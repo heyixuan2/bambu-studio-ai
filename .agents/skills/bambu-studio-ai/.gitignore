@@ -1,8 +1,0 @@
-.secrets.json
-config.json
-__pycache__/
-*.pyc
-.DS_Store
-output/
-.token_cache.json
-.verify_code

@@ -6,3 +6,5 @@ __pycache__/
 output/
 .token_cache.json
 .verify_code
+.agents/
+skills-lock.json
