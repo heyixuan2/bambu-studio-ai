@@ -417,20 +417,34 @@ def cmd_ams():
 
 def cmd_snapshot():
     if MODE == "cloud":
-        # Try cloud camera URL
-        b = get_backend()
-        try:
-            urls = b.client.get_camera_urls(b.device_id)
-            print(f"📸 Camera URLs: {urls}")
-        except Exception as e:
-            print(f"⚠️ Cloud camera: {e}")
-        finally:
-            b.disconnect()
+        print("❌ Camera snapshots not available in Cloud mode.")
+        print("   Switch to LAN mode for camera access.")
         return
 
-    ip = os.environ.get("BAMBU_IP", "")
-    ac = os.environ.get("BAMBU_ACCESS_CODE", "")
-    out = "/tmp/bambu-snapshot.jpg"
+    ip = os.environ.get("BAMBU_IP", _config.get("printer_ip", ""))
+    ac = os.environ.get("BAMBU_ACCESS_CODE", _config.get("access_code", ""))
+    if not ip or not ac:
+        # Try loading from secrets
+        _sp = os.path.join(_skill_dir, ".secrets.json")
+        if os.path.exists(_sp):
+            import json as _sj
+            with open(_sp) as _sf:
+                _sd = _sj.load(_sf)
+                ac = ac or _sd.get("access_code", "")
+        if not ip:
+            print("❌ BAMBU_IP not set. Check config.json or set env var.")
+            return
+        if not ac:
+            print("❌ Access code not set. Check .secrets.json or set BAMBU_ACCESS_CODE.")
+            return
+
+    out = os.path.join(_skill_dir, "output", "snapshots", "snapshot.jpg")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+
+    # Use RTSP stream (port 322) — NOT port 6000 socket
+    # Port 6000 is incompatible with H2D and newer firmware (SSL handshake failure)
+    # RTSP via ffmpeg is the reliable method for all models
+    print(f"📸 Capturing from RTSP stream ({ip}:322)...")
     try:
         import subprocess
         result = subprocess.run(
@@ -440,11 +454,24 @@ def cmd_snapshot():
             capture_output=True, timeout=15
         )
         if result.returncode == 0 and os.path.exists(out):
-            print(f"📸 Snapshot saved to {out}")
+            size = os.path.getsize(out)
+            print(f"📸 Snapshot saved: {out} ({size // 1024} KB)")
         else:
-            print(f"⚠️ ffmpeg error: {result.stderr.decode()[:200]}")
+            stderr = result.stderr.decode()[:300]
+            print(f"⚠️ ffmpeg error: {stderr}")
+            if "Connection refused" in stderr or "timeout" in stderr.lower():
+                print("   💡 Camera may be in use by Bambu Studio or phone app.")
+                print("   Only one client can access the camera at a time.")
+                print("   Close other viewers and try again.")
+            elif "401" in stderr or "Unauthorized" in stderr:
+                print("   💡 Wrong access code. Check Settings → Device on printer.")
     except FileNotFoundError:
         print("❌ ffmpeg not installed. Run: brew install ffmpeg")
+    except subprocess.TimeoutExpired:
+        print("⚠️ Camera timeout. Possible causes:")
+        print("   1. Camera in use by another app (phone/Bambu Studio)")
+        print("   2. Printer in sleep mode (tap touchscreen)")
+        print("   3. Wrong IP address")
     except Exception as e:
         print(f"❌ Error: {e}")
 
