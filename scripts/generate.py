@@ -96,7 +96,7 @@ def get_max_size():
 
 # ─── Prompt Enhancement ──────────────────────────────────────────────
 
-def enhance_prompt(user_prompt, max_size=None):
+def enhance_prompt(user_prompt, max_size=None, multicolor=False):
     """Add 3D-printing-specific instructions to user prompt."""
     if not max_size:
         max_size = get_max_size()
@@ -405,7 +405,7 @@ def get_backend():
 
 # ─── Commands ────────────────────────────────────────────────────────
 
-def cmd_text(prompt, wait=False, **kwargs):
+def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
     backend = get_backend()
 
     # Enhance prompt for printability
