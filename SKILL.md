@@ -90,15 +90,7 @@ keywords:
 
 # 🖨️ Bambu Studio AI
 
-> **Minimum Model Requirement:** This skill is 600+ lines with complex multi-step flows.
-> 
-> | Tier | Models | Status |
-> |------|--------|--------|
-> | ✅ **Recommended** | Claude Opus 4, Claude Sonnet 4.5, GPT-4o, GPT-5.x, Gemini 2.5 Pro, DeepSeek-V3, Qwen-Max, or equivalent flagship models | Full capability — follows all multi-step flows correctly |
-> | ⚠️ **Usable with limitations** | Claude Haiku 3.5, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1/3.3 70B+, DeepSeek-V2.5, Qwen-72B, GLM-4, Yi-Large, or similar mid-tier models | May simplify pre-generation research or skip monitoring details |
-> | ❌ **Not recommended** | Llama 8B, Phi-3/4, Qwen-7B, ChatGLM-6B, Mistral 7B, or any model under ~30B parameters | Will miss critical safety steps (analyze, preview) — unsafe for printer control |
->
-> **Key requirement:** This skill is 700+ lines with complex branching logic (setup → search → generate → analyze → preview → print → monitor). The model must reliably follow multi-step instructions, not skip or merge steps, and handle conditional flows (Cloud vs LAN, search vs generate, material compatibility). When in doubt, use a recommended-tier model.
+
 
 Full-stack Bambu Lab 3D printing skill: **Idea → 3D Model → Print → Monitor → Notify**.
 
@@ -383,6 +375,14 @@ After research, confirm:
 > Ready to generate?"
 
 ### Step 4: Generate
+
+**Before generating, tell the user:**
+> "提醒一下：AI 生成的 3D 模型质量主要取决于两个因素：
+> 1. 你选的 3D 生成服务商（Meshy/Tripo 等）的能力
+> 2. Prompt 的详细程度 — 越具体越好
+> 
+> AI 生成的模型不是成品，通常需要在 Bambu Studio 里检查和调整。
+> 如果效果不理想，可以换个服务商或者优化 prompt 再试。"
 
 Call `generate.py` with a detailed, dimensions-aware prompt. The script auto-enhances prompts with printability instructions and scales to your printer's build volume.
 
