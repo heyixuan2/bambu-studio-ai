@@ -714,7 +714,7 @@ Critical → notify user + optional auto-pause
 | Cloud login failed | Check email/password, enter verification code when prompted |
 | Cloud verification spam | Don't retry — wait patiently for code, enter once |
 | SSL handshake error (LAN) | Normal with newer firmware (self-signed certs). Script auto-handles this. |
-| API method not found | Run `pip3 install --upgrade bambulabs-api` — method names changed in newer versions |
+| API method not found | Run `pip3 install --upgrade bambulabs-api` — v2.6.6+ renamed many methods (e.g. get_progress→get_percentage, get_gcode_state→get_current_state). Skill is tested against v2.6.6. |
 | Can't connect (LAN) | 1) LAN Mode ON on printer 2) IP correct 3) Same WiFi/network as OpenClaw |
 | Auth failed | Wrong serial or access code (check Settings → Device on printer) |
 | Timeout | Wake printer (tap touchscreen), check if printer IP changed |

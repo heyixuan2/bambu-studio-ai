@@ -226,14 +226,14 @@ class LocalBackend:
         p = self.printer
         return {
             "nozzle_temp": p.get_nozzle_temperature(),
-            "nozzle_target": p.get_nozzle_target_temp(),
+            "nozzle_target": p.get_nozzle_temperature(),
             "bed_temp": p.get_bed_temperature(),
-            "bed_target": p.get_bed_target_temp(),
-            "state": p.get_gcode_state(),
-            "progress": p.get_print_percentage(),
-            "remaining": p.get_remaining_time(),
-            "file": p.get_current_file(),
-            "speed": p.get_speed_level(),
+            "bed_target": p.get_bed_temperature(),
+            "state": p.get_current_state(),
+            "progress": p.get_percentage(),
+            "remaining": p.get_time(),
+            "file": p.get_file_name(),
+            "speed": p.get_print_speed(),
             "light": p.get_light_state(),
             "layer": getattr(p, 'get_current_layer', lambda: None)(),
             "total_layers": getattr(p, 'get_total_layers', lambda: None)(),
@@ -241,7 +241,7 @@ class LocalBackend:
 
     def get_ams(self):
         try:
-            return self.printer.get_ams_info()
+            return self.printer.get_ams()
         except:
             return None
 
