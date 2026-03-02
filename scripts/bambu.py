@@ -285,7 +285,7 @@ def cmd_status():
     try:
         s = backend.get_status()
         mode_label = "☁️ Cloud" if MODE == "cloud" else "🔌 LAN"
-        print(f"{mode_label} | Bambu Lab H2D")
+        print(f"{mode_label} | Bambu Lab {_config.get('model', 'Unknown')}")
 
         if MODE == "local":
             print(f"🔥 Nozzle: {s.get('nozzle_temp', '?')}°C / {s.get('nozzle_target', '?')}°C")
@@ -434,7 +434,7 @@ def cmd_snapshot():
     try:
         import subprocess
         result = subprocess.run(
-            ["ffmpeg", "-y", "-rtsp_transport", "tcp",
+            ["ffmpeg", "-y", "-update", "1", "-rtsp_transport", "tcp",
              "-i", f"rtsps://bblp:{ac}@{ip}:322/streaming/live/1",
              "-frames:v", "1", out],
             capture_output=True, timeout=15

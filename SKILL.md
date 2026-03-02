@@ -618,7 +618,18 @@ The `references/` folder contains docs the agent can consult:
 ### ⚠️ Requires User Consent
 
 **Always ask before enabling:**
-> "Would you like AI print monitoring? I'll take photos every 2 minutes to check for issues. OK?"
+> "Want AI print monitoring? I'll photograph your print and use AI to check for failures."
+
+If yes, ask monitoring intensity:
+> "How closely should I monitor? This affects token usage:
+> - 🟢 **Light** (every 30 min) — ~2 tokens/hr, good for long prints
+> - 🟡 **Standard** (every 5 min) — ~12 tokens/hr, recommended
+> - 🔴 **Intensive** (every 2 min) — ~30 tokens/hr, for critical prints or new materials
+> - ⚫ **Off** — no monitoring
+>
+> Which level?"
+
+Then: "Should I auto-pause if I detect something serious like spaghetti or bed detachment?"
 
 **Never auto-enable.**
 

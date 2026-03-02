@@ -77,6 +77,14 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
 
     bounds = mesh.bounds
     dims = mesh.extents  # [x, y, z] dimensions in mm
+    # Check if model is too complex (may be too large for printer SD card)
+    if len(mesh.faces) > 500000:
+        report["warnings"].append(
+            f"Very high triangle count ({len(mesh.faces):,}). "
+            f"Consider simplifying: open in Bambu Studio → right-click → Simplify Model, "
+            f"or use: trimesh.simplify_quadric_decimation(mesh, face_count=100000)"
+        )
+    
     report["geometry"] = {
         "dimensions_mm": [round(d, 2) for d in dims],
         "volume_cm3": round(mesh.volume / 1000, 2),

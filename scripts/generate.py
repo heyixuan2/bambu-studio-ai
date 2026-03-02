@@ -492,9 +492,27 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
     """Poll until complete, then download."""
     print(f"\n⏳ Waiting for generation...")
     
+    retries_502 = 0
+    max_502_retries = 10
     for i in range(120):  # Max 10 min
         time.sleep(5)
-        status = backend.get_status(task_id)
+        try:
+            status = backend.get_status(task_id)
+        except Exception as poll_err:
+            err_str = str(poll_err)
+            if "502" in err_str or "503" in err_str or "500" in err_str:
+                retries_502 += 1
+                if retries_502 <= max_502_retries:
+                    print(f"   ⚠️ API returned error ({err_str[:30]}), retry {retries_502}/{max_502_retries}...")
+                    time.sleep(10)  # Wait longer on server error
+                    continue
+                else:
+                    print(f"   ❌ API error persisted after {max_502_retries} retries.")
+                    print(f"   💡 Try manually: python3 scripts/generate.py status {task_id}")
+                    print(f"   💡 Or download: python3 scripts/generate.py download {task_id}")
+                    return None
+            raise
+        retries_502 = 0  # Reset on success
         state = status["status"]
         progress = status.get("progress", 0)
         
