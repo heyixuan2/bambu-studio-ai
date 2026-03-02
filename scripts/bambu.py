@@ -96,15 +96,23 @@ class CloudBackend:
                 if "verify" in err_msg or "code" in err_msg or "captcha" in err_msg:
                     print("📧 Verification code required!")
                     print("   Check your email for the code from Bambu Lab.")
-                    print("   ⏳ Waiting for you to provide the code...")
                     print("")
-                    print("   Enter verification code: ", end="", flush=True)
-                    verify_code = input().strip()
-                    if verify_code:
-                        token = auth.login(email, password, verify_code=verify_code)
-                    else:
-                        print("❌ No code entered. Please try again.")
+                    # Check for code via env var or file (non-blocking for autonomous agents)
+                    verify_code = os.environ.get("BAMBU_VERIFY_CODE", "")
+                    verify_file = os.path.join(_skill_dir, ".verify_code")
+                    if not verify_code and os.path.exists(verify_file):
+                        with open(verify_file) as _vf:
+                            verify_code = _vf.read().strip()
+                        os.remove(verify_file)  # One-time use
+                    if not verify_code:
+                        print("   To provide the code, either:")
+                        print("   1. Set env: export BAMBU_VERIFY_CODE=123456")
+                        print("   2. Write to file: echo 123456 > .verify_code")
+                        print("   3. Re-run with: BAMBU_VERIFY_CODE=123456 python3 scripts/bambu.py status")
+                        print("")
+                        print("   💡 TIP: Use LAN mode instead to avoid verification entirely.")
                         sys.exit(1)
+                    token = auth.login(email, password, verify_code=verify_code)
                 else:
                     raise login_err
 
@@ -204,14 +212,13 @@ class LocalBackend:
 
         self.ip = ip
         self.access_code = access_code
-        # Disable SSL verification for LAN MQTT (H2D and newer firmware use self-signed certs)
-        import ssl
-        import urllib3
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        if hasattr(ssl, '_create_unverified_context'):
-            ssl._create_default_https_context = ssl._create_unverified_context
-
-        self.printer = bl.Printer(ip, access_code, serial)
+        # LAN MQTT uses self-signed certs — pass verify=False only to the printer connection
+        # DO NOT disable SSL globally (would weaken all network calls)
+        try:
+            self.printer = bl.Printer(ip, access_code, serial, ssl_verify=False)
+        except TypeError:
+            # Older bambulabs-api versions don't accept ssl_verify
+            self.printer = bl.Printer(ip, access_code, serial)
         self.printer.connect()
         time.sleep(2)
 

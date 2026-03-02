@@ -268,6 +268,49 @@ def render_views(mesh, output_dir):
         return []
 
 
+def repair_mesh(mesh, output_path=None):
+    """Attempt to repair non-manifold mesh using trimesh."""
+    import trimesh
+    
+    issues = []
+    if not mesh.is_watertight:
+        issues.append("not watertight")
+    if not mesh.is_volume:
+        issues.append("non-manifold edges")
+    
+    if not issues:
+        print("✅ Mesh is clean — no repair needed.")
+        return mesh, False
+    
+    print(f"🔧 Repairing mesh ({', '.join(issues)})...")
+    
+    # trimesh auto-repair
+    trimesh.repair.fix_normals(mesh)
+    trimesh.repair.fix_winding(mesh)
+    trimesh.repair.fix_inversion(mesh)
+    trimesh.repair.fill_holes(mesh)
+    
+    # Remove degenerate faces
+    mesh.remove_degenerate_faces()
+    mesh.remove_duplicate_faces()
+    mesh.remove_unreferenced_vertices()
+    
+    repaired = mesh.is_watertight and mesh.is_volume
+    
+    if repaired:
+        print(f"✅ Mesh repaired! Watertight: {mesh.is_watertight}, Manifold: {mesh.is_volume}")
+    else:
+        print(f"⚠️ Partial repair. Watertight: {mesh.is_watertight}, Manifold: {mesh.is_volume}")
+        print(f"   For stubborn meshes, try: https://www.formware.co/onlinestlrepair")
+        print(f"   Or: Bambu Studio → right-click model → Fix Model")
+    
+    if output_path:
+        mesh.export(output_path)
+        print(f"💾 Saved repaired model: {output_path}")
+    
+    return mesh, True
+
+
 def format_report(report):
     """Format report as human-readable text."""
     lines = []
@@ -332,6 +375,7 @@ def main():
                         help="Purpose affects infill/wall recommendations")
     parser.add_argument("--render", action="store_true", help="Render preview images")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    parser.add_argument("--repair", action="store_true", help="Auto-repair non-manifold mesh before analysis")
     parser.add_argument("--output-dir", default=".", help="Directory for rendered images")
     args = parser.parse_args()
 
@@ -359,6 +403,17 @@ def main():
     except Exception as e:
         print(f"ERROR: Failed to load '{args.file}': {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Auto-repair if requested or if mesh has issues
+    if args.repair or not mesh.is_watertight or not mesh.is_volume:
+        if not args.repair and (not mesh.is_watertight or not mesh.is_volume):
+            print(f"⚠️ Mesh has issues (watertight={mesh.is_watertight}, manifold={mesh.is_volume})")
+            print(f"   Auto-repairing... (use --repair to always repair)")
+        repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+        mesh, was_repaired = repair_mesh(mesh, repair_path if args.repair else None)
+        if was_repaired and args.repair:
+            print(f"\n📁 Original: {args.file}")
+            print(f"📁 Repaired: {repair_path}\n")
 
     # Analyze
     report = analyze_mesh(mesh, printer, material, args.purpose)

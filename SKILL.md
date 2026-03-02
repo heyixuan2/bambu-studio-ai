@@ -23,7 +23,7 @@ metadata:
         kind: cask
         package: bambu-studio
         optional: true
-        label: "Bambu Studio — mandatory for model preview/slicing before printing"
+        label: "Bambu Studio (recommended for model preview and slicing — required before printing generated models)"
 env:
   - name: BAMBU_MODE
     required: false
@@ -63,6 +63,7 @@ security:
   secrets_storage: ".secrets.json (chmod 600, git-ignored)"
   no_plaintext_in: ["config.json", "SKILL.md", "*.py"]
   config_gitignored: true
+  files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
   data_access:
     local_reads:
       - "config.json and .secrets.json in skill directory"
@@ -119,6 +120,7 @@ Full-stack Bambu Lab 3D printing skill: **Idea → 3D Model → Print → Monito
 | Check generation status | `python3 scripts/generate.py status <task_id>` |
 | Download model | `python3 scripts/generate.py download <task_id> --format 3mf` |
 | Analyze model before printing | `python3 scripts/analyze.py model.3mf --material PLA --purpose functional` |
+| Analyze + auto-repair mesh | `python3 scripts/analyze.py model.3mf --repair --material PLA` |
 | Single print check | `python3 scripts/monitor.py --once` |
 | Continuous monitoring | `python3 scripts/monitor.py --interval 120` |
 | Monitor with auto-pause | `python3 scripts/monitor.py --interval 120 --auto-pause` |
@@ -559,12 +561,23 @@ Default `--format 3mf` unless user specifies otherwise.
 
 ```
 1. Generate/Download → model.3mf
-2. Analyze           → python3 scripts/analyze.py model.3mf --material PLA
-3. Report to user    → "Score 8/10, 2 warnings: ..."
-4. Open preview      → open -a "BambuStudio" model.3mf
-5. User confirms     → "looks good" / "print it"
-6. Print             → python3 scripts/bambu.py print model.3mf
+2. Analyze + Repair  → python3 scripts/analyze.py model.3mf --repair --material PLA
+3. Report to user    → "Score 8/10, repaired 58K non-manifold edges..."
+4. Open in Bambu Studio → open -a "BambuStudio" model.3mf
+5. ⚠️ MANDATORY: Tell user to inspect in Bambu Studio
+   → "I've opened the model in Bambu Studio. Please check:
+      - Does it look correct? Any missing parts?
+      - Is the size right? (check dimensions in bottom bar)
+      - Any red warnings? (non-manifold, intersecting parts)
+      - Slice it and check estimated time/filament.
+      Let me know when you're ready to print!"
+6. WAIT for explicit user confirmation → "looks good" / "print it" / "go ahead"
+7. Print             → python3 scripts/bambu.py print model.3mf
 ```
+
+**⛔ NEVER skip step 5-6. NEVER auto-print without user seeing the model in Bambu Studio.**
+AI-generated models frequently have mesh errors (non-manifold edges, holes, intersections).
+The user MUST visually verify before printing.
 
 #### The 10-Point Printability Check
 
