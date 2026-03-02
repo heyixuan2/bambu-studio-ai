@@ -437,16 +437,44 @@ def main():
         print(f"ERROR: Failed to load '{args.file}': {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Auto-repair if requested or if mesh has issues
-    if args.repair or not mesh.is_watertight or not mesh.is_volume:
-        if not args.repair and (not mesh.is_watertight or not mesh.is_volume):
-            print(f"⚠️ Mesh has issues (watertight={mesh.is_watertight}, manifold={mesh.is_volume})")
-            print(f"   Auto-repairing... (use --repair to always repair)")
-        repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
-        mesh, was_repaired = repair_mesh(mesh, repair_path if args.repair else None)
-        if was_repaired and args.repair:
-            print(f"\n📁 Original: {args.file}")
-            print(f"📁 Repaired: {repair_path}\n")
+    # Tiered repair: don't over-process good models
+    has_holes = not mesh.is_watertight
+    has_nonmanifold = not mesh.is_volume
+    try:
+        bodies = mesh.split(only_watertight=False)
+        has_disconnected = len(bodies) > 1
+    except:
+        has_disconnected = False
+
+    if has_holes or has_nonmanifold or has_disconnected:
+        severity = "minor" if (has_holes and not has_nonmanifold) else "major" if has_nonmanifold else "disconnected"
+        print(f"\n🔍 Mesh issues detected (severity: {severity}):")
+        if has_holes: print(f"   - Not watertight (has holes)")
+        if has_nonmanifold: print(f"   - Non-manifold edges")
+        if has_disconnected: print(f"   - {len(bodies)} disconnected parts")
+
+        if severity == "minor":
+            # Small holes only — light repair
+            print(f"\n🔧 Light repair (filling holes, fixing normals)...")
+            repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+            mesh, was_repaired = repair_mesh(mesh, repair_path)
+        elif severity == "major":
+            # Non-manifold — full repair
+            print(f"\n🔧 Full repair (voxel remesh may be needed for severe cases)...")
+            print(f"   💡 If auto-repair fails, try in Blender:")
+            print(f"      Remesh modifier → Voxel (size: 0.15-0.25mm) → Smooth")
+            print(f"      ⚠️ Use smallest voxel size that preserves detail")
+            repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+            mesh, was_repaired = repair_mesh(mesh, repair_path)
+        else:
+            print(f"\n⚠️ Disconnected parts — repair may not help.")
+            print(f"   Consider re-generating or manually merging in Blender.")
+            if args.repair:
+                repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+                mesh, was_repaired = repair_mesh(mesh, repair_path)
+    elif args.repair:
+        print(f"\n✅ Mesh is clean — no repair needed.")
+    # If no issues and no --repair flag, skip entirely
 
     # Analyze
     report = analyze_mesh(mesh, printer, material, args.purpose)

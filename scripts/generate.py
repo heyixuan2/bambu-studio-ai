@@ -212,7 +212,7 @@ class TripoBackend:
     def text_to_3d(self, prompt, **kwargs):
         r = requests.post(f"{self.BASE}/task",
             headers=self.headers(),
-            json={"type": "text_to_model", "prompt": prompt}
+            json={"type": "text_to_model", "texture": True, "prompt": prompt}
         )
         r.raise_for_status()
         task_id = r.json()["data"]["task_id"]
@@ -234,7 +234,7 @@ class TripoBackend:
         
         r = requests.post(f"{self.BASE}/task",
             headers=self.headers(),
-            json={"type": "image_to_model", "file": {"type": "jpg", "file_token": image_token}}
+            json={"type": "image_to_model", "texture": True, "file": {"type": "jpg", "file_token": image_token}}
         )
         r.raise_for_status()
         task_id = r.json()["data"]["task_id"]
