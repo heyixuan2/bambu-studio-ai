@@ -8,7 +8,7 @@ Usage:
   python3 generate.py image photo.jpg
   python3 generate.py image photo.jpg --prompt "make it a 3D printable model"
   python3 generate.py status <task_id>
-  python3 generate.py download <task_id> [--format stl]
+  python3 generate.py download <task_id> [--format 3mf]
 """
 
 import os
@@ -16,6 +16,45 @@ import sys
 import json
 import time
 import argparse
+import shutil
+
+
+def _convert_model(input_path, target_format):
+    """Convert GLB/OBJ to STL/3MF using trimesh. Returns new path or original if conversion fails."""
+    if not input_path or not os.path.exists(input_path):
+        return input_path
+    
+    current_ext = os.path.splitext(input_path)[1].lower().lstrip('.')
+    target_format = target_format.lower().lstrip('.')
+    
+    # No conversion needed
+    if current_ext == target_format:
+        return input_path
+    
+    # Bambu Lab compatible formats
+    BAMBU_FORMATS = {"3mf", "stl", "step", "stp", "obj"}
+    
+    try:
+        import trimesh
+        mesh = trimesh.load(input_path, force="mesh")
+        new_path = os.path.splitext(input_path)[0] + f".{target_format}"
+        mesh.export(new_path)
+        print(f"🔄 Converted {current_ext.upper()} → {target_format.upper()}: {os.path.basename(new_path)}")
+        
+        # Warn if original format not Bambu-compatible
+        if current_ext not in BAMBU_FORMATS:
+            print(f"   ⚠️ Original {current_ext.upper()} is not Bambu Studio compatible. Using converted {target_format.upper()}.")
+        
+        return new_path
+    except ImportError:
+        print(f"⚠️ trimesh not installed — cannot convert {current_ext.upper()} to {target_format.upper()}")
+        print(f"   Run: pip3 install trimesh")
+        if current_ext not in BAMBU_FORMATS:
+            print(f"   ❌ WARNING: {current_ext.upper()} cannot be opened in Bambu Studio!")
+        return input_path
+    except Exception as e:
+        print(f"⚠️ Conversion failed: {e}")
+        return input_path
 import requests
 from pathlib import Path
 
@@ -206,7 +245,7 @@ class TripoBackend:
             "model_urls": {"glb": data.get("output", {}).get("model", "")},
         }
     
-    def download(self, task_id, fmt="glb"):
+    def download(self, task_id, fmt="3mf"):
         status = self.get_status(task_id)
         url = status.get("model_urls", {}).get("glb") or status.get("model_urls", {}).get(fmt)
         if not url:
@@ -377,7 +416,7 @@ def cmd_text(prompt, wait=False, **kwargs):
     task_id = backend.text_to_3d(prompt, **kwargs)
     
     if wait:
-        return _wait_and_download(backend, task_id, kwargs.get("format", "stl"))
+        return _wait_and_download(backend, task_id, kwargs.get("format", "3mf"))
     else:
         print(f"\n💡 Check status: python3 generate.py status {task_id}")
         print(f"💡 Download:     python3 generate.py download {task_id}")
@@ -392,7 +431,7 @@ def cmd_image(image_path, prompt="", wait=False, **kwargs):
     task_id = backend.image_to_3d(image_path, prompt, **kwargs)
     
     if wait:
-        return _wait_and_download(backend, task_id, kwargs.get("format", "stl"))
+        return _wait_and_download(backend, task_id, kwargs.get("format", "3mf"))
     else:
         print(f"\n💡 Check status: python3 generate.py status {task_id}")
         print(f"💡 Download:     python3 generate.py download {task_id}")
@@ -418,19 +457,32 @@ def cmd_status(task_id):
         if urls:
             print(f"📦 Available formats: {', '.join(urls.keys())}")
             print(f"\n💡 Download: python3 generate.py download {task_id} --format stl")
+            print(f"   Note: If provider returns GLB, it will be auto-converted to your preferred format.")
     
     return status
 
-def cmd_download(task_id, fmt="stl"):
+def cmd_download(task_id, fmt="3mf"):
     backend = get_backend()
     path = backend.download(task_id, fmt)
     if path:
+        # Auto-convert to requested format if provider returned different format (e.g., GLB)
+        actual_ext = os.path.splitext(path)[1].lower().lstrip('.')
+        if actual_ext != fmt.lower():
+            path = _convert_model(path, fmt)
         size = os.path.getsize(path)
         print(f"✅ Downloaded: {path} ({size / 1024:.1f} KB)")
-        print(f"\n💡 Print it: python3 bambu.py print {os.path.basename(path)}")
+        # Verify Bambu compatibility
+        final_ext = os.path.splitext(path)[1].lower().lstrip('.')
+        if final_ext in ("3mf", "stl", "step", "stp", "obj"):
+            print(f"   ✅ {final_ext.upper()} is Bambu Studio compatible")
+        else:
+            print(f"   ❌ WARNING: {final_ext.upper()} is NOT compatible with Bambu Studio!")
+            print(f"   Run: python3 generate.py download {task_id} --format stl")
+        print(f"\n💡 Next: python3 analyze.py {os.path.basename(path)}")
+        print(f"         python3 bambu.py print {os.path.basename(path)}")
     return path
 
-def _wait_and_download(backend, task_id, fmt="stl"):
+def _wait_and_download(backend, task_id, fmt="3mf"):
     """Poll until complete, then download."""
     print(f"\n⏳ Waiting for generation...")
     
@@ -484,7 +536,7 @@ def main():
     
     p_dl = sub.add_parser("download", help="Download generated model")
     p_dl.add_argument("task_id")
-    p_dl.add_argument("--format", default="stl")
+    p_dl.add_argument("--format", default="3mf", help="Output format (auto-converts from GLB if needed)")
     
     args = parser.parse_args()
     if not args.command:

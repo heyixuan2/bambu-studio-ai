@@ -93,9 +93,11 @@ keywords:
 > 
 > | Tier | Models | Status |
 > |------|--------|--------|
-> | ✅ **Recommended** | Claude Opus, Claude Sonnet, GPT-4o, GPT-5, Gemini 2.5 Pro | Full capability |
-> | ⚠️ **Works but may skip steps** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1 70B+ | May simplify pre-gen flow or monitoring |
-> | ❌ **Not recommended** | Llama 3.1 8B, Phi-3, small local models | Will miss setup steps, unsafe for printing |
+> | ✅ **Recommended** | Claude Opus 4, Claude Sonnet 4.5, GPT-4o, GPT-5.x, Gemini 2.5 Pro, DeepSeek-V3, Qwen-Max, or equivalent flagship models | Full capability — follows all multi-step flows correctly |
+> | ⚠️ **Usable with limitations** | Claude Haiku 3.5, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1/3.3 70B+, DeepSeek-V2.5, Qwen-72B, GLM-4, Yi-Large, or similar mid-tier models | May simplify pre-generation research or skip monitoring details |
+> | ❌ **Not recommended** | Llama 8B, Phi-3/4, Qwen-7B, ChatGLM-6B, Mistral 7B, or any model under ~30B parameters | Will miss critical safety steps (analyze, preview) — unsafe for printer control |
+>
+> **Key requirement:** This skill is 700+ lines with complex branching logic (setup → search → generate → analyze → preview → print → monitor). The model must reliably follow multi-step instructions, not skip or merge steps, and handle conditional flows (Cloud vs LAN, search vs generate, material compatibility). When in doubt, use a recommended-tier model.
 
 Full-stack Bambu Lab 3D printing skill: **Idea → 3D Model → Print → Monitor → Notify**.
 
@@ -683,10 +685,14 @@ Critical → notify user + optional auto-pause
 
 | Problem | Fix |
 |---------|-----|
-| Cloud login failed | Check email/password |
-| Can't connect (local) | 1) LAN Mode on 2) IP correct 3) Same network |
-| Auth failed | Wrong serial or access code |
-| Timeout | Wake printer (touch screen) |
+| Cloud login failed | Check email/password, enter verification code when prompted |
+| Cloud verification spam | Don't retry — wait patiently for code, enter once |
+| SSL handshake error (LAN) | Normal with newer firmware (self-signed certs). Script auto-handles this. |
+| API method not found | Run `pip3 install --upgrade bambulabs-api` — method names changed in newer versions |
+| Can't connect (LAN) | 1) LAN Mode ON on printer 2) IP correct 3) Same WiFi/network as OpenClaw |
+| Auth failed | Wrong serial or access code (check Settings → Device on printer) |
+| Timeout | Wake printer (tap touchscreen), check if printer IP changed |
+| Token expired | Auto-handled — re-authenticates after 24h cache expires |
 
 ### Print Failures
 

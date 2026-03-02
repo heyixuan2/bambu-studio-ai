@@ -204,6 +204,13 @@ class LocalBackend:
 
         self.ip = ip
         self.access_code = access_code
+        # Disable SSL verification for LAN MQTT (H2D and newer firmware use self-signed certs)
+        import ssl
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        if hasattr(ssl, '_create_unverified_context'):
+            ssl._create_default_https_context = ssl._create_unverified_context
+
         self.printer = bl.Printer(ip, access_code, serial)
         self.printer.connect()
         time.sleep(2)
@@ -211,9 +218,9 @@ class LocalBackend:
     def get_status(self):
         p = self.printer
         return {
-            "nozzle_temp": p.get_nozzle_temp(),
+            "nozzle_temp": p.get_nozzle_temperature(),
             "nozzle_target": p.get_nozzle_target_temp(),
-            "bed_temp": p.get_bed_temp(),
+            "bed_temp": p.get_bed_temperature(),
             "bed_target": p.get_bed_target_temp(),
             "state": p.get_gcode_state(),
             "progress": p.get_print_percentage(),

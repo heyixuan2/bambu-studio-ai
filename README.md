@@ -37,9 +37,11 @@ This skill has 600+ lines of instructions with multi-step flows (setup, pre-gene
 
 | Tier | Models | Notes |
 |------|--------|-------|
-| ✅ **Recommended** | Claude Opus, Claude Sonnet, GPT-4o, GPT-5, Gemini 2.5 Pro | Full capability — follows all steps correctly |
-| ⚠️ **Usable** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1 70B+ | May simplify pre-generation flow or skip monitoring details |
-| ❌ **Not recommended** | Small local models (<30B params) | Will miss critical safety steps — not safe for printer control |
+| ✅ **Recommended** | Claude Opus 4, Claude Sonnet 4.5, GPT-4o, GPT-5.x, Gemini 2.5 Pro, DeepSeek-V3, Qwen-Max, or equivalent flagship models | Full capability — follows all multi-step flows correctly |
+| ⚠️ **Usable** | Claude Haiku 3.5, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1/3.3 70B+, DeepSeek-V2.5, Qwen-72B, GLM-4, Yi-Large, or similar mid-tier models | May simplify pre-generation or skip monitoring details |
+| ❌ **Not recommended** | Llama 8B, Phi-3/4, Qwen-7B, ChatGLM-6B, Mistral 7B, or any model under ~30B parameters | Will miss critical safety steps — not safe for printer control |
+
+> **Why it matters:** This skill has 700+ lines of instructions with multi-step branching flows. Small models tend to skip the analyze/preview steps, which can waste filament or damage the printer. When in doubt, use a recommended-tier model.
 
 ## Install
 
