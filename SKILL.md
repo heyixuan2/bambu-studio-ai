@@ -12,11 +12,18 @@ metadata:
       - id: pip-deps
         kind: pip
         packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh"]
+        required: true
+        description: "Core Python dependencies for printer control, 3D generation, and model analysis"
+      - id: ffmpeg
+        kind: brew
+        package: ffmpeg
+        optional: true
+        description: "Required for camera snapshots (local mode only)"
       - id: bambu-studio
         kind: cask
         package: bambu-studio
         optional: true
-        label: "Bambu Studio (live camera + slicer)"
+        label: "Bambu Studio — mandatory for model preview/slicing before printing"
 env:
   - name: BAMBU_MODE
     required: false
@@ -26,27 +33,49 @@ env:
     description: "Printer model (e.g., H2D, A1 Mini, X1C)"
   - name: BAMBU_EMAIL
     required: false
-    description: "Bambu account email (cloud mode)"
+    description: "Bambu account email (required for cloud mode)"
+  - name: BAMBU_DEVICE_ID
+    required: false
+    description: "Device ID (cloud mode, optional — auto-detected if only one printer)"
   - name: BAMBU_IP
     required: false
-    description: "Printer local IP (local mode)"
+    description: "Printer local IP (required for local mode)"
   - name: BAMBU_SERIAL
     required: false
-    description: "Serial number (local mode)"
+    description: "Serial number (required for local mode)"
   - name: BAMBU_3D_PROVIDER
     required: false
     description: "3D gen provider: meshy, tripo, printpal, 3daistudio"
 secrets:
   - name: BAMBU_PASSWORD
-    description: "Bambu account password (cloud mode). Prefer .secrets.json over env var."
+    required_when: "mode=cloud"
+    storage: ".secrets.json (key: password)"
+    description: "Bambu account password. Stored in .secrets.json, NOT env vars."
   - name: BAMBU_ACCESS_CODE
-    description: "LAN access code (local mode). Prefer .secrets.json over env var."
+    required_when: "mode=local"
+    storage: ".secrets.json (key: access_code)"
+    description: "LAN access code from printer Settings > Device. Stored in .secrets.json."
   - name: BAMBU_3D_API_KEY
-    description: "3D generation API key. Prefer .secrets.json over env var."
+    required_when: "3D generation enabled"
+    storage: ".secrets.json (key: 3d_api_key)"
+    description: "API key from chosen 3D generation provider. Stored in .secrets.json."
 security:
   secrets_storage: ".secrets.json (chmod 600, git-ignored)"
   no_plaintext_in: ["config.json", "SKILL.md", "*.py"]
   config_gitignored: true
+  data_access:
+    local_reads:
+      - "config.json and .secrets.json in skill directory"
+    network_calls:
+      - "Bambu Lab Cloud API (cloud.bambulab.com) — printer control"
+      - "Bambu Lab printer via MQTT (local IP) — local control"
+      - "3D generation APIs (Meshy/Tripo/Printpal/3DAI) — model generation only"
+    uploads:
+      - "Text prompts to 3D generation API (user-initiated only)"
+      - "Images to 3D generation API for image-to-3D (user-initiated only)"
+    subprocesses:
+      - "ffmpeg — camera snapshot extraction (optional, local only)"
+    consent: "All network calls, uploads, and monitoring require explicit user consent before first use. Setup flow asks permission at each step."
 keywords:
   - 3d printing
   - bambu lab

@@ -26,7 +26,7 @@ for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".s
 
 BAMBU_IP = os.environ.get("BAMBU_IP", _cfg.get("printer_ip", ""))
 BAMBU_ACCESS_CODE = os.environ.get("BAMBU_ACCESS_CODE", _cfg.get("access_code", ""))
-SNAPSHOT_DIR = os.path.expanduser("~/bambu-monitor")
+SNAPSHOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "snapshots")
 LOG_FILE = os.path.join(SNAPSHOT_DIR, "monitor-log.json")
 
 def take_snapshot():

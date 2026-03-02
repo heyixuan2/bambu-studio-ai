@@ -18,12 +18,11 @@ MODE = os.environ.get("BAMBU_MODE", "").lower()
 # Load config.json + .secrets.json (fallback for env vars)
 _config = {}
 _skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _cpath in [os.path.join(_skill_dir, "config.json"), os.path.expanduser("~/.bambu-config.json")]:
-    if os.path.exists(_cpath):
-        import json as _j
-        with open(_cpath) as _f:
-            _config = _j.load(_f)
-        break
+_cpath = os.path.join(_skill_dir, "config.json")
+if os.path.exists(_cpath):
+    import json as _j
+    with open(_cpath) as _f:
+        _config = _j.load(_f)
 
 # Load secrets
 _secrets_path = os.path.join(_skill_dir, ".secrets.json")
