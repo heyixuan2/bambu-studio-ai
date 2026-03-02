@@ -11,6 +11,79 @@ Output: JSON report with issues, warnings, suggestions, and optional rendered vi
 """
 
 import argparse
+
+
+def auto_orient(mesh):
+    """Auto-orient model for optimal 3D printing position.
+    Finds the orientation with the largest flat surface on the build plate,
+    minimizes overhangs, and places the model on the floor (z=0).
+    """
+    try:
+        import trimesh
+        best_mesh = mesh.copy()
+        best_score = -1
+        best_transform = None
+
+        # Try principal orientations + stable poses
+        # Method 1: Use trimesh's stable poses if available
+        try:
+            transforms, probs = trimesh.poses.compute_stable_poses(mesh, n_samples=50)
+            for i, (T, p) in enumerate(zip(transforms, probs)):
+                candidate = mesh.copy()
+                candidate.apply_transform(T)
+                # Score: probability * base area
+                bounds = candidate.bounds
+                base_area = (bounds[1][0] - bounds[0][0]) * (bounds[1][1] - bounds[0][1])
+                height = bounds[1][2] - bounds[0][2]
+                # Prefer: high probability, large base, low height (less supports)
+                score = p * base_area / max(height, 0.001)
+                if score > best_score:
+                    best_score = score
+                    best_transform = T
+        except Exception:
+            # Fallback: try 6 cardinal orientations
+            import numpy as np
+            rotations = [
+                np.eye(4),  # original
+                trimesh.transformations.rotation_matrix(np.pi/2, [1, 0, 0]),   # +90 X
+                trimesh.transformations.rotation_matrix(-np.pi/2, [1, 0, 0]),  # -90 X
+                trimesh.transformations.rotation_matrix(np.pi/2, [0, 1, 0]),   # +90 Y
+                trimesh.transformations.rotation_matrix(-np.pi/2, [0, 1, 0]),  # -90 Y
+                trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]),     # 180 X
+            ]
+            for T in rotations:
+                candidate = mesh.copy()
+                candidate.apply_transform(T)
+                bounds = candidate.bounds
+                base_area = (bounds[1][0] - bounds[0][0]) * (bounds[1][1] - bounds[0][1])
+                height = bounds[1][2] - bounds[0][2]
+                # Count downward-facing faces (potential base)
+                normals = candidate.face_normals
+                down_faces = normals[normals[:, 2] < -0.9]
+                base_coverage = len(down_faces) / max(len(normals), 1)
+                score = base_area * (1 + base_coverage * 5) / max(height, 0.001)
+                if score > best_score:
+                    best_score = score
+                    best_transform = T
+
+        if best_transform is not None:
+            mesh.apply_transform(best_transform)
+
+        # Drop to floor (z=0)
+        bounds = mesh.bounds
+        mesh.apply_translation([0, 0, -bounds[0][2]])
+
+        print(f"🔄 Auto-oriented: base area optimized, placed on build plate (z=0)")
+        bounds = mesh.bounds
+        dims = bounds[1] - bounds[0]
+        print(f"   Dimensions: {dims[0]*1000:.1f} × {dims[1]*1000:.1f} × {dims[2]*1000:.1f} mm")
+        return mesh
+    except Exception as e:
+        print(f"⚠️ Auto-orient failed: {e}")
+        # At least drop to floor
+        bounds = mesh.bounds
+        mesh.apply_translation([0, 0, -bounds[0][2]])
+        return mesh
 import json
 import math
 import os
@@ -76,7 +149,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     }
 
     bounds = mesh.bounds
-    dims = mesh.extents  # [x, y, z] dimensions in mm
+    dims = mesh.extents if mesh.extents is not None else [0, 0, 0]  # [x, y, z] dimensions in mm
     # Check if model is too complex (may be too large for printer SD card)
     if len(mesh.faces) > 500000:
         report["warnings"].append(
@@ -86,7 +159,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         )
     
     report["geometry"] = {
-        "dimensions_mm": [round(d, 2) for d in dims],
+        "dimensions_mm": [round(d, 2) for d in dims] if dims is not None else [0, 0, 0],
         "volume_cm3": round(mesh.volume / 1000, 2),
         "surface_area_cm2": round(mesh.area / 100, 2),
         "triangle_count": len(mesh.faces),
@@ -324,9 +397,9 @@ def repair_mesh(mesh, output_path=None):
     trimesh.repair.fill_holes(mesh)
     
     # Remove degenerate faces
-    mesh.remove_degenerate_faces()
-    mesh.remove_duplicate_faces()
-    mesh.remove_unreferenced_vertices()
+    mesh.update_faces(mesh.nondegenerate_faces())
+    mesh.merge_vertices()
+    # mesh cleanup done via merge_vertices
     
     repaired = mesh.is_watertight and mesh.is_volume
     
@@ -408,6 +481,8 @@ def main():
                         help="Purpose affects infill/wall recommendations")
     parser.add_argument("--render", action="store_true", help="Render preview images")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    parser.add_argument("--height", type=float, default=0, help="Target height in mm (auto-scale model)")
+    parser.add_argument("--orient", action="store_true", help="Auto-orient for optimal print position")
     parser.add_argument("--repair", action="store_true", help="Auto-repair non-manifold mesh before analysis")
     parser.add_argument("--output-dir", default=".", help="Directory for rendered images")
     args = parser.parse_args()
@@ -436,6 +511,32 @@ def main():
     except Exception as e:
         print(f"ERROR: Failed to load '{args.file}': {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Auto-scale if target height specified
+    if args.height and args.height > 0:
+        bounds = mesh.bounds
+        current_h = (bounds[1][2] - bounds[0][2])
+        # Tripo models are in ~1 unit scale, detect if too small
+        current_h_mm = current_h * 1000 if current_h < 1 else current_h
+        if current_h_mm < 1:
+            current_h_mm = current_h * 1000
+        scale = args.height / current_h_mm
+        mesh.apply_scale(scale)
+        print(f"📏 Scaled to {args.height}mm height (scale factor: {scale:.2f}x)")
+        bounds = mesh.bounds
+        dims = bounds[1] - bounds[0]
+        print(f"   New dimensions: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
+
+    # Auto-orient if requested
+    if args.orient:
+        mesh = auto_orient(mesh)
+        # Export oriented model
+        orient_path = os.path.splitext(args.file)[0] + "_oriented" + os.path.splitext(args.file)[1]
+        mesh.export(orient_path)
+        print(f"📁 Oriented model: {orient_path}")
+
+    # ─── Run analysis on ORIGINAL mesh first ───
+    original_mesh = mesh.copy()
 
     # Tiered repair: don't over-process good models
     has_holes = not mesh.is_watertight

@@ -248,7 +248,7 @@ class TripoBackend:
         return {
             "status": data.get("status", "unknown"),
             "progress": data.get("progress", 0),
-            "model_urls": {"glb": data.get("output", {}).get("model", "")},
+            "model_urls": {"glb": data.get("output", {}).get("pbr_model") or data.get("output", {}).get("model", "")},
         }
     
     def download(self, task_id, fmt="3mf"):
@@ -458,7 +458,7 @@ def cmd_status(task_id):
         bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
         print(f"📊 Progress: [{bar}] {progress}%")
     
-    if state == "completed":
+    if state in ("completed", "success"):
         urls = status.get("model_urls", {})
         if urls:
             print(f"📦 Available formats: {', '.join(urls.keys())}")
@@ -519,7 +519,7 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
         bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
         print(f"\r  [{bar}] {progress}% - {state}", end="", flush=True)
         
-        if state == "completed":
+        if state in ("completed", "success"):
             print(f"\n✅ Done!")
             path = backend.download(task_id, fmt)
             if path:

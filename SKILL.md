@@ -137,6 +137,8 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh
 | Download model | `python3 scripts/generate.py download <task_id> --format 3mf` |
 | Analyze model before printing | `python3 scripts/analyze.py model.3mf --material PLA --purpose functional` |
 | Analyze + auto-repair mesh | `python3 scripts/analyze.py model.3mf --repair --material PLA` |
+| Auto-orient for printing | `python3 scripts/analyze.py model.stl --orient` |
+| Orient + repair combo | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
 | Convert to multi-color OBJ | `python3 scripts/colorize.py model.glb --colors "#FF0,#000,#F00,#FFF" --height 80` |
 | Single print check | `python3 scripts/monitor.py --once` |
 | Continuous monitoring | `python3 scripts/monitor.py --interval 120` |
