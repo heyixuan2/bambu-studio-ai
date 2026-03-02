@@ -109,9 +109,15 @@ def enhance_prompt(user_prompt, max_size=None):
         f"{user_prompt}. "
         f"Optimized for FDM 3D printing. "
         f"Maximum dimensions: {max_size[0]}x{max_size[1]}x{max_size[2]}mm. "
-        f"Flat stable base, watertight manifold mesh, "
-        f"no overhangs beyond 45 degrees, "
-        f"minimum 1.5mm wall thickness, no floating parts."
+        f"CRITICAL REQUIREMENTS: "
+        f"Single connected piece (no separate floating parts), "
+        f"flat stable base touching the ground plane, "
+        f"all parts must be physically connected to the base (no hovering elements), "
+        f"watertight manifold mesh with no holes or non-manifold edges, "
+        f"no overhangs beyond 45 degrees from vertical, "
+        f"minimum 1.5mm wall thickness, "
+        f"no thin protruding features under 2mm. "
+        f"The model must be printable without supports if possible."
     )
     return enhanced
 

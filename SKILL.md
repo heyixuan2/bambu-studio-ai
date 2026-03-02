@@ -566,10 +566,12 @@ Default `--format 3mf` unless user specifies otherwise.
 4. Open in Bambu Studio → open -a "BambuStudio" model.3mf
 5. ⚠️ MANDATORY: Tell user to inspect in Bambu Studio
    → "I've opened the model in Bambu Studio. Please check:
-      - Does it look correct? Any missing parts?
+      - Does it look correct? Any missing or deformed parts?
+      - Any floating/disconnected pieces? (they will fall during printing!)
       - Is the size right? (check dimensions in bottom bar)
       - Any red warnings? (non-manifold, intersecting parts)
-      - Slice it and check estimated time/filament.
+      - Are there parts hanging in the air that need supports?
+      - Slice it and check: estimated time, filament usage, and support amount.
       Let me know when you're ready to print!"
 6. WAIT for explicit user confirmation → "looks good" / "print it" / "go ahead"
 7. Print             → python3 scripts/bambu.py print model.3mf

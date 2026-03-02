@@ -155,6 +155,31 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         checks_passed += 1
     report["checks"].append(check5)
 
+    # === CHECK 5b: Floating Parts Detection ===
+    check5b = {"name": "Floating/disconnected parts", "status": "pass"}
+    try:
+        # trimesh can split mesh into connected components
+        bodies = mesh.split(only_watertight=False)
+        if len(bodies) > 1:
+            sizes = sorted([b.volume for b in bodies], reverse=True)
+            check5b["status"] = "fail"
+            check5b["components"] = len(bodies)
+            report["issues"].append(
+                f"Model has {len(bodies)} disconnected parts! "
+                f"Floating parts will fall during printing. "
+                f"Merge into single mesh or remove small floating pieces. "
+                f"Largest part: {sizes[0]:.1f}mm³, smallest: {sizes[-1]:.1f}mm³."
+            )
+        else:
+            check5b["note"] = "Single connected body — no floating parts."
+            checks_passed += 1
+    except Exception:
+        check5b["status"] = "info"
+        check5b["note"] = "Could not check connectivity."
+        checks_passed += 1
+    report["checks"].append(check5b)
+    total_checks += 1
+
     # === CHECK 6: Layer Height ===
     check6 = {"name": "Layer height recommendation", "status": "pass"}
     if min_dim < 10:
