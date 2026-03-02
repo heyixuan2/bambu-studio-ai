@@ -18,7 +18,7 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 📸 **Camera** | Live snapshots from printer camera |
 | 🔎 **Model Search** | Search Printables, MakerWorld, Thingiverse, Thangs for existing models |
 | 🔔 **Notifications** | Print complete/fail alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
-| 🌐 **Dual Mode** | Cloud (remote, anywhere) + Local (LAN, faster) |
+| 🌐 **Dual Mode** | LAN (recommended, full features) + Cloud (remote, limited) |
 
 ## Supported Printers
 

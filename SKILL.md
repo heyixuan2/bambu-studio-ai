@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Full-stack Bambu Lab 3D printing: control any printer (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D), generate 3D models from text/images, monitor prints with AI, get notifications. Use when user mentions: printer, print, 3D, filament, nozzle, bed, temperature, Bambu, AMS, spool, layer, G-code, laser, STL, model, generate, slice. Also for print failure diagnosis, material advice, and multi-color management."
-version: "0.7.0"
+version: "0.9.0"
 author: TieGaier
 metadata:
   openclaw:
@@ -164,11 +164,21 @@ Show options grouped by series:
 - 🔴 **H Series** (High-end): H2C (350°C, heated chamber), H2S (340³mm, 1000mm/s), H2D (dual extruder, laser, cutting)
 
 **2. Connection Mode**
-> "Cloud (remote, anywhere) or Local (same network, faster)? Or both?"
+> "How is your printer connected?"
+> 
+> **🔌 LAN (Recommended)** — If your computer and printer are on the same WiFi/network.
+> Full features: camera, G-code, AMS, AI monitoring, fast response.
+> You'll need: IP address, serial number, and access code from printer Settings → Device.
+> Also make sure LAN Mode is turned ON on the printer (Settings → Network → LAN Mode → ON).
+>
+> **☁️ Cloud** — If you're accessing remotely (not on the same network).
+> Limited features: no camera, no G-code, no AI monitoring. Requires email verification.
 
-- **Cloud** → email + password (stored in .secrets.json)
-- **Local** → printer IP + serial + access code (from printer Settings → Device)
-- **Both** → collect all, ask which is default
+Default to LAN unless user specifically needs remote access.
+
+- **LAN** → printer IP + serial + access code (Settings → Device → LAN Access Code)
+- **Cloud** → email + password (will require verification code on first login)
+- **Both** → collect all, default to LAN
 
 **3. AI 3D Generation** (optional)
 > "Want AI 3D model generation? Create printable models from text or photos."
@@ -425,30 +435,62 @@ Use `--raw` to skip auto-enhancement if you've crafted a precise prompt.
 
 ## Connection Modes
 
-### ☁️ Cloud (default)
+> **⚠️ Recommendation: Use LAN mode whenever possible.**
+> Cloud mode has limited features and requires email verification on every login.
+> LAN mode is faster, has full features, and no auth headaches.
+
+### 🔌 Local / LAN (Recommended)
+
+**Requirements:** OpenClaw host and Bambu Lab printer on the **same local network** (WiFi or Ethernet).
+
+**How to enable LAN mode on your printer:**
+1. On printer touchscreen → **Settings** → **Network** → **LAN Mode**
+2. Toggle **LAN Mode** to **ON** (实况/Live)
+3. Note down:
+   - **IP Address** — shown on the network screen
+   - **Serial Number** — Settings → Device Info
+   - **Access Code** — Settings → Device Info → LAN Access Code
+
+```bash
+export BAMBU_MODE="local"
+export BAMBU_IP="192.168.1.100"        # Your printer's IP
+export BAMBU_SERIAL="01P00A000000000"   # From Device Info
+export BAMBU_ACCESS_CODE="12345678"     # From Device Info
+```
+
+### ☁️ Cloud (remote access only)
+
+Only use Cloud mode if you **cannot** be on the same network as the printer.
+
+**Limitations:**
+- ❌ No camera snapshots
+- ❌ No G-code commands
+- ❌ Limited AMS info
+- ❌ Requires email verification code on first login (and after token expires)
+- ⚠️ Slower response, depends on Bambu servers
+
+**Login includes verification code flow:**
+1. Script sends login request
+2. Bambu emails you a verification code
+3. Enter the code when prompted (script will **wait patiently** — no auto-retry)
+4. Token is cached for 24 hours
+
 ```bash
 export BAMBU_MODE="cloud"
 export BAMBU_EMAIL="you@email.com"
 export BAMBU_PASSWORD="password"
 ```
-Works anywhere. Depends on Bambu servers.
 
-### 🔌 Local
-```bash
-export BAMBU_MODE="local"
-export BAMBU_IP="192.168.1.100"
-export BAMBU_SERIAL="01P00A000000000"
-export BAMBU_ACCESS_CODE="12345678"
-```
-Faster. Camera + full AMS. Needs same network.
-
-| Feature | Cloud | Local |
-|---------|-------|-------|
+| Feature | Cloud | LAN |
+|---------|-------|-----|
 | Status / Control | ✅ | ✅ |
 | Camera Snapshot | ❌ | ✅ |
-| AMS Details | Basic | Full |
+| AMS Full Details | ❌ | ✅ |
 | G-code Send | ❌ | ✅ |
-| Remote Access | ✅ | Needs VPN |
+| AI Monitoring | ❌ | ✅ |
+| Speed | Slow | Fast |
+| Auth | Email + verify code | Access code (one-time) |
+| Network | Anywhere | Same LAN |
 
 Scripts auto-load `config.json` + `.secrets.json` from the skill directory.
 Environment variables override config file values.
@@ -697,11 +739,15 @@ python3 scripts/bambu.py speed ludicrous  # Max (H2S: 1000mm/s)
 
 ## Version History
 
-- **0.5.0** — Pre-generation research flow, QA fixes, full English, secrets schema
+- **0.9.0** — Cloud login: token caching (24h), verification code patience, LAN recommended by default
+- **0.8.x** — Model sourcing (search before generate), user choice (search/generate/auto)
+- **0.7.x** — analyze.py (10-point check), model requirements table, security scan fixes, README
+- **0.6.0** — Monitor intensity levels, 3MF priority format, mandatory Bambu Studio preview
+- **0.5.x** — Pre-generation research flow, .secrets.example.json, QA fixes
 - **0.4.0** — 3-phase setup (configure → test → summary)
-- **0.3.x** — Security fixes, env var alignment, config/secrets separation
+- **0.3.x** — Security fixes, config/secrets separation
 - **0.2.0** — Full 9-model support, Cloud+Local dual mode, AI monitoring
-- **0.1.0** — Initial release (H2D only)
+- **0.1.0** — Initial release
 
 ## License
 

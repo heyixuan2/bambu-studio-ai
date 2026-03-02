@@ -59,13 +59,68 @@ class CloudBackend:
             if not password: print("   export BAMBU_PASSWORD='your_password'")
             sys.exit(1)
 
+        # Token cache: avoid re-login every run
+        _token_cache = os.path.join(_skill_dir, ".token_cache.json")
+        cached_token = None
+        if os.path.exists(_token_cache):
+            try:
+                import json as _tj
+                with open(_token_cache) as _tf:
+                    _tc = _tj.load(_tf)
+                    cached_token = _tc.get("token")
+                    cache_time = _tc.get("timestamp", 0)
+                    import time
+                    # Token valid for 24 hours
+                    if time.time() - cache_time > 86400:
+                        cached_token = None
+                        print("🔄 Cached token expired, re-authenticating...")
+            except Exception:
+                cached_token = None
+
+        if cached_token:
+            try:
+                self.client = BambuClient(token=cached_token)
+                print("✅ Using cached login token")
+                return
+            except Exception:
+                print("⚠️ Cached token invalid, re-authenticating...")
+                cached_token = None
+
         try:
             auth = BambuAuthenticator()
-            token = auth.login(email, password)
+            # First attempt — may trigger verification code
+            try:
+                token = auth.login(email, password)
+            except Exception as login_err:
+                err_msg = str(login_err).lower()
+                if "verify" in err_msg or "code" in err_msg or "captcha" in err_msg:
+                    print("📧 Verification code required!")
+                    print("   Check your email for the code from Bambu Lab.")
+                    print("   ⏳ Waiting for you to provide the code...")
+                    print("")
+                    print("   Enter verification code: ", end="", flush=True)
+                    verify_code = input().strip()
+                    if verify_code:
+                        token = auth.login(email, password, verify_code=verify_code)
+                    else:
+                        print("❌ No code entered. Please try again.")
+                        sys.exit(1)
+                else:
+                    raise login_err
+
             self.client = BambuClient(token=token)
+
+            # Cache the token
+            import json as _tj, time as _tt
+            with open(_token_cache, "w") as _tf:
+                _tj.dump({"token": token, "timestamp": _tt.time(), "email": email}, _tf)
+            os.chmod(_token_cache, 0o600)
+            print("✅ Logged in and token cached (valid 24h)")
+
         except Exception as e:
             print(f"❌ Cloud login failed: {e}")
             print("   Check email/password, or try again later")
+            print("   💡 TIP: If stuck on verification codes, use LAN mode instead (faster + more features)")
             sys.exit(1)
 
         # Get printer
