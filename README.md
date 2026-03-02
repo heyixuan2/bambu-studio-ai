@@ -635,6 +635,9 @@ PRs welcome! Areas that need help:
 
 | Version | Changes |
 |---------|---------|
+| **0.10.1** 🏷️ | **First production-ready release** — monitor intensity selection |
+| 0.10.0 | 502 retry with backoff, ffmpeg fix, dynamic printer model, triangle count warning |
+| 0.9.8 | Complete README rewrite, AI quality disclaimer |
 | 0.9.7 | Model requirements moved to README (prevents agent confusion) |
 | 0.9.6 | Anti-floating: prompt enhancement, disconnected parts detection |
 | 0.9.5 | Auto mesh repair, mandatory Bambu Studio preview with checklist |
