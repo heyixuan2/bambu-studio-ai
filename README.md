@@ -635,22 +635,7 @@ PRs welcome! Areas that need help:
 
 | Version | Changes |
 |---------|---------|
-| **0.10.1** 🏷️ | **First production-ready release** — monitor intensity selection |
-| 0.10.0 | 502 retry with backoff, ffmpeg fix, dynamic printer model, triangle count warning |
-| 0.9.8 | Complete README rewrite, AI quality disclaimer |
-| 0.9.7 | Model requirements moved to README (prevents agent confusion) |
-| 0.9.6 | Anti-floating: prompt enhancement, disconnected parts detection |
-| 0.9.5 | Auto mesh repair, mandatory Bambu Studio preview with checklist |
-| 0.9.4 | Scoped SSL, non-blocking verification code, security fixes |
-| 0.9.3 | GLB→3MF auto-conversion (providers return GLB, Bambu needs 3MF) |
-| 0.9.1 | SSL fix for LAN MQTT, API method name compatibility |
-| 0.9.0 | Token caching (24h), LAN recommended, Cloud limitations documented |
-| 0.8.x | Model sourcing (search online before generating), user choice flow |
-| 0.7.x | analyze.py (10-point check), README, security scan fixes |
-| 0.6.0 | Monitor intensity levels, 3MF format priority, mandatory preview |
-| 0.5.x | Pre-generation research flow, secrets documentation |
-| 0.4.0 | 3-phase conversational setup |
-| 0.1.0 | Initial release |
+| **0.10.2** 🏷️ | **First production-ready release** — full bambulabs-api v2.6.6 compatibility, 20+ iterations of real-world testing on H2D |
 
 ---
 
