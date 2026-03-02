@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "bambu-studio-ai": {
+      "source": "heyixuan2/bambu-studio-ai",
+      "sourceType": "github",
+      "computedHash": "1cb93304952516dd43085a88ce25bd6317ddc7a0f0a18eb646ccf20200777104"
+    }
+  }
+}

@@ -168,33 +168,33 @@ First login requires email verification code. Token is cached for 24 hours.
 Here's what happens when you say "make me an iPhone 15 Pro Max case and print it":
 
 ```
-You: "Print me an iPhone 16 Pro Max case"
+You: "帮我打印一个iPhone 16 Pro Max的手机壳"
 
-Agent: "How would you like to get the model?               ← Ask preference
-  1. 🔎 Search existing models
-  2. 🎨 AI generate a custom one
-  3. 🤷 Not sure"
+Agent: "你想：                                             ← Ask preference
+  1. 🔎 搜索现有模型
+  2. 🎨 AI生成定制
+  3. 🤷 不确定"
 
-User: "Not sure"
+User: "不确定"
 
-Agent: "Let me search first..."                            ← Search online
+Agent: "让我先搜搜..."                                     ← Search online
  → Searches Printables, MakerWorld, Thangs
-Agent: "Found 3 options:                                   ← Present results
+Agent: "找到3个：                                          ← Present results
   1. ⭐ iPhone 16 PM Case (4.8★, 12K downloads)
   2. Slim Case with MagSafe
   3. Rugged Case with kickstand"
 
-User: "None of these, generate one"
+User: "没有喜欢的，帮我生成"
 
-Agent: "A few questions:                                   ← Clarify requirements
-  1. Material? TPU recommended (flexible)
-  2. Features? (protection only / kickstand / card slot)
-  3. Style preference?"
+Agent: "几个问题：                                          ← Clarify requirements
+  1. 什么材质？建议TPU(柔软)
+  2. 需要什么功能？(纯保护/支架/卡槽)
+  3. 风格偏好？"
 
-Agent: "Let me look up the exact dimensions..."            ← Research (with permission)
+Agent: "我查一下精确尺寸..."                                ← Research (with permission)
  → Searches iPhone 16 Pro Max specs
-Agent: "159.9×76.7×8.25mm, camera bump 40×36mm            ← Confirm specs
-  Adding 1mm tolerance, TPU material. OK?"
+Agent: "159.9×76.7×8.25mm, 摄像头40×36mm                  ← Confirm specs
+  加1mm公差, TPU材质. OK?"
 
 User: "OK"
                     ↓
@@ -211,20 +211,20 @@ Auto-repair if needed                                       ← Repair
 "🔧 Fixed 58K non-manifold edges"
                     ↓
 open -a "BambuStudio" phone_case.3mf                       ← Preview (MANDATORY)
-Agent: "Opened in Bambu Studio. Please check:              ← User must verify
-  - Does the model look correct?
-  - Any floating/disconnected parts?
-  - Dimensions right?
-  - Slice it — check time and filament
-  Let me know when ready!"
+Agent: "已在Bambu Studio打开，请检查：                        ← User must verify
+  - 模型看起来对吗？
+  - 有没有悬空/断开的部分？
+  - 尺寸对吗？
+  - 切片看看时间和耗材
+  确认后告诉我！"
 
-User: "Looks good, print it"
+User: "可以，打印吧"
                     ↓
 bambu.py print phone_case.3mf                               ← Print
                     ↓
 monitor.py (every 5 min)                                    ← AI Monitor
                     ↓
-Agent: "Print complete! Here's the final photo."           ← Notify
+Agent: "打印完成！这是最终照片。"                              ← Notify
 ```
 
 ---

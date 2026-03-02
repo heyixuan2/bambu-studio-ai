@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
-description: "From chat to finished print — the first full-pipeline AI 3D printing skill. Connect your Bambu Lab printer, pick a 3D API, and let your agent search, generate, analyze, repair, preview, print & monitor. All 9 Bambu printers supported."
-version: "0.10.6"
+description: "Full-stack Bambu Lab 3D printing: control any printer (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D), generate 3D models from text/images, monitor prints with AI, get notifications. Use when user mentions: printer, print, 3D, filament, nozzle, bed, temperature, Bambu, AMS, spool, layer, G-code, laser, STL, model, generate, slice. Also for print failure diagnosis, material advice, and multi-color management."
+version: "0.9.0"
 author: TieGaier
 metadata:
   openclaw:
@@ -90,28 +90,9 @@ keywords:
 
 # 🖨️ Bambu Studio AI
 
-The first full-pipeline AI 3D printing skill — from a chat message to a finished print.
 
-Connect your Bambu Lab printer + pick a 3D generation API, and your agent handles everything:
-search → generate → analyze → repair → preview → print → monitor.
 
-Supports all 9 Bambu Lab printers. Cloud + LAN dual mode.
-
-## Installation
-
-```bash
-clawhub install bambu-studio-ai
-```
-
-Or clone from GitHub:
-```bash
-git clone https://github.com/heyixuan2/bambu-studio-ai.git ~/.agents/skills/bambu-studio-ai
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh
-```
-
-📦 **GitHub:** https://github.com/heyixuan2/bambu-studio-ai
-
----
+Full-stack Bambu Lab 3D printing skill: **Idea → 3D Model → Print → Monitor → Notify**.
 
 ## Quick Reference
 
@@ -396,12 +377,12 @@ After research, confirm:
 ### Step 4: Generate
 
 **Before generating, tell the user:**
-> "A quick heads-up: AI-generated 3D model quality depends mainly on two things:
-> 1. Your 3D generation provider (Meshy, Tripo, etc.) — each has different strengths
-> 2. How detailed your prompt is — the more specific, the better
+> "提醒一下：AI 生成的 3D 模型质量主要取决于两个因素：
+> 1. 你选的 3D 生成服务商（Meshy/Tripo 等）的能力
+> 2. Prompt 的详细程度 — 越具体越好
 > 
-> AI-generated models are not production-ready out of the box. Always review in Bambu Studio.
-> If the result isn't great, try a different provider or refine your prompt."
+> AI 生成的模型不是成品，通常需要在 Bambu Studio 里检查和调整。
+> 如果效果不理想，可以换个服务商或者优化 prompt 再试。"
 
 Call `generate.py` with a detailed, dimensions-aware prompt. The script auto-enhances prompts with printability instructions and scales to your printer's build volume.
 
@@ -468,7 +449,7 @@ Use `--raw` to skip auto-enhancement if you've crafted a precise prompt.
 
 **How to enable LAN mode on your printer:**
 1. On printer touchscreen → **Settings** → **Network** → **LAN Mode**
-2. Toggle **LAN Mode** to **ON** (Live)
+2. Toggle **LAN Mode** to **ON** (实况/Live)
 3. Note down:
    - **IP Address** — shown on the network screen
    - **Serial Number** — Settings → Device Info
