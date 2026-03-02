@@ -89,6 +89,14 @@ keywords:
 
 # 🖨️ Bambu Studio AI
 
+> **Minimum Model Requirement:** This skill is 600+ lines with complex multi-step flows.
+> 
+> | Tier | Models | Status |
+> |------|--------|--------|
+> | ✅ **Recommended** | Claude Opus, Claude Sonnet, GPT-4o, GPT-5, Gemini 2.5 Pro | Full capability |
+> | ⚠️ **Works but may skip steps** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1 70B+ | May simplify pre-gen flow or monitoring |
+> | ❌ **Not recommended** | Llama 3.1 8B, Phi-3, small local models | Will miss setup steps, unsafe for printing |
+
 Full-stack Bambu Lab 3D printing skill: **Idea → 3D Model → Print → Monitor → Notify**.
 
 ## Quick Reference
@@ -124,7 +132,7 @@ Activate this skill when you see:
 | "check my printer" / "printer status" | Run `bambu.py status` |
 | "what's printing?" / "how far along?" | Run `bambu.py progress` |
 | "print this" / "start printing" | Pre-gen flow → `bambu.py print` |
-| "generate a ..." / "make me a ..." | Pre-generation flow → `generate.py` |
+| "print a ..." / "make me a ..." | Ask: search online or AI generate? |
 | "turn image into 3D" / sends photo | `generate.py image` |
 | "pause" / "stop" / "resume" printing | `bambu.py pause\|cancel\|resume` |
 | "speed up" / "quiet mode" / "ludicrous" | `bambu.py speed` |
@@ -132,6 +140,7 @@ Activate this skill when you see:
 | "show me the printer" / "camera" | `bambu.py snapshot` |
 | "watch my print" / "monitor" | Ask permission → `monitor.py` |
 | "light on/off" | `bambu.py light on\|off` |
+| "find a model" / "download" / known object | Search online model libraries first |
 | "analyze" / "check this model" / before any print | `analyze.py` → 10-point check |
 | First use + no config.json | → Start Setup Flow |
 
@@ -246,6 +255,64 @@ Try: "What's my printer status?" or "Generate a phone stand"
 ```
 
 
+
+---
+
+## Model Sourcing (Search Before Generating)
+
+**When a user wants to print something, always ask first:**
+
+> "Do you want me to:
+> 1. 🔎 **Search online** — find existing models (usually higher quality, tested by community)
+> 2. 🎨 **AI Generate** — create a custom model from scratch
+> 3. 🤷 **Not sure** — I'll search first, generate if nothing fits"
+
+Then follow the appropriate flow. Don't assume — the user may already have a specific design in mind,
+or may want something completely custom that doesn't exist.
+
+### Search Priority
+
+| Source | URL | Best For |
+|--------|-----|----------|
+| **Printables** | printables.com | Bambu Lab community, pre-sliced profiles |
+| **Thingiverse** | thingiverse.com | Largest library, everything |
+| **MakerWorld** | makerworld.com | Bambu Lab official, ready-to-print |
+| **Thangs** | thangs.com | 3D search engine, searches multiple sites |
+| **MyMiniFactory** | myminifactory.com | Curated, high quality |
+| **Cults3D** | cults3d.com | Designer models, some paid |
+
+### When to Search vs Generate
+
+| Scenario | Action |
+|----------|--------|
+| Common object (phone stand, hook, box) | **Search first** — 99% chance it exists |
+| Specific product accessory (iPhone 15 case) | **Search first** — likely exists with exact dimensions |
+| Custom/unique object | **Generate** with AI |
+| Artistic/decorative | **Search first**, generate if nothing fits |
+| Mechanical/functional part | **Search first** — tested designs > AI guesses |
+
+### Search Flow
+
+1. Ask user: "Want me to search for existing models first? Often better quality than AI-generated."
+2. If yes → search Thangs/Printables/MakerWorld via web_search
+3. Present top 3-5 results with:
+   - Name, thumbnail URL, download count/rating
+   - File format (prefer .3mf > .stl)
+   - Whether it has Bambu Lab print profiles
+4. If user picks one → download → `analyze.py` → preview → print
+5. If nothing good → fall back to AI generation
+
+### Example
+
+> User: "Print me a headphone stand"
+> Agent: "Let me search — headphone stands are very common online."
+> → Searches Printables + MakerWorld
+> Agent: "Found 3 good options:
+> 1. ⭐ 'Minimal Headphone Stand' — 4.8★, 12K downloads, has Bambu profile
+> 2. 'Under-desk Hook Stand' — 4.6★, wall-mounted
+> 3. 'RGB Headphone Holder' — with cable channel
+>
+> Want one of these, or should I generate a custom design?"
 
 ---
 

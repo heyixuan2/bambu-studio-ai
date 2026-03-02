@@ -16,6 +16,7 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 🔍 **AI Print Monitoring** | Periodic camera snapshots → AI anomaly detection → auto-pause |
 | 📦 **AMS Management** | Filament slot status, low-filament alerts |
 | 📸 **Camera** | Live snapshots from printer camera |
+| 🔎 **Model Search** | Search Printables, MakerWorld, Thingiverse, Thangs for existing models |
 | 🔔 **Notifications** | Print complete/fail alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
 | 🌐 **Dual Mode** | Cloud (remote, anywhere) + Local (LAN, faster) |
 
@@ -29,6 +30,16 @@ All 9 Bambu Lab models:
 | 🔵 **P** (Prosumer) | P1S, P2S | Enclosed, up to 600mm/s |
 | 🟠 **X** (Pro) | X1C, X1E | AI features, industrial |
 | 🔴 **H** (High-end) | H2C, H2S, H2D | 350°C, 1000mm/s, dual extruder, laser |
+
+## Model Requirements
+
+This skill has 600+ lines of instructions with multi-step flows (setup, pre-generation research, 10-point analysis). Model capability matters.
+
+| Tier | Models | Notes |
+|------|--------|-------|
+| ✅ **Recommended** | Claude Opus, Claude Sonnet, GPT-4o, GPT-5, Gemini 2.5 Pro | Full capability — follows all steps correctly |
+| ⚠️ **Usable** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1 70B+ | May simplify pre-generation flow or skip monitoring details |
+| ❌ **Not recommended** | Small local models (<30B params) | Will miss critical safety steps — not safe for printer control |
 
 ## Install
 
@@ -61,6 +72,9 @@ No CLI wizard needed — your OpenClaw agent handles setup through conversation:
 ```
 You: "Make me an iPhone 15 Pro Max case and print it"
 
+Agent: "Let me search for existing models first..."     ← Search online
+Agent: "Found 3 options on Printables, but none fit
+        your exact specs. I'll generate a custom one."
 Agent: "Let me look up the exact dimensions — ok?"     ← Research
 Agent: "159.9×76.7×8.25mm, camera bump 40×36mm.        ← Confirm specs
         I'll add 1mm tolerance. TPU material.
