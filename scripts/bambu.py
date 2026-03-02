@@ -1,0 +1,444 @@
+#!/usr/bin/env python3
+"""
+Bambu Lab Printer Control (All Models) — Dual Mode (Cloud API + Local MQTT)
+Usage: python3 bambu.py <command> [args]
+
+Modes:
+  BAMBU_MODE=cloud  → Remote via Bambu Cloud API (anywhere)
+  BAMBU_MODE=local  → Local via MQTT (same network)
+"""
+
+import os
+import sys
+import time
+import argparse
+
+MODE = os.environ.get("BAMBU_MODE", "").lower()
+
+# Load config.json + .secrets.json (fallback for env vars)
+_config = {}
+_skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _cpath in [os.path.join(_skill_dir, "config.json"), os.path.expanduser("~/.bambu-config.json")]:
+    if os.path.exists(_cpath):
+        import json as _j
+        with open(_cpath) as _f:
+            _config = _j.load(_f)
+        break
+
+# Load secrets
+_secrets_path = os.path.join(_skill_dir, ".secrets.json")
+if os.path.exists(_secrets_path):
+    import json as _j
+    with open(_secrets_path) as _f:
+        _config.update(_j.load(_f))
+
+# Config.json values as fallbacks for env vars
+if not MODE:
+    MODE = _config.get("mode", "cloud").lower()
+for _k, _e in [("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL"),
+               ("access_code", "BAMBU_ACCESS_CODE"), ("email", "BAMBU_EMAIL"),
+               ("password", "BAMBU_PASSWORD"), ("device_id", "BAMBU_DEVICE_ID")]:
+    if not os.environ.get(_e) and _config.get(_k):
+        os.environ[_e] = _config[_k]
+
+# ─── Cloud API Backend ───────────────────────────────────────────────
+
+class CloudBackend:
+    def __init__(self):
+        try:
+            from bambulab import BambuClient, BambuAuthenticator
+        except ImportError:
+            print("❌ bambu-lab-cloud-api not installed.")
+            print("   Run: pip3 install --break-system-packages bambu-lab-cloud-api")
+            sys.exit(1)
+
+        email = os.environ.get("BAMBU_EMAIL", "")
+        password = os.environ.get("BAMBU_PASSWORD", "")
+        if not email or not password:
+            print("❌ Missing cloud credentials:")
+            if not email: print("   export BAMBU_EMAIL='your@email.com'")
+            if not password: print("   export BAMBU_PASSWORD='your_password'")
+            sys.exit(1)
+
+        try:
+            auth = BambuAuthenticator()
+            token = auth.login(email, password)
+            self.client = BambuClient(token=token)
+        except Exception as e:
+            print(f"❌ Cloud login failed: {e}")
+            print("   Check email/password, or try again later")
+            sys.exit(1)
+
+        # Get printer
+        device_id = os.environ.get("BAMBU_DEVICE_ID", "")
+        if device_id:
+            self.device_id = device_id
+        else:
+            try:
+                devices = self.client.get_devices()
+                if not devices:
+                    print("❌ No printers found on your Bambu account")
+                    sys.exit(1)
+                self.device_id = devices[0].get("dev_id", devices[0].get("id", ""))
+                name = devices[0].get("name", self.device_id)
+                print(f"📡 Using printer: {name}")
+            except Exception as e:
+                print(f"❌ Cannot get printer list: {e}")
+                sys.exit(1)
+
+    def get_status(self):
+        try:
+            return self.client.get_print_status(self.device_id)
+        except:
+            return self.client.get_device_info(self.device_id)
+
+    def get_ams(self):
+        try:
+            return self.client.get_ams_filaments(self.device_id)
+        except:
+            return None
+
+    def pause(self):
+        self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
+                           json={"print": {"command": "pause"}})
+
+    def resume(self):
+        self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
+                           json={"print": {"command": "resume"}})
+
+    def stop(self):
+        self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
+                           json={"print": {"command": "stop"}})
+
+    def set_light(self, on):
+        mode = "on" if on else "off"
+        self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
+                           json={"system": {"led_mode": mode}})
+
+    def set_speed(self, level):
+        self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
+                           json={"print": {"command": "print_speed", "param": str(level)}})
+
+    def start_print(self, filename):
+        self.client.start_cloud_print(self.device_id, filename)
+
+    def disconnect(self):
+        pass
+
+
+# ─── Local MQTT Backend ──────────────────────────────────────────────
+
+class LocalBackend:
+    def __init__(self):
+        try:
+            import bambulabs_api as bl
+        except ImportError:
+            print("❌ bambulabs-api not installed.")
+            print("   Run: pip3 install --break-system-packages bambulabs-api")
+            sys.exit(1)
+
+        ip = os.environ.get("BAMBU_IP", "")
+        serial = os.environ.get("BAMBU_SERIAL", "")
+        access_code = os.environ.get("BAMBU_ACCESS_CODE", "")
+
+        if not all([ip, serial, access_code]):
+            print("❌ Missing local connection vars:")
+            if not ip: print("   export BAMBU_IP='192.168.1.xxx'")
+            if not serial: print("   export BAMBU_SERIAL='01P00Axxxxxxx'")
+            if not access_code: print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
+            sys.exit(1)
+
+        self.ip = ip
+        self.access_code = access_code
+        self.printer = bl.Printer(ip, access_code, serial)
+        self.printer.connect()
+        time.sleep(2)
+
+    def get_status(self):
+        p = self.printer
+        return {
+            "nozzle_temp": p.get_nozzle_temp(),
+            "nozzle_target": p.get_nozzle_target_temp(),
+            "bed_temp": p.get_bed_temp(),
+            "bed_target": p.get_bed_target_temp(),
+            "state": p.get_gcode_state(),
+            "progress": p.get_print_percentage(),
+            "remaining": p.get_remaining_time(),
+            "file": p.get_current_file(),
+            "speed": p.get_speed_level(),
+            "light": p.get_light_state(),
+            "layer": getattr(p, 'get_current_layer', lambda: None)(),
+            "total_layers": getattr(p, 'get_total_layers', lambda: None)(),
+        }
+
+    def get_ams(self):
+        try:
+            return self.printer.get_ams_info()
+        except:
+            return None
+
+    def pause(self):
+        self.printer.pause_print()
+
+    def resume(self):
+        self.printer.resume_print()
+
+    def stop(self):
+        self.printer.stop_print()
+
+    def set_light(self, on):
+        if on:
+            self.printer.turn_light_on()
+        else:
+            self.printer.turn_light_off()
+
+    def set_speed(self, level):
+        self.printer.set_speed_level(level)
+
+    def start_print(self, filename):
+        self.printer.start_print(filename)
+
+    def disconnect(self):
+        self.printer.disconnect()
+
+
+# ─── Unified Commands ────────────────────────────────────────────────
+
+def get_backend():
+    if MODE == "cloud":
+        return CloudBackend()
+    else:
+        return LocalBackend()
+
+SPEED_NAMES = {1: "Silent", 2: "Standard", 3: "Sport", 4: "Ludicrous"}
+
+def cmd_status():
+    backend = get_backend()
+    try:
+        s = backend.get_status()
+        mode_label = "☁️ Cloud" if MODE == "cloud" else "🔌 LAN"
+        print(f"{mode_label} | Bambu Lab H2D")
+
+        if MODE == "local":
+            print(f"🔥 Nozzle: {s.get('nozzle_temp', '?')}°C / {s.get('nozzle_target', '?')}°C")
+            print(f"🛏️ Bed: {s.get('bed_temp', '?')}°C / {s.get('bed_target', '?')}°C")
+            print(f"📄 State: {s.get('state', '?')}")
+            print(f"🏎️ Speed: {SPEED_NAMES.get(s.get('speed'), s.get('speed', '?'))}")
+            print(f"💡 Light: {'ON' if s.get('light') else 'OFF'}")
+
+            if s.get("state") in ["RUNNING", "PAUSE"]:
+                print(f"📁 File: {s.get('file', 'Unknown')}")
+                print(f"📊 Progress: {s.get('progress', '?')}%")
+                if s.get("layer") and s.get("total_layers"):
+                    print(f"📐 Layer: {s['layer']}/{s['total_layers']}")
+                r = s.get("remaining")
+                if r:
+                    print(f"⏳ Remaining: {r // 60}h {r % 60}m")
+        else:
+            # Cloud — parse whatever structure comes back
+            if isinstance(s, dict):
+                for key in ["gcode_state", "mc_percent", "mc_remaining_time",
+                            "nozzle_temper", "bed_temper", "subtask_name"]:
+                    val = s.get(key) or (s.get("print", {}) or {}).get(key)
+                    if val is not None:
+                        labels = {
+                            "gcode_state": "📄 State",
+                            "mc_percent": "📊 Progress",
+                            "mc_remaining_time": "⏳ Remaining (min)",
+                            "nozzle_temper": "🔥 Nozzle (°C)",
+                            "bed_temper": "🛏️ Bed (°C)",
+                            "subtask_name": "📁 File",
+                        }
+                        print(f"{labels.get(key, key)}: {val}")
+            else:
+                print(f"📊 Status: {s}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    finally:
+        backend.disconnect()
+
+def cmd_progress():
+    backend = get_backend()
+    try:
+        s = backend.get_status()
+        if MODE == "local":
+            state = s.get("state", "?")
+            if state not in ["RUNNING", "PAUSE"]:
+                print(f"📄 No active print (state: {state})")
+                return
+            print(f"📁 File: {s.get('file', 'Unknown')}")
+            print(f"📊 Progress: {s.get('progress', '?')}%")
+            if s.get("layer") and s.get("total_layers"):
+                print(f"📐 Layer: {s['layer']}/{s['total_layers']}")
+            r = s.get("remaining")
+            if r:
+                print(f"⏳ Remaining: {r // 60}h {r % 60}m")
+        else:
+            if isinstance(s, dict):
+                pct = s.get("mc_percent") or (s.get("print", {}) or {}).get("mc_percent", "?")
+                remaining = s.get("mc_remaining_time") or (s.get("print", {}) or {}).get("mc_remaining_time")
+                state = s.get("gcode_state") or (s.get("print", {}) or {}).get("gcode_state", "?")
+                print(f"📄 State: {state}")
+                print(f"📊 Progress: {pct}%")
+                if remaining:
+                    print(f"⏳ Remaining: {remaining} min")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    finally:
+        backend.disconnect()
+
+def cmd_pause():
+    b = get_backend()
+    try: b.pause(); print("⏸️ Print paused")
+    finally: b.disconnect()
+
+def cmd_resume():
+    b = get_backend()
+    try: b.resume(); print("▶️ Print resumed")
+    finally: b.disconnect()
+
+def cmd_cancel():
+    b = get_backend()
+    try: b.stop(); print("🛑 Print cancelled")
+    finally: b.disconnect()
+
+def cmd_light(state):
+    b = get_backend()
+    try: b.set_light(state == "on"); print(f"💡 Light {'ON' if state == 'on' else 'OFF'}")
+    finally: b.disconnect()
+
+def cmd_speed(mode):
+    speed_map = {"silent": 1, "standard": 2, "sport": 3, "ludicrous": 4}
+    level = speed_map.get(mode.lower())
+    if not level:
+        print(f"❌ Unknown mode: {mode}. Options: silent, standard, sport, ludicrous")
+        return
+    b = get_backend()
+    try: b.set_speed(level); print(f"🏎️ Speed: {mode.capitalize()}")
+    finally: b.disconnect()
+
+def cmd_print(filename):
+    b = get_backend()
+    try: b.start_print(filename); print(f"✅ Started printing: {filename}")
+    except Exception as e: print(f"❌ Error: {e}")
+    finally: b.disconnect()
+
+def cmd_ams():
+    b = get_backend()
+    try:
+        ams = b.get_ams()
+        if not ams:
+            print("📦 No AMS data available")
+            return
+        print("📦 AMS Status:")
+        if isinstance(ams, list):
+            for i, slot in enumerate(ams):
+                if slot:
+                    t = slot.get("type", slot.get("tray_type", "?"))
+                    c = slot.get("color", slot.get("tray_color", "?"))
+                    r = slot.get("remain", slot.get("remain_pct", "?"))
+                    print(f"  Slot {i+1}: {t} | Color: #{c} | Remaining: {r}%")
+                else:
+                    print(f"  Slot {i+1}: Empty")
+        else:
+            print(f"  Raw: {ams}")
+    except Exception as e:
+        print(f"⚠️ AMS: {e}")
+    finally:
+        b.disconnect()
+
+def cmd_snapshot():
+    if MODE == "cloud":
+        # Try cloud camera URL
+        b = get_backend()
+        try:
+            urls = b.client.get_camera_urls(b.device_id)
+            print(f"📸 Camera URLs: {urls}")
+        except Exception as e:
+            print(f"⚠️ Cloud camera: {e}")
+        finally:
+            b.disconnect()
+        return
+
+    ip = os.environ.get("BAMBU_IP", "")
+    ac = os.environ.get("BAMBU_ACCESS_CODE", "")
+    out = "/tmp/bambu-snapshot.jpg"
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-rtsp_transport", "tcp",
+             "-i", f"rtsps://bblp:{ac}@{ip}:322/streaming/live/1",
+             "-frames:v", "1", out],
+            capture_output=True, timeout=15
+        )
+        if result.returncode == 0 and os.path.exists(out):
+            print(f"📸 Snapshot saved to {out}")
+        else:
+            print(f"⚠️ ffmpeg error: {result.stderr.decode()[:200]}")
+    except FileNotFoundError:
+        print("❌ ffmpeg not installed. Run: brew install ffmpeg")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def cmd_gcode(code):
+    """Send raw G-code to printer (local mode only)."""
+    if MODE != "local":
+        print("⚠️ G-code requires local mode: export BAMBU_MODE=local")
+        return
+    b = get_backend()
+    try:
+        # Send via MQTT
+        b.printer.send_gcode(code)
+        print(f"📟 G-code sent: {code}")
+    except AttributeError:
+        # Fallback: direct MQTT publish
+        import json as _json
+        topic = f"device/{os.environ.get('BAMBU_SERIAL', '')}/request"
+        payload = {"print": {"command": "gcode_line", "param": code}}
+        try:
+            b.printer._client.publish(topic, _json.dumps(payload))
+            print(f"📟 G-code sent (MQTT): {code}")
+        except Exception as e:
+            print(f"❌ G-code error: {e}")
+    finally:
+        b.disconnect()
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Bambu Lab Printer Control (All Models) (Cloud + Local)",
+        epilog=f"Current mode: {MODE.upper()} | Set BAMBU_MODE=cloud or BAMBU_MODE=local"
+    )
+    sub = parser.add_subparsers(dest="command")
+    sub.add_parser("status")
+    sub.add_parser("progress")
+    sub.add_parser("pause")
+    sub.add_parser("resume")
+    sub.add_parser("cancel")
+    sub.add_parser("ams")
+    sub.add_parser("snapshot")
+    p = sub.add_parser("print"); p.add_argument("filename")
+    p = sub.add_parser("gcode", help="Send raw G-code (local only)"); p.add_argument("code")
+    p = sub.add_parser("light"); p.add_argument("state", choices=["on", "off"])
+    p = sub.add_parser("speed"); p.add_argument("mode", choices=["silent", "standard", "sport", "ludicrous"])
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    cmds = {"status": cmd_status, "progress": cmd_progress, "pause": cmd_pause,
+            "resume": cmd_resume, "cancel": cmd_cancel, "ams": cmd_ams, "snapshot": cmd_snapshot}
+
+    if args.command in cmds:
+        cmds[args.command]()
+    elif args.command == "print":
+        cmd_print(args.filename)
+    elif args.command == "gcode":
+        cmd_gcode(args.code)
+    elif args.command == "light":
+        cmd_light(args.state)
+    elif args.command == "speed":
+        cmd_speed(args.mode)
+
+if __name__ == "__main__":
+    main()
