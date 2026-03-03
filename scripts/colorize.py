@@ -443,6 +443,14 @@ else:
                         merged += 1
             print(f"   {merged} faces merged from small islands")
 
+# ─── Convert to mm (glTF/GLB uses meters) ───
+bbox_pre = [obj.matrix_world @ v.co for v in obj.data.vertices]
+max_dim_pre = max(max(abs(v.x) for v in bbox_pre), max(abs(v.y) for v in bbox_pre), max(abs(v.z) for v in bbox_pre))
+if max_dim_pre < 10:  # Still in meters
+    obj.scale *= 1000
+    bpy.ops.object.transform_apply(scale=True)
+    print(f"📐 Converted to mm for Bambu Studio")
+
 # ─── Export ───
 bpy.ops.wm.obj_export(
     filepath=args.output,
