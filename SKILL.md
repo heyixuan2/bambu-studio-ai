@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "From chat to finished print — the first full-pipeline AI 3D printing skill. Connect your Bambu Lab printer, pick a 3D API, and let your agent search, generate, analyze, repair, preview, print & monitor. All 9 Bambu printers supported."
-version: "0.10.6"
+version: "0.13.0"
 author: TieGaier
 metadata:
   openclaw:
@@ -54,18 +54,19 @@ env:
 secrets:
   - name: BAMBU_PASSWORD
     required_when: "mode=cloud"
-    storage: ".secrets.json (key: password)"
-    description: "Bambu account password. Stored in .secrets.json, NOT env vars."
+    storage: ".secrets.json"
+    description: "Bambu account password (user-provided, never shipped with skill)"
   - name: BAMBU_ACCESS_CODE
     required_when: "mode=local"
-    storage: ".secrets.json (key: access_code)"
-    description: "LAN access code from printer Settings > Device. Stored in .secrets.json."
+    storage: ".secrets.json"
+    description: "LAN access code from printer touchscreen (user-provided)"
   - name: BAMBU_3D_API_KEY
     required_when: "3D generation enabled"
-    storage: ".secrets.json (key: 3d_api_key)"
-    description: "API key from chosen 3D generation provider. Stored in .secrets.json."
+    storage: ".secrets.json"
+    description: "API key from chosen 3D generation provider (user-provided)"
 security:
-  secrets_storage: ".secrets.json (chmod 600, git-ignored)"
+  no_credentials_shipped: true
+  secrets_storage: ".secrets.json (chmod 600, git-ignored, user creates manually)"
   no_plaintext_in: ["config.json", "SKILL.md", "*.py"]
   config_gitignored: true
   files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
