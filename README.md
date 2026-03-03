@@ -46,7 +46,8 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 🔄 **Format Conversion** | Auto GLB→STL (single-color) or GLB→OBJ+MTL (multi-color) |
 | 📸 **Camera** | RTSP snapshots from printer camera (LAN mode, all models incl. H2D) |
 | 🤖 **AI Print Monitoring** | Periodic snapshots → anomaly detection → auto-pause on failure |
-| 📦 **AMS Management** | Auto-detect filament colors/types, low-filament alerts |
+| 📦 **AMS Management** | Auto-detect filament colors/types via `bambu.py info` |
+| ⚙️ **CLI Slicing** | OrcaSlicer backend, auto profile merging, quality presets, 3MF output |
 | 🔔 **Notifications** | Print complete/fail alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
 | 🌐 **Dual Mode** | LAN (recommended, full features) + Cloud (remote, limited) |
 
