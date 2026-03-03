@@ -25,9 +25,18 @@ def auto_orient(mesh):
         best_transform = None
 
         # Try principal orientations + stable poses
-        # Method 1: Use trimesh's stable poses if available
+        # Method 1: Use trimesh's stable poses (decimate first if too large)
         try:
-            transforms, probs = trimesh.poses.compute_stable_poses(mesh, n_samples=50)
+            orient_mesh = mesh
+            if len(mesh.faces) > 500000:
+                print(f"   Large mesh ({len(mesh.faces):,} faces) — using decimated proxy for orientation...")
+                try:
+                    orient_mesh = mesh.simplify_quadric_decimation(100000)
+                    if orient_mesh is None or len(orient_mesh.faces) == 0:
+                        orient_mesh = mesh
+                except:
+                    orient_mesh = mesh
+            transforms, probs = trimesh.poses.compute_stable_poses(orient_mesh, n_samples=50)
             for i, (T, p) in enumerate(zip(transforms, probs)):
                 candidate = mesh.copy()
                 candidate.apply_transform(T)
