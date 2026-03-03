@@ -169,6 +169,17 @@ def fix_process_profile(profile):
     if not profile.get("from"):
         profile["from"] = "system"
 
+    # Fix values that OrcaSlicer uses but Bambu Studio doesn't recognize
+    compat_fixes = {
+        "ensure_vertical_shell_thickness": ("enabled", {"ensure_all": "enabled"}),
+        "ironing_pattern": ("zig-zag", {"rectilinear": "zig-zag"}),
+        "support_ironing_pattern": ("zig-zag", {"rectilinear": "zig-zag"}),
+    }
+    for key, (default, mapping) in compat_fixes.items():
+        val = profile.get(key)
+        if val in mapping:
+            profile[key] = mapping[val]
+
     # Fix out-of-range defaults
     range_fixes = {
         "prime_tower_brim_width": ("0", 0, None),
