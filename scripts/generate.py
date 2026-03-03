@@ -72,6 +72,7 @@ for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".s
 PROVIDER = os.environ.get("BAMBU_3D_PROVIDER", _cfg.get("3d_provider", "meshy")).lower()
 API_KEY = os.environ.get("BAMBU_3D_API_KEY", _cfg.get("3d_api_key", ""))
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "models")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 PRINTER_MODEL = os.environ.get("BAMBU_MODEL", _cfg.get("model", ""))
 
 # ─── Build Volume Limits (with 10% safety margin) ────────────────────

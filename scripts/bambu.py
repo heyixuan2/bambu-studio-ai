@@ -33,7 +33,7 @@ if os.path.exists(_secrets_path):
 
 # Config.json values as fallbacks for env vars
 if not MODE:
-    MODE = _config.get("mode", "cloud").lower()
+    MODE = _config.get("mode", "local").lower()
 for _k, _e in [("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL"),
                ("access_code", "BAMBU_ACCESS_CODE"), ("email", "BAMBU_EMAIL"),
                ("password", "BAMBU_PASSWORD"), ("device_id", "BAMBU_DEVICE_ID")]:
@@ -284,6 +284,13 @@ class LocalBackend:
 
 def get_backend():
     if MODE == "cloud":
+        email = os.environ.get("BAMBU_EMAIL") or _config.get("email")
+        password = os.environ.get("BAMBU_PASSWORD") or _config.get("password")
+        if not email or not password:
+            print("❌ Cloud mode requires BAMBU_EMAIL and BAMBU_PASSWORD.")
+            print("   Set in config.json or environment variables.")
+            print("   Or switch to LAN mode: set mode=local in config.json")
+            raise SystemExit(1)
         return CloudBackend()
     else:
         return LocalBackend()
