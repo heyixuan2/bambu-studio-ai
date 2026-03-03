@@ -552,6 +552,10 @@ if max_dim_pre < 10:  # Still in meters
     print(f"📐 Converted to mm for Bambu Studio")
 
 # ─── Export ───
+# Ensure .obj extension
+if not args.output.lower().endswith('.obj'):
+    args.output = args.output + '.obj'
+
 bpy.ops.wm.obj_export(
     filepath=args.output,
     export_selected_objects=False,

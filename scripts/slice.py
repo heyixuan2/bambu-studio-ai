@@ -304,8 +304,14 @@ def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
     """Slice an STL file and produce a 3MF with embedded G-code."""
 
     if not os.path.exists(stl_path):
-        print(f"❌ File not found: {stl_path}")
-        sys.exit(1)
+        # Try adding common extensions
+        for ext in [".stl", ".obj", ".3mf"]:
+            if os.path.exists(stl_path + ext):
+                stl_path = stl_path + ext
+                break
+        else:
+            print(f"❌ File not found: {stl_path}")
+            sys.exit(1)
 
     slicer = find_slicer()
     profiles_dir = find_profiles_dir()
