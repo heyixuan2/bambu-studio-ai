@@ -193,7 +193,7 @@ class MeshyBackend:
     
     def _download_file(self, url, task_id, fmt):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.{fmt}")
+        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
         r = requests.get(url, stream=True)
         r.raise_for_status()
         with open(out, "wb") as f:
@@ -251,14 +251,14 @@ class TripoBackend:
             "model_urls": {"glb": data.get("output", {}).get("pbr_model") or data.get("output", {}).get("model", "")},
         }
     
-    def download(self, task_id, fmt="3mf"):
+    def download(self, task_id, fmt="glb"):
         status = self.get_status(task_id)
         url = status.get("model_urls", {}).get("glb") or status.get("model_urls", {}).get(fmt)
         if not url:
             print(f"❌ No download URL. Status: {status['status']}")
             return None
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.{fmt}")
+        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
         r = requests.get(url, stream=True)
         with open(out, "wb") as f:
             for chunk in r.iter_content(8192):
@@ -315,7 +315,7 @@ class PrintpalBackend:
             headers=self.headers(), params={"format": fmt}, stream=True)
         r.raise_for_status()
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.{fmt}")
+        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
         with open(out, "wb") as f:
             for chunk in r.iter_content(8192):
                 f.write(chunk)
@@ -371,7 +371,7 @@ class Studio3DBackend:
             print(f"❌ No URL. Status: {status['status']}")
             return None
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.{fmt}")
+        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
         r = requests.get(url, stream=True)
         with open(out, "wb") as f:
             for chunk in r.iter_content(8192):
@@ -491,7 +491,7 @@ def cmd_download(task_id, fmt="3mf"):
         print(f"         python3 bambu.py print {os.path.basename(path)}")
     return path
 
-def _wait_and_download(backend, task_id, fmt="glb"):
+def _wait_and_download(backend, task_id, fmt="stl"):
     """Poll until complete, then download."""
     print(f"\n⏳ Waiting for generation...")
     

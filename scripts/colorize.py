@@ -151,6 +151,16 @@ if args.height > 0:
         z_min2 = min(v.z for v in bbox2)
         obj.location.z -= z_min2
 
+# ─── Pre-subdivide decimation (prevent giant OBJ files) ───
+face_count = len(obj.data.polygons)
+if face_count > 200000 and args.subdivide >= 2:
+    target_ratio = 100000 / face_count
+    print(f"\n⚡ Pre-decimation: {face_count:,} faces → ~100K (prevents >500MB output)")
+    mod = obj.modifiers.new('Decimate', 'DECIMATE')
+    mod.ratio = target_ratio
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    print(f"   Result: {len(obj.data.polygons):,} faces")
+
 # ─── Subdivide ───
 if args.subdivide > 0:
     mod = obj.modifiers.new("Subdivide", 'SUBSURF')
@@ -441,6 +451,41 @@ bpy.ops.wm.obj_export(
     export_normals=True,
     export_uv=True
 )
+
+# Fix MTL: Blender doesn't write correct Kd colors from diffuse_color
+mtl_path = args.output.rsplit(".", 1)[0] + ".mtl"
+if os.path.exists(mtl_path):
+    mtl_lines = []
+    mtl_lines.append("# Multi-color MTL for Bambu Lab AMS\n")
+    for i in range(n_colors):
+        mat_name = f"Color_{i+1:02d}"
+        r, g, b = filament_colors[i]
+        mtl_lines.append(f"newmtl {mat_name}\n")
+        mtl_lines.append(f"Kd {r:.6f} {g:.6f} {b:.6f}\n")
+        mtl_lines.append(f"Ka 0.000000 0.000000 0.000000\n")
+        mtl_lines.append(f"Ks 0.000000 0.000000 0.000000\n")
+        mtl_lines.append(f"Ns 0.000000\n")
+        mtl_lines.append(f"d 1.000000\n")
+        mtl_lines.append(f"illum 1\n")
+        mtl_lines.append(f"\n")
+    with open(mtl_path, "w") as f:
+        f.writelines(mtl_lines)
+    print(f"\n📝 MTL rewritten with correct filament colors")
+
+# Ensure OBJ mtllib references the correct MTL filename (basename only)
+mtl_basename = os.path.basename(mtl_path)
+with open(args.output, "r") as f:
+    obj_head = f.read(4096)
+if "mtllib " in obj_head:
+    import re
+    old_ref = re.search(r"mtllib (.+)", obj_head).group(1).strip()
+    if old_ref != mtl_basename:
+        with open(args.output, "r") as f:
+            obj_content = f.read()
+        obj_content = obj_content.replace(f"mtllib {old_ref}", f"mtllib {mtl_basename}", 1)
+        with open(args.output, "w") as f:
+            f.write(obj_content)
+        print(f"📝 Fixed mtllib reference: {old_ref} → {mtl_basename}")
 
 mat_counts = defaultdict(int)
 for poly in obj.data.polygons:
