@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Bambu Lab Printer Control (All Models) — Dual Mode (Cloud API + Local MQTT)
-Usage: python3 bambu.py <command> [args]
+Usage: python3 scripts/bambu.py <command> [args]
 
 Modes:
   BAMBU_MODE=cloud  → Remote via Bambu Cloud API (anywhere)
@@ -338,15 +338,15 @@ SPEED_NAMES = {1: "Silent", 2: "Standard", 3: "Sport", 4: "Ludicrous"}
 def cmd_info(json_output=False):
     """Get printer hardware info for slicing: model, nozzle, AMS filaments."""
     info = {
-        "model": _config.get("model", "Unknown"),
+        "model": _config.get("model") or _config.get("printer_model", "Unknown"),
         "nozzle_diameter": None,
         "nozzle_type": None,
         "filaments": [],
     }
 
     if MODE == "local":
-        backend = get_backend()
         try:
+            backend = get_backend()
             printer = backend.printer
             # Nozzle info
             try:
@@ -374,8 +374,9 @@ def cmd_info(json_output=False):
                     for item in ams:
                         info["filaments"].append({"raw": str(item)})
             except: pass
-        finally:
-            backend.disconnect()
+        except (Exception, SystemExit):
+            # Printer not reachable — still show config info
+            pass
     else:
         # Cloud mode — limited info
         pass
@@ -515,7 +516,7 @@ def cmd_speed(mode):
 def cmd_print(filename, confirmed=False):
     if not confirmed:
         print("⛔ Safety: Preview in Bambu Studio first, then re-run with --confirmed")
-        print(f"   python3 bambu.py print {filename} --confirmed")
+        print(f"   python3 scripts/bambu.py print {filename} --confirmed")
         sys.exit(1)
     b = get_backend()
     try: b.start_print(filename, plate_number=1); print(f"✅ Started printing: {filename}")

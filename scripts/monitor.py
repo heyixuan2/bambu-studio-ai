@@ -9,11 +9,11 @@ Notifications:
   - COMPLETE: print finished
 
 Usage:
-  python3 monitor.py                     # Start monitoring (2min interval)
-  python3 monitor.py --once              # Single check
-  python3 monitor.py --status            # Show log (offline, no printer needed)
-  python3 monitor.py --interval 60       # Custom interval
-  python3 monitor.py --auto-pause        # Auto-pause on anomaly
+  python3 scripts/monitor.py                     # Start monitoring (2min interval)
+  python3 scripts/monitor.py --once              # Single check
+  python3 scripts/monitor.py --status            # Show log (offline, no printer needed)
+  python3 scripts/monitor.py --interval 60       # Custom interval
+  python3 scripts/monitor.py --auto-pause        # Auto-pause on anomaly
 """
 
 import os, sys, time, argparse, subprocess, json

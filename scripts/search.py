@@ -4,9 +4,9 @@ Bambu Studio AI — Model Search
 Searches 3D model repositories via DuckDuckGo.
 
 Usage:
-  python3 search.py "pikachu"
-  python3 search.py "vase" --source makerworld --limit 5
-  python3 search.py "gear" --source all
+  python3 scripts/search.py "pikachu"
+  python3 scripts/search.py "vase" --source makerworld --limit 5
+  python3 scripts/search.py "gear" --source all
 
 Sources: MakerWorld, Printables, Thingiverse, Thangs
 Requires: pip install ddgs

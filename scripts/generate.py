@@ -4,9 +4,9 @@
 Supports: Meshy, Tripo3D, 3D AI Studio, Printpal
 
 Usage:
-  python3 generate.py text "a phone stand with cable hole"
-  python3 generate.py image photo.jpg
-  python3 generate.py image photo.jpg --prompt "make it a 3D printable model"
+  python3 scripts/generate.py text "a phone stand with cable hole"
+  python3 scripts/generate.py image photo.jpg
+  python3 scripts/generate.py image photo.jpg --prompt "make it a 3D printable model"
   python3 scripts/generate.py status <task_id>
   python3 scripts/generate.py download <task_id> [--format 3mf]
 """
@@ -443,10 +443,12 @@ def _finalize(file_path, target_format="stl"):
         print(f"🔄 Format corrected → {actual_ext}")
     
     # 2. Convert if needed
-    if target_format == "stl" and file_path.endswith('.glb'):
-        converted = _convert_model(file_path, 'stl')
+    current_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
+    target = target_format.lower().lstrip('.')
+    if current_ext != target and current_ext in ('glb', 'gltf', 'obj'):
+        converted = _convert_model(file_path, target)
         if converted and converted != file_path:
-            print(f"🔄 Converted → STL")
+            print(f"🔄 Converted {current_ext.upper()} → {target.upper()}")
             file_path = converted
     
     # 3. Verify file is readable
@@ -541,7 +543,7 @@ def cmd_download(task_id, fmt="3mf"):
             print(f"   ❌ WARNING: {final_ext.upper()} is NOT compatible with Bambu Studio!")
             print(f"   Run: python3 scripts/generate.py download {task_id} --format stl")
         print(f"\n💡 Next: python3 scripts/analyze.py {path}")
-        print(f"         python3 bambu.py print {os.path.basename(path)}")
+        print(f"         python3 scripts/bambu.py print {os.path.basename(path)}")
     return path
 
 def _wait_and_download(backend, task_id, fmt="stl"):

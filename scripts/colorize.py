@@ -8,14 +8,14 @@ Requires: Blender 4.0+ (brew install --cask blender)
 
 Usage:
   # Recommended (most models):
-  python3 colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80
+  python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80
 
   # High precision:
-  python3 colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80 \
+  python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80 \
     --subdivide 3 --min_island 80 --tex_smooth 11 --tex_smooth_passes 8
 
   # Vinyl toy / cartoon style (less shadow removal needed):
-  python3 colorize.py model.glb --colors "#FFFF00,#000000" --height 50 --delight_floor 0.5
+  python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000" --height 50 --delight_floor 0.5
 """
 
 import os

@@ -3,7 +3,7 @@
 Bambu Studio AI — Dependency Doctor
 Run before first use to verify all dependencies and API compatibility.
 
-Usage: python3 doctor.py
+Usage: python3 scripts/doctor.py
 """
 
 import sys, os, importlib

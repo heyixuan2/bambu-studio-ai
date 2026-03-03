@@ -6,13 +6,13 @@ Resolves Bambu Studio profile inheritance chains, fixes known compatibility
 issues, and produces print-ready 3MF files with embedded G-code.
 
 Usage:
-  python3 slice.py model.stl                          # Slice with defaults (H2D, 0.20mm, PLA)
-  python3 slice.py model.stl --quality fine            # 0.12mm layer height
-  python3 slice.py model.stl --quality draft           # 0.28mm layer height
-  python3 slice.py model.stl --orient --arrange        # Auto-orient + arrange
-  python3 slice.py model.stl --filament "Bambu PETG Basic"
-  python3 slice.py model.stl --output /path/to/out.3mf
-  python3 slice.py --list-profiles                     # Show available profiles
+  python3 scripts/slice.py model.stl                          # Slice with defaults (H2D, 0.20mm, PLA)
+  python3 scripts/slice.py model.stl --quality fine            # 0.12mm layer height
+  python3 scripts/slice.py model.stl --quality draft           # 0.28mm layer height
+  python3 scripts/slice.py model.stl --orient --arrange        # Auto-orient + arrange
+  python3 scripts/slice.py model.stl --filament "Bambu PETG Basic"
+  python3 scripts/slice.py model.stl --output /path/to/out.3mf
+  python3 scripts/slice.py --list-profiles                     # Show available profiles
 """
 
 import os, sys, json, subprocess, argparse, shutil, tempfile, glob, re
@@ -354,6 +354,11 @@ def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
         else:
             print(f"❌ File not found: {stl_path}")
             sys.exit(1)
+
+    # Resolve to absolute (relative paths break 3MF post-processing)
+    stl_path = os.path.abspath(stl_path)
+    if output_path:
+        output_path = os.path.abspath(output_path)
 
     slicer = find_slicer()
     profiles_dir = find_profiles_dir()
