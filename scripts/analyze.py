@@ -44,7 +44,6 @@ def auto_orient(mesh):
     """
     try:
         import trimesh
-        best_mesh = mesh.copy()
         best_score = -1
         best_transform = None
 
@@ -58,7 +57,7 @@ def auto_orient(mesh):
                     orient_mesh = mesh.simplify_quadric_decimation(100000)
                     if orient_mesh is None or len(orient_mesh.faces) == 0:
                         orient_mesh = mesh
-                except:
+                except Exception:
                     orient_mesh = mesh
             transforms, probs = trimesh.poses.compute_stable_poses(orient_mesh, n_samples=50)
             for i, (T, p) in enumerate(zip(transforms, probs)):

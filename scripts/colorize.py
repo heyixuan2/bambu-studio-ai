@@ -302,7 +302,7 @@ else:
     ao_threshold = effective_floor + 0.1
     try:
         shadow_mask_flat = ao_pixels < ao_threshold
-    except:
+    except Exception:
         brightness = np.max(pixels, axis=1)
         shadow_mask_flat = brightness < 0.3
     
@@ -772,10 +772,12 @@ def main():
             print("❌ No --colors provided and Bambu Lab palette not found.")
             print("   Provide colors: --colors '#FF0000,#00FF00,#0000FF'")
             sys.exit(1)
-    colorize(args.input, args.output, colors, args.height, args.subdivide,
+    result = colorize(args.input, args.output, colors, args.height, args.subdivide,
              args.min_island, args.cleanup, args.tex_smooth,
              args.tex_smooth_passes, args.delight_floor, args.delight_bright,
              args.delight_sat, no_delight=getattr(args, "no_delight", False))
+    if result is None:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

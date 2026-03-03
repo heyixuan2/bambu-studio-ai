@@ -528,6 +528,11 @@ python3 scripts/analyze.py model.3mf --render                           # With p
 ### Print Monitoring
 
 ```bash
+# Preview
+python3 scripts/preview.py model.stl                          # Quick preview (matplotlib)
+python3 scripts/preview.py model.stl --hq                     # HQ render (Blender)
+python3 scripts/preview.py model.stl --hq --output render.png # Custom output path
+
 python3 scripts/monitor.py --once                  # Single check
 python3 scripts/monitor.py --interval 300          # Every 5 min (standard)
 python3 scripts/monitor.py --interval 1800         # Every 30 min (light)
@@ -630,6 +635,7 @@ bambu-studio-ai/
     ├── analyze.py              — 11-point printability analysis + mesh repair
     ├── colorize.py             — Multi-color pipeline (AO delight, CIELAB NN, OBJ+MTL export)
     ├── monitor.py              — Smart print monitor (anomaly detection, notifications)
+    ├── preview.py              — Model preview renderer (matplotlib quick / Blender HQ)
     ├── slice.py                — CLI slicer (OrcaSlicer backend, auto profile merging)
     ├── search.py               — Model search (MakerWorld, Printables, Thingiverse, Thangs)
     ├── doctor.py               — Dependency doctor (verify all deps + API symbols)
@@ -650,6 +656,8 @@ PRs welcome! Areas that need help:
 ---
 
 ## Version History
+
+| **0.21.0** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). |
 
 | Version | Changes |
 |---------|---------|

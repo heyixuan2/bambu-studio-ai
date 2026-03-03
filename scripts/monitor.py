@@ -47,7 +47,7 @@ def _load_state():
         try:
             with open(STATE_FILE) as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return {
         "last_progress": None,
@@ -74,7 +74,7 @@ def take_snapshot():
              "-frames:v", "1", outpath],
             capture_output=True, timeout=15)
         return outpath if r.returncode == 0 and os.path.exists(outpath) else None
-    except:
+    except Exception:
         return None
 
 def get_status_dict():
@@ -87,7 +87,7 @@ def get_status_dict():
             env={**os.environ, "BAMBU_MODE": os.environ.get("BAMBU_MODE", "local")})
         if r.returncode == 0:
             return json.loads(r.stdout)
-    except:
+    except Exception:
         pass
     # Fallback: parse text output
     try:
@@ -107,14 +107,14 @@ def notify(title, message, snapshot=None):
         if snapshot:
             cmd.extend(["--image", snapshot])
         subprocess.run(cmd, capture_output=True, timeout=15)
-    except:
+    except Exception:
         pass
     # Also try macOS notification as fallback
     try:
         subprocess.run(["osascript", "-e",
             f'display notification "{message}" with title "🖨️ {title}"'],
             capture_output=True, timeout=5)
-    except:
+    except Exception:
         pass
     print(f"📢 NOTIFY: {title} — {message}")
 
@@ -132,7 +132,7 @@ def log_event(event_type, details, snapshot=None):
         try:
             with open(LOG_FILE) as f:
                 logs = json.load(f)
-        except:
+        except Exception:
             pass
     logs.append(entry)
     if len(logs) > 200:
@@ -147,7 +147,7 @@ def pause_print():
         r = subprocess.run(["python3", script, "pause"],
                           capture_output=True, text=True, timeout=30)
         return r.returncode == 0
-    except:
+    except Exception:
         return False
 
 # ─── Anomaly Detection ───
@@ -184,7 +184,7 @@ def check_anomalies(status, state):
     if progress is not None:
         try:
             progress = float(progress)
-        except:
+        except Exception:
             progress = None
     
     if progress is not None:
@@ -199,7 +199,7 @@ def check_anomalies(status, state):
                 if float(last_p) == progress and minutes_since >= STALL_MINUTES:
                     alerts.append(("warning", 
                         f"⚠️ Progress stalled: {progress}% stalled for {minutes_since:.0f} min unchanged"))
-            except:
+            except Exception:
                 pass
         
         # Update progress tracking
@@ -227,7 +227,7 @@ def monitor_once(auto_pause=False):
         if "IDLE" in raw.upper() or "No active" in raw:
             # Check if we were tracking a print (= just finished)
             if state.get("print_started"):
-                notify("Print Complete ✅", f"Print finished!Started at {state['print_started']}")
+                notify("Print Complete ✅", f"Print finished! Started at {state['print_started']}")
                 state["print_started"] = None
                 _save_state(state)
                 log_event("complete", "Print finished")
@@ -289,7 +289,7 @@ def monitor_once(auto_pause=False):
                 minutes_since_report = (now - datetime.fromisoformat(last_report)).total_seconds() / 60
                 if minutes_since_report >= PROGRESS_REPORT_MIN:
                     should_report = True
-            except:
+            except Exception:
                 should_report = True
         
         if should_report:
@@ -330,7 +330,7 @@ def monitor_loop(interval=120, auto_pause=False):
     print(f"🔍 Print monitor started")
     print(f"   Check interval: {interval}s")
     print(f"   Auto-pause: {'Yes' if auto_pause else 'No'}")
-    print(f"   Progressreport: Every {PROGRESS_REPORT_MIN} min")
+    print(f"   Progress report: Every {PROGRESS_REPORT_MIN} min")
     print(f"   Anomaly alert: Realtime")
     print(f"   Snapshot dir: {SNAPSHOT_DIR}")
     print()
@@ -353,13 +353,13 @@ def monitor_loop(interval=120, auto_pause=False):
             consecutive_failures = 0
             
             if not result.get("printing"):
-                print("🏁 Print complete or idle, monitor stopped。")
+                print("🏁 Print complete or idle, monitor stopped.")
                 break
         except Exception as e:
             consecutive_failures += 1
             print(f"❌ Check failed ({consecutive_failures}/{max_failures}): {e}")
             if consecutive_failures >= max_failures:
-                notify("Monitor Error ⛔", f"Consecutive {max_failures}  check failures, monitor stopped: {e}")
+                notify("Monitor Error ⛔", f"Consecutive {max_failures} check failures, monitor stopped: {e}")
                 break
         
         time.sleep(interval)

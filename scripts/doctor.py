@@ -36,7 +36,7 @@ def check_blender():
             if r.returncode == 0:
                 ver = r.stdout.split("\n")[0]
                 return True, ver, path
-        except:
+        except Exception:
             continue
     return False, None, None
 
@@ -64,10 +64,14 @@ def check_cloud_api_symbols():
     issues = []
     try:
         from bambu_lab_cloud_api import BambuClient
+        from bambu_lab_cloud_api import BambuAuthenticator
         c_methods = dir(BambuClient)
-        for method in ["login", "get_device_list"]:
+        for method in ["get_device_list"]:
             if method not in c_methods:
                 issues.append(f"BambuClient missing .{method}()")
+        a_methods = dir(BambuAuthenticator)
+        if "login" not in a_methods:
+            issues.append("BambuAuthenticator missing .login()")
     except ImportError:
         issues.append("bambu-lab-cloud-api not installed (needed for Cloud mode)")
     except Exception as e:
@@ -142,6 +146,14 @@ def main():
             print(f"  ⚠️ {issue}")
     else:
         print("  ✅ bambu-lab-cloud-api symbols verified")
+
+    print("\nPreview rendering:")
+    try:
+        import matplotlib
+        print(f"  ✅ matplotlib {matplotlib.__version__}")
+    except ImportError:
+        print("  ❌ matplotlib not installed (pip3 install matplotlib) — needed for preview.py")
+        all_ok = False
 
     print("\nSearch backend:")
     search_ok, search_pkg = check_search_backend()

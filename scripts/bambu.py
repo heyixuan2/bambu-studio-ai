@@ -151,13 +151,13 @@ class CloudBackend:
     def get_status(self):
         try:
             return self.client.get_print_status(self.device_id)
-        except:
+        except Exception:
             return self.client.get_device_info(self.device_id)
 
     def get_ams(self):
         try:
             return self.client.get_ams_filaments(self.device_id)
-        except:
+        except Exception:
             return None
 
     def pause(self):
@@ -254,7 +254,7 @@ class LocalBackend:
                 return self.printer.ams_hub
             else:
                 return None
-        except:
+        except Exception:
             return None
 
     def pause(self):
@@ -289,7 +289,7 @@ class LocalBackend:
 
 # ─── Notifications ───
 
-def notify(title, message, channel="auto"):
+def notify(title, message, channel="auto", image=None):
     """Send notification via the user's current channel.
     
     channel: auto (detect), discord, imessage, telegram, console
@@ -305,7 +305,7 @@ def notify(title, message, channel="auto"):
             "osascript", "-e",
             f'display notification "{message}" with title "Bambu Studio AI" subtitle "{title}"'
         ], timeout=5, capture_output=True)
-    except:
+    except Exception:
         pass
     
     # Log to file for agent pickup
@@ -355,11 +355,11 @@ def cmd_info(json_output=False):
             try:
                 nd = printer.nozzle_diameter
                 info["nozzle_diameter"] = nd() if callable(nd) else nd
-            except: pass
+            except Exception: pass
             try:
                 nt = printer.nozzle_type
                 info["nozzle_type"] = nt() if callable(nt) else nt
-            except: pass
+            except Exception: pass
 
             # AMS filaments
             try:
@@ -376,7 +376,7 @@ def cmd_info(json_output=False):
                 elif hasattr(ams, '__iter__'):
                     for item in ams:
                         info["filaments"].append({"raw": str(item)})
-            except: pass
+            except Exception: pass
         except (Exception, SystemExit):
             # Printer not reachable — show config info only
             info["_offline"] = True
@@ -668,7 +668,7 @@ def main():
     elif args.command == "info":
         cmd_info(json_output=getattr(args, "json", False))
     elif args.command == "notify":
-        notify(args.title, args.message)
+        notify(args.title, args.message, image=getattr(args, "image", None))
     elif args.command in cmds:
         cmds[args.command]()
     elif args.command == "print":

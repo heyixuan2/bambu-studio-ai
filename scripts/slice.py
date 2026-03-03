@@ -216,7 +216,7 @@ def detect_printer_info():
             capture_output=True, text=True, timeout=30)
         if r.returncode == 0:
             return json.loads(r.stdout)
-    except:
+    except Exception:
         pass
     return None
 
@@ -458,7 +458,7 @@ def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
                 with zipfile.ZipFile(output_path) as z:
                     has_gcode = any("gcode" in n.lower() for n in z.namelist())
                     print(f"   🔧 G-code: {'✅' if has_gcode else '❌ missing'}")
-            except:
+            except Exception:
                 pass
 
             return output_path
