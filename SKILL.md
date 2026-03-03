@@ -805,6 +805,16 @@ python3 scripts/bambu.py speed ludicrous  # Max (H2S: 1000mm/s)
 
 ---
 
+## Known Limitations
+
+| Feature | Status | Note |
+|---------|--------|------|
+| Single-color printing | ✅ Stable | Full pipeline: generate → analyze → slice → print |
+| Multi-color (colorize) | ⚠️ Manual step | OBJ+MTL output works, but user must manually map 43 colors → AMS slots in Bambu Studio |
+| CLI slicing | ✅ Stable | OrcaSlicer backend; Bambu Studio CLI has SEGFAULT bug in v2.5.0 |
+| End-to-end auto-print | 🔜 Planned | Currently requires Bambu Studio preview before printing |
+| OrcaSlicer CLI gcode | ⚠️ Simplified | Start gcode simplified for OrcaSlicer compat; printer firmware handles actual startup sequence |
+
 ## Version History
 
 ### 0.20.0
