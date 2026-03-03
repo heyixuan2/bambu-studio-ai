@@ -222,7 +222,29 @@ else:
     print(f"   Delight applied to {len(delit)} pixels (vectorized)")
 
     # ─── Step 2: CIELAB K-means clustering — vectorized ───
-    print(f"\n🎯 Step 2: K-means clustering ({args.clusters} clusters in CIELAB)")
+    # For large palettes (>20 filament colors), direct nearest-neighbor is more accurate
+    if n_colors > 20:
+        print(f"\n🎯 Step 2: Direct nearest-neighbor mapping ({n_colors} filament colors)")
+        filament_lab_np = np.array(filament_lab)
+        # Vectorized: compute distance from each pixel to each filament
+        # Process in chunks to avoid memory explosion
+        chunk_size = 100000
+        quantized = np.zeros(len(pixel_lab), dtype=np.int32)
+        for start in range(0, len(pixel_lab), chunk_size):
+            end = min(start + chunk_size, len(pixel_lab))
+            chunk = pixel_lab[start:end]
+            # Broadcast: (chunk, 1, 3) - (1, n_colors, 3)
+            dists = np.sqrt(np.sum((chunk[:, None, :] - filament_lab_np[None, :, :]) ** 2, axis=2))
+            quantized[start:end] = np.argmin(dists, axis=1)
+        # Print distribution
+        for i in range(n_colors):
+            count = np.sum(quantized == i)
+            pct = count / len(quantized) * 100
+            if count > 0:
+                r, g, b = filament_colors[i]
+                print(f"Filament {i+1}: {count} pixels ({pct:.1f}%) — #{int(r*255):02X}{int(g*255):02X}{int(b*255):02X}")
+    else:
+        print(f"\n🎯 Step 2: K-means clustering ({args.clusters} clusters in CIELAB)")
 
     # Batch RGB→Lab conversion (vectorized)
     def batch_rgb_to_lab(rgb):
@@ -248,7 +270,11 @@ else:
     pixel_lab = batch_rgb_to_lab(delit)
 
     # Vectorized K-means
-    n_clusters = min(args.clusters, len(np.unique(delit.round(2), axis=0)))
+    # Auto-adjust: clusters should be at least 2x filament colors for accurate mapping
+    auto_clusters = max(args.clusters, n_colors * 3)
+    n_clusters = min(auto_clusters, len(np.unique(delit.round(2), axis=0)))
+    if n_clusters != args.clusters:
+        print(f"   Auto-adjusted clusters: {args.clusters} → {n_clusters} (need ≥{n_colors*3} for {n_colors} filaments)")
     rng = np.random.RandomState(42)
     idx = rng.choice(len(pixel_lab), size=n_clusters, replace=False)
     centroids = pixel_lab[idx].copy()
@@ -636,7 +662,8 @@ def main():
     )
     parser.add_argument("input", help="Input model (GLB/GLTF/OBJ/FBX/STL)")
     parser.add_argument("--output", "-o", help="Output OBJ path")
-    parser.add_argument("--colors", "-c", required=True, help="AMS filament hex colors, comma-separated")
+    parser.add_argument("--colors", "-c", required=False, help="AMS filament hex colors, comma-separated. Omit to use --palette bambu.")
+    parser.add_argument("--palette", choices=["bambu", "custom"], default="bambu", help="Use Bambu Lab official palette")
     parser.add_argument("--height", type=float, default=0, help="Target height mm (0=keep)")
     parser.add_argument("--subdivide", type=int, default=2, choices=[0, 1, 2, 3], help="Subdivision (0=raw, 2=recommended, 3=max)")
     parser.add_argument("--min_island", type=int, default=50, help="Min faces per color island")
