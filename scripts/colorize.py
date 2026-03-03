@@ -186,7 +186,14 @@ else:
     print(f"Texture: {w}x{h} ({len(pixels)} pixels)")
 
     # ─── Step 1: Delight (remove baked shadows) — vectorized ───
-    print(f"\n🔆 Step 1: Delight (floor={args.delight_floor}, bright={args.delight_bright}, sat={args.delight_sat})")
+    # Smart delight: if dark filaments exist, reduce floor to preserve dark regions
+    effective_floor = args.delight_floor
+    dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
+    if dark_filaments:
+        effective_floor = min(args.delight_floor, 0.3)
+        print(f"\n🔆 Step 1: Delight (floor adjusted {args.delight_floor}→{effective_floor} — dark filament detected)")
+    else:
+        print(f"\n🔆 Step 1: Delight (floor={args.delight_floor}, bright={args.delight_bright}, sat={args.delight_sat})")
     delit = pixels.copy()
     # Vectorized HSV conversion
     r_ch, g_ch, b_ch = delit[:, 0], delit[:, 1], delit[:, 2]
@@ -195,7 +202,7 @@ else:
     v = maxc
     s = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
     # Boost brightness and saturation
-    v = np.clip(v * args.delight_bright, args.delight_floor, 1.0)
+    v = np.clip(v * args.delight_bright, effective_floor, 1.0)
     s = np.clip(s * args.delight_sat, 0, 1.0)
     # Convert back to RGB (simplified: adjust original pixels by brightness ratio)
     old_v = maxc + 1e-10
