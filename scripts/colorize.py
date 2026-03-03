@@ -518,6 +518,25 @@ def find_blender():
     return None
 
 
+# ─── Bambu Lab Official Filament Colors ───
+import json as _json
+
+def _load_bambu_palette():
+    """Load Bambu Lab official filament colors as fallback palette."""
+    ref_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "references", "bambu_filament_colors.json")
+    if not os.path.exists(ref_path):
+        return None
+    with open(ref_path) as f:
+        data = _json.load(f)
+    # Flatten all colors into a unique set
+    colors = {}
+    for series, palette in data.get("filaments", {}).items():
+        for name, hex_code in palette.items():
+            if hex_code not in colors.values():
+                colors[f"{name} ({series})"] = hex_code
+    return colors
+
+
 def _validate_colors(colors_str):
     """Validate hex color string."""
     import re
@@ -633,7 +652,18 @@ def main():
     if not args.output:
         args.output = os.path.splitext(args.input)[0] + "_multicolor.obj"
 
-    colorize(args.input, args.output, args.colors, args.height, args.subdivide,
+    # Auto-use Bambu Lab palette if no colors specified
+    colors = args.colors
+    if not colors or args.palette == "bambu":
+        bambu = _load_bambu_palette()
+        if bambu:
+            colors = ",".join(bambu.values())
+            print(f"🎨 Using Bambu Lab official palette ({len(bambu)} colors)")
+        elif not colors:
+            print("❌ No --colors provided and Bambu Lab palette not found.")
+            print("   Provide colors: --colors '#FF0000,#00FF00,#0000FF'")
+            sys.exit(1)
+    colorize(args.input, args.output, colors, args.height, args.subdivide,
              args.min_island, args.cleanup, args.clusters, args.tex_smooth,
              args.tex_smooth_passes, args.delight_floor, args.delight_bright,
              args.delight_sat)
