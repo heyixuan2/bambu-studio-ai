@@ -406,6 +406,42 @@ def get_backend():
 
 # ─── Commands ────────────────────────────────────────────────────────
 
+def _finalize(file_path, target_format="stl"):
+    """Unified post-download processing: validate format, convert, verify."""
+    if not file_path or not os.path.exists(file_path):
+        print(f"❌ File not found: {file_path}")
+        return None
+    
+    # 1. Validate magic bytes
+    with open(file_path, 'rb') as f:
+        magic = f.read(8)
+    actual_ext = None
+    if magic[:4] == b'glTF':
+        actual_ext = '.glb'
+    elif magic[:2] == b'PK':
+        actual_ext = '.3mf'
+    
+    if actual_ext and not file_path.endswith(actual_ext):
+        correct = file_path.rsplit('.', 1)[0] + actual_ext
+        os.rename(file_path, correct)
+        file_path = correct
+        print(f"🔄 Format corrected → {actual_ext}")
+    
+    # 2. Convert if needed
+    if target_format == "stl" and file_path.endswith('.glb'):
+        converted = _convert_model(file_path, 'stl')
+        if converted and converted != file_path:
+            print(f"🔄 Converted → STL")
+            file_path = converted
+    
+    # 3. Verify file is readable
+    size = os.path.getsize(file_path)
+    if size < 100:
+        print(f"⚠️ File suspiciously small ({size} bytes)")
+    
+    return file_path
+
+
 def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
     if not prompt or not prompt.strip():
         print("❌ Empty prompt. Please describe what you want to generate.")

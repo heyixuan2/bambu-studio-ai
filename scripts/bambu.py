@@ -182,7 +182,14 @@ class CloudBackend:
                            json={"print": {"command": "print_speed", "param": str(level)}})
 
     def start_print(self, filename, plate_number=1):
-        self.client.start_cloud_print(self.device_id, filename, plate_number=plate_number)
+        # Try multiple calling conventions for different library versions
+        try:
+            self.client.start_cloud_print(self.device_id, filename, plate_number=plate_number)
+        except TypeError:
+            try:
+                self.client.start_cloud_print(self.device_id, filename)
+            except TypeError:
+                self.client.start_cloud_print(device_id=self.device_id, filename=filename)
 
     def disconnect(self):
         pass
@@ -434,6 +441,10 @@ def cmd_speed(mode):
     finally: b.disconnect()
 
 def cmd_print(filename):
+    if not args.confirmed:
+        print("⛔ Safety: Preview in Bambu Studio first, then re-run with --confirmed")
+        print(f"   python3 bambu.py print {filename} --confirmed")
+        sys.exit(1)
     b = get_backend()
     try: b.start_print(filename, plate_number=1); print(f"✅ Started printing: {filename}")
     except Exception as e: print(f"❌ Error: {e}")

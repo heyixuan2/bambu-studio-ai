@@ -67,6 +67,32 @@ def get_print_status():
     except Exception as e:
         return f"Error getting status: {e}"
 
+def log_pause_attempt(reason):
+    """Log auto-pause attempt with result."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["python3", os.path.join(os.path.dirname(__file__), "bambu.py"), "pause"],
+            capture_output=True, text=True, timeout=30)
+        success = result.returncode == 0
+        log_event({
+            "type": "auto_pause",
+            "reason": reason,
+            "success": success,
+            "output": result.stdout[:200] if result.stdout else "",
+            "error": result.stderr[:200] if result.stderr else ""
+        })
+        if success:
+            print(f"⏸️ Auto-pause SUCCESS: {reason}")
+        else:
+            print(f"❌ Auto-pause FAILED: {reason} — {result.stderr[:100]}")
+        return success
+    except Exception as e:
+        log_event({"type": "auto_pause", "reason": reason, "success": False, "error": str(e)})
+        print(f"❌ Auto-pause ERROR: {e}")
+        return False
+
+
 def log_event(event_type, details, snapshot_path=None):
     """Append event to monitor log."""
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
@@ -147,6 +173,8 @@ def monitor_loop(interval=120, auto_pause=False):
     print()
     
     cycle = 0
+    consecutive_failures = 0
+    max_failures = 3  # Stop after 3 consecutive failures
     while True:
         cycle += 1
         print(f"--- Cycle {cycle} ({datetime.now().strftime('%H:%M:%S')}) ---")

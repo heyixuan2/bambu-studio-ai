@@ -384,7 +384,7 @@ def render_views(mesh, output_dir):
 
 
 def repair_mesh(mesh, output_path=None):
-    """Attempt to repair non-manifold mesh using trimesh."""
+    """Attempt to repair mesh. Returns structured result dict."""
     import trimesh
     
     issues = []
@@ -395,6 +395,7 @@ def repair_mesh(mesh, output_path=None):
     
     if not issues:
         print("✅ Mesh is clean — no repair needed.")
+        return {"attempted": False, "success": True, "reason": "already clean"}
         return mesh, False
     
     print(f"🔧 Repairing mesh ({', '.join(issues)})...")
@@ -490,6 +491,7 @@ def main():
                         help="Purpose affects infill/wall recommendations")
     parser.add_argument("--render", action="store_true", help="Render preview images")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    parser.add_argument("--unit", choices=["mm", "cm", "in", "m", "auto"], default="auto", help="Model unit (default: auto-detect)")
     parser.add_argument("--height", type=float, default=0, help="Target height in mm (auto-scale model)")
     parser.add_argument("--orient", action="store_true", help="Auto-orient for optimal print position")
     parser.add_argument("--repair", action="store_true", help="Auto-repair non-manifold mesh before analysis")
@@ -530,14 +532,31 @@ def main():
     max_dim = max(dims)
     converted_to_mm = False
 
-    if max_dim < 1:  # Very likely meters (glTF standard: 0.001 - 0.5m typical)
-        print(f"📐 Detected meter-scale model (max dimension: {max_dim:.4f}m)")
+    # Manual unit override
+    unit = getattr(args, 'unit', 'auto')
+    if unit != 'auto':
+        scale_map = {"mm": 1, "cm": 10, "in": 25.4, "m": 1000}
+        scale = scale_map[unit]
+        if scale != 1:
+            mesh.apply_scale(scale)
+            converted_to_mm = True
+            dims = mesh.bounds[1] - mesh.bounds[0]
+            print(f"📐 Manual unit: {unit} → mm (×{scale}): {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
+    elif max_dim < 0.5:  # Very likely meters (high confidence)
+        print(f"📐 Detected meters (confidence: HIGH, max dim: {max_dim:.4f}m)")
         mesh.apply_scale(1000)
         converted_to_mm = True
         dims = mesh.bounds[1] - mesh.bounds[0]
         print(f"   Converted to mm: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
-    elif max_dim < 10:  # Ambiguous zone (1-10): could be cm or small mm
-        print(f"⚠️ Ambiguous scale (max dim: {max_dim:.2f}). Assuming millimeters.")
+    elif max_dim < 5:  # Could be meters or cm (medium confidence)
+        print(f"⚠️ Ambiguous scale (max dim: {max_dim:.2f}). Assuming meters (confidence: MEDIUM)")
+        print(f"   Override with --unit mm/cm/in if wrong")
+        mesh.apply_scale(1000)
+        converted_to_mm = True
+        dims = mesh.bounds[1] - mesh.bounds[0]
+        print(f"   Converted to mm: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
+    elif max_dim < 30:  # Likely cm or small mm
+        print(f"⚠️ Small model (max dim: {max_dim:.1f}). Assuming mm. Use --unit cm if wrong.")
 
     # Auto-scale if target height specified
     if args.height and args.height > 0:

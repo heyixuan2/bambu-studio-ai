@@ -221,7 +221,33 @@ else:
     delit = np.clip(delit, 0, 1)
     print(f"   Delight applied to {len(delit)} pixels (vectorized)")
 
+    # Batch RGB→Lab conversion (vectorized)
+    def batch_rgb_to_lab(rgb):
+        """Vectorized sRGB→CIELAB for numpy array (N,3)."""
+        # Linearize sRGB
+        linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+        # Linear RGB → XYZ (D65)
+        M = np.array([[0.4124564, 0.3575761, 0.1804375],
+                       [0.2126729, 0.7151522, 0.0721750],
+                       [0.0193339, 0.1191920, 0.9503041]])
+        xyz = linear @ M.T
+        # Normalize
+        xyz[:, 0] /= 0.95047
+        xyz[:, 2] /= 1.08883
+        # XYZ → Lab
+        mask = xyz > 0.008856
+        xyz_f = np.where(mask, xyz ** (1/3), 7.787 * xyz + 16/116)
+        L = 116 * xyz_f[:, 1] - 16
+        a = 500 * (xyz_f[:, 0] - xyz_f[:, 1])
+        b_val = 200 * (xyz_f[:, 1] - xyz_f[:, 2])
+        return np.column_stack([L, a, b_val])
+
+    pixel_lab = batch_rgb_to_lab(delit)
+
     # ─── Step 2: CIELAB K-means clustering — vectorized ───
+    # Convert pixels to CIELAB for color matching
+    pixel_lab = batch_rgb_to_lab(delit)
+
     # For large palettes (>20 filament colors), direct nearest-neighbor is more accurate
     if n_colors > 20:
         print(f"\n🎯 Step 2: Direct nearest-neighbor mapping ({n_colors} filament colors)")
@@ -246,71 +272,50 @@ else:
     else:
         print(f"\n🎯 Step 2: K-means clustering ({args.clusters} clusters in CIELAB)")
 
-    # Batch RGB→Lab conversion (vectorized)
-    def batch_rgb_to_lab(rgb):
-        """Vectorized sRGB→CIELAB for numpy array (N,3)."""
-        # Linearize sRGB
-        linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
-        # Linear RGB → XYZ (D65)
-        M = np.array([[0.4124564, 0.3575761, 0.1804375],
-                       [0.2126729, 0.7151522, 0.0721750],
-                       [0.0193339, 0.1191920, 0.9503041]])
-        xyz = linear @ M.T
-        # Normalize
-        xyz[:, 0] /= 0.95047
-        xyz[:, 2] /= 1.08883
-        # XYZ → Lab
-        mask = xyz > 0.008856
-        xyz_f = np.where(mask, xyz ** (1/3), 7.787 * xyz + 16/116)
-        L = 116 * xyz_f[:, 1] - 16
-        a = 500 * (xyz_f[:, 0] - xyz_f[:, 1])
-        b_val = 200 * (xyz_f[:, 1] - xyz_f[:, 2])
-        return np.column_stack([L, a, b_val])
 
-    pixel_lab = batch_rgb_to_lab(delit)
+    if n_colors <= 20:
+        # Vectorized K-means
+        # Auto-adjust: clusters should be at least 2x filament colors for accurate mapping
+        auto_clusters = max(args.clusters, n_colors * 3)
+        n_clusters = min(auto_clusters, len(np.unique(delit.round(2), axis=0)))
+        if n_clusters != args.clusters:
+            print(f"   Auto-adjusted clusters: {args.clusters} → {n_clusters} (need ≥{n_colors*3} for {n_colors} filaments)")
+        rng = np.random.RandomState(42)
+        idx = rng.choice(len(pixel_lab), size=n_clusters, replace=False)
+        centroids = pixel_lab[idx].copy()
 
-    # Vectorized K-means
-    # Auto-adjust: clusters should be at least 2x filament colors for accurate mapping
-    auto_clusters = max(args.clusters, n_colors * 3)
-    n_clusters = min(auto_clusters, len(np.unique(delit.round(2), axis=0)))
-    if n_clusters != args.clusters:
-        print(f"   Auto-adjusted clusters: {args.clusters} → {n_clusters} (need ≥{n_colors*3} for {n_colors} filaments)")
-    rng = np.random.RandomState(42)
-    idx = rng.choice(len(pixel_lab), size=n_clusters, replace=False)
-    centroids = pixel_lab[idx].copy()
+        labels = np.zeros(len(pixel_lab), dtype=np.int32)
+        for iteration in range(20):
+            # Vectorized distance: (N, 1, 3) - (1, K, 3) → (N, K)
+            diffs = pixel_lab[:, np.newaxis, :] - centroids[np.newaxis, :, :]
+            dists = np.sum(diffs ** 2, axis=2)
+            labels = np.argmin(dists, axis=1)
+            # Update centroids
+            new_centroids = np.zeros_like(centroids)
+            counts = np.zeros(n_clusters)
+            np.add.at(new_centroids, labels, pixel_lab)
+            np.add.at(counts, labels, 1)
+            mask = counts > 0
+            new_centroids[mask] /= counts[mask, np.newaxis]
+            changed = np.sum(np.sum((new_centroids - centroids) ** 2, axis=1) > 0.01)
+            centroids = new_centroids
+            if changed == 0:
+                break
+        print(f"   K-means converged in {iteration+1} iterations")
 
-    labels = np.zeros(len(pixel_lab), dtype=np.int32)
-    for iteration in range(20):
-        # Vectorized distance: (N, 1, 3) - (1, K, 3) → (N, K)
-        diffs = pixel_lab[:, np.newaxis, :] - centroids[np.newaxis, :, :]
-        dists = np.sum(diffs ** 2, axis=2)
-        labels = np.argmin(dists, axis=1)
-        # Update centroids
-        new_centroids = np.zeros_like(centroids)
-        counts = np.zeros(n_clusters)
-        np.add.at(new_centroids, labels, pixel_lab)
-        np.add.at(counts, labels, 1)
-        mask = counts > 0
-        new_centroids[mask] /= counts[mask, np.newaxis]
-        changed = np.sum(np.sum((new_centroids - centroids) ** 2, axis=1) > 0.01)
-        centroids = new_centroids
-        if changed == 0:
-            break
-    print(f"   K-means converged in {iteration+1} iterations")
+        # Map each cluster to nearest filament
+        cluster_to_filament = {}
+        for c in range(n_clusters):
+            cluster_to_filament[c] = nearest_filament(tuple(centroids[c]))
 
-    # Map each cluster to nearest filament
-    cluster_to_filament = {}
-    for c in range(n_clusters):
-        cluster_to_filament[c] = nearest_filament(tuple(centroids[c]))
+        # Quantize: pixel → cluster → filament
+        quantized = np.array([cluster_to_filament[l] for l in labels], dtype=np.int32)
 
-    # Quantize: pixel → cluster → filament
-    quantized = np.array([cluster_to_filament[l] for l in labels], dtype=np.int32)
-
-    # Count per filament
-    for fi in range(n_colors):
-        count = np.sum(quantized == fi)
-        pct = count / len(quantized) * 100
-        print(f"   Filament {fi+1}: {count} pixels ({pct:.1f}%)")
+        # Count per filament
+        for fi in range(n_colors):
+            count = np.sum(quantized == fi)
+            pct = count / len(quantized) * 100
+            print(f"   Filament {fi+1}: {count} pixels ({pct:.1f}%)")
 
     # ─── Step 3: Texture-space smoothing — vectorized mode filter ───
     print(f"\n🔄 Step 3: Texture smoothing (window={args.tex_smooth}, passes={args.tex_smooth_passes})")
@@ -469,6 +474,10 @@ else:
                         merged += 1
             print(f"   {merged} faces merged from small islands")
 
+# Note: Multi-material OBJ files inherently have non-manifold edges at color boundaries.
+# This is normal OBJ format behavior and does NOT affect printing.
+# Bambu Studio will show a warning but slices correctly.
+
 # ─── Convert to mm (glTF/GLB uses meters) ───
 bbox_pre = [obj.matrix_world @ v.co for v in obj.data.vertices]
 max_dim_pre = max(max(abs(v.x) for v in bbox_pre), max(abs(v.y) for v in bbox_pre), max(abs(v.z) for v in bbox_pre))
@@ -626,7 +635,7 @@ def colorize(input_path, output_path, colors, height=0, subdivide=2,
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
         for line in result.stdout.split('\n'):
             line = line.strip()
-            if line and (line.startswith(('Mesh:', 'Texture:', 'Filament', '✅', '📋', '📐', '🔆', '🎯', '🔄', '🧹', '🏝', '  ')) or 'ERROR' in line or 'WARNING' in line):
+            if line and (line.startswith(('Mesh:', 'Texture:', 'Filament', 'Faces:', 'Non-manifold', 'Repaired', '✅', '📋', '📐', '🔆', '🎯', '🔄', '🧹', '🏝', '🔧', '⚡', '  ')) or 'ERROR' in line or 'WARNING' in line or 'Step' in line):
                 print(line)
 
         if result.returncode != 0:
@@ -681,7 +690,9 @@ def main():
 
     # Auto-use Bambu Lab palette if no colors specified
     colors = args.colors
-    if not colors or args.palette == "bambu":
+    if colors:
+        pass  # User provided colors explicitly, use them
+    elif args.palette == "bambu" or not colors:
         bambu = _load_bambu_palette()
         if bambu:
             colors = ",".join(bambu.values())
