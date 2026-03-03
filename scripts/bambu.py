@@ -280,6 +280,37 @@ class LocalBackend:
         self.printer.disconnect()
 
 
+# ─── Notifications ───
+
+def notify(title, message, channel="auto"):
+    """Send notification via the user's current channel.
+    
+    channel: auto (detect), discord, imessage, telegram, console
+    In agent context, the agent handles notifications via its messaging tools.
+    This is a fallback for standalone script usage.
+    """
+    print(f"🔔 {title}: {message}")
+    
+    # Try macOS notification
+    try:
+        import subprocess
+        subprocess.run([
+            "osascript", "-e",
+            f'display notification "{message}" with title "Bambu Studio AI" subtitle "{title}"'
+        ], timeout=5, capture_output=True)
+    except:
+        pass
+    
+    # Log to file for agent pickup
+    _skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    log_path = os.path.join(_skill_dir, "output", "notifications.jsonl")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    import json as _nj, time as _nt
+    entry = {"timestamp": _nt.time(), "title": title, "message": message, "channel": channel}
+    with open(log_path, "a") as f:
+        f.write(_nj.dumps(entry) + "\n")
+
+
 # ─── Unified Commands ────────────────────────────────────────────────
 
 def get_backend():
