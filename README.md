@@ -657,7 +657,7 @@ PRs welcome! Areas that need help:
 
 ## Version History
 
-| **0.21.0** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). |
+| **0.21.1** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). | Full manifest metadata restored (env, secrets, install, security, network access, persistence declarations) for ClawHub audit compliance.
 
 | Version | Changes |
 |---------|---------|

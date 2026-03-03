@@ -1,6 +1,107 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
+version: "0.21.0"
+author: TieGaier
+metadata:
+  openclaw:
+    emoji: "🖨️"
+    requires:
+      bins: ["python3", "pip3"]
+    install:
+      - id: pip-deps
+        kind: pip
+        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "matplotlib", "numpy", "Pillow", "ddgs"]
+        required: true
+      - id: ffmpeg
+        kind: brew
+        package: ffmpeg
+        optional: true
+        label: "Camera snapshots (LAN mode)"
+      - id: bambu-studio
+        kind: cask
+        package: bambu-studio
+        optional: true
+        label: "Model preview and manual slicing"
+      - id: blender
+        kind: cask
+        package: blender
+        optional: true
+        label: "Multi-color pipeline + HQ preview rendering"
+      - id: orcaslicer
+        kind: cask
+        package: orcaslicer
+        optional: true
+        label: "CLI slicing backend"
+env:
+  - name: BAMBU_MODE
+    required: false
+    description: "Connection mode: cloud (default) or local"
+  - name: BAMBU_MODEL
+    required: false
+    description: "Printer model (e.g., H2D, A1 Mini, X1C)"
+  - name: BAMBU_EMAIL
+    required: false
+    description: "Bambu account email (cloud mode)"
+  - name: BAMBU_IP
+    required: false
+    description: "Printer LAN IP (local mode)"
+  - name: BAMBU_SERIAL
+    required: false
+    description: "Printer serial number (local mode)"
+  - name: BAMBU_ACCESS_CODE
+    required: false
+    description: "LAN access code from printer touchscreen (local mode)"
+  - name: BAMBU_VERIFY_CODE
+    required: false
+    description: "Cloud login verification code (one-time)"
+  - name: BAMBU_DEVICE_ID
+    required: false
+    description: "Cloud device ID (auto-detected)"
+  - name: BAMBU_3D_PROVIDER
+    required: false
+    description: "AI 3D gen provider: meshy, tripo, printpal, 3daistudio"
+  - name: BAMBU_3D_API_KEY
+    required: false
+    description: "API key for chosen 3D generation provider"
+secrets:
+  - name: BAMBU_PASSWORD
+    required_when: "mode=cloud"
+    storage: ".secrets.json"
+    description: "Bambu Lab account password"
+  - name: BAMBU_ACCESS_CODE
+    required_when: "mode=local"
+    storage: ".secrets.json"
+    description: "LAN access code from printer Settings → Device"
+  - name: BAMBU_3D_API_KEY
+    required_when: "3D generation enabled"
+    storage: ".secrets.json"
+    description: "API key from chosen 3D generation provider"
+security:
+  no_credentials_shipped: true
+  secrets_storage: ".secrets.json (chmod 600, git-ignored)"
+  config_storage: "config.json (non-sensitive printer settings, git-ignored)"
+  token_cache: ".token_cache.json (cloud auth token, 24h TTL, git-ignored)"
+  verify_code_file: ".verify_code (one-time cloud login code, git-ignored)"
+  files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
+  persistence: "Reads/writes config.json, .secrets.json, .token_cache.json, .verify_code locally. No remote data exfiltration."
+  network_access:
+    - "Bambu Lab Cloud API (bambulab.com) — printer control, cloud mode only"
+    - "Bambu Lab MQTT (LAN) — printer control, local mode only"
+    - "Meshy API (api.meshy.ai) — 3D generation, optional"
+    - "Tripo3D API (api.tripo3d.ai) — 3D generation, optional"
+    - "Printpal API — 3D generation, optional"
+    - "3D AI Studio API — 3D generation, optional"
+    - "DuckDuckGo (via ddgs) — model search, optional"
+  consent: "All network calls, file writes, printer operations, and monitoring require explicit user consent."
+keywords:
+  - 3d printing
+  - bambu lab
+  - ams
+  - text to 3d
+  - slicing
+  - print monitoring
+  - multi-color
 ---
 
 # 🖨️ Bambu Studio AI
