@@ -638,7 +638,15 @@ PRs welcome! Areas that need help:
 
 | Version | Changes |
 |---------|---------|
-| **0.10.2** 🏷️ | **First production-ready release** — full bambulabs-api v2.6.6 compatibility, 20+ iterations of real-world testing on H2D |
+| **0.18.0** 🏷️ | Model search (MakerWorld/Printables/Thingiverse/Thangs), notification system, default Bambu Lab color palette |
+| **0.17.0** | Bambu Lab official 43-color palette, direct nearest-neighbor mapping, default LAN mode |
+| **0.16.0** | Unit detection fix, start_print plate_number, MTL color fix |
+| **0.15.0** | GLB format fix, error handling (401/403/429), input validation, pre-decimation |
+| **0.14.0** | GLB-as-3MF fix, meter→mm auto-detection, corrupt file handling |
+| **0.13.0** | 10 bugfixes from sub-agent testing (--wait loop, Tripo path, trimesh API, etc.) |
+| **0.12.0** | Multi-color v2: Delight + CIELAB K-means + texture smoothing |
+| **0.11.0** | Multi-color AMS printing (colorize.py), auto-detect AMS colors |
+| **0.10.2** | **First production-ready release** — bambulabs-api v2.6.6 compat, H2D tested |
 
 ---
 
