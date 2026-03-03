@@ -196,6 +196,20 @@ def fix_filament_profile(profile):
         profile["from"] = "system"
     return profile
 
+
+def detect_printer_info():
+    """Query printer for hardware info (model, nozzle, filaments)."""
+    script = os.path.join(os.path.dirname(__file__), "bambu.py")
+    try:
+        r = subprocess.run(
+            ["python3", script, "info", "--json"],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode == 0:
+            return json.loads(r.stdout)
+    except:
+        pass
+    return None
+
 # ─── Printer Model Mapping ───
 
 PRINTER_PROFILES = {
@@ -431,9 +445,11 @@ def main():
     parser = argparse.ArgumentParser(description="Bambu Lab CLI Slicer")
     parser.add_argument("model", nargs="?", help="STL/OBJ file to slice")
     parser.add_argument("--output", "-o", help="Output 3MF path")
-    parser.add_argument("--printer", default=_cfg.get("model", "H2D"),
-                       help="Printer model (default: from config or H2D)")
-    parser.add_argument("--nozzle", default="0.4", help="Nozzle size (default: 0.4)")
+    parser.add_argument("--printer", default=None,
+                       help="Printer model (default: auto-detect from printer)")
+    parser.add_argument("--nozzle", default=None, help="Nozzle size (default: auto-detect)")
+    parser.add_argument("--no-detect", action="store_true",
+                       help="Skip printer auto-detection")
     parser.add_argument("--quality", default="standard",
                        choices=["draft", "standard", "fine", "extra"],
                        help="Print quality (default: standard)")
@@ -453,13 +469,49 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # Auto-detect printer info
+    printer = args.printer
+    nozzle = args.nozzle
+    filament = args.filament
+
+    if not args.no_detect and (not printer or not nozzle):
+        print("🔍 Detecting printer info...")
+        info = detect_printer_info()
+        if info:
+            if not printer:
+                printer = info.get("model") or _cfg.get("model", "H2D")
+                print(f"   🖨️ Printer: {printer}")
+            if not nozzle:
+                nd = info.get("nozzle_diameter")
+                if nd:
+                    # Normalize: could be float, string, or list
+                    if isinstance(nd, list):
+                        nd = nd[0]
+                    nozzle = str(nd)
+                    print(f"   🔧 Nozzle: {nozzle}mm")
+            # Show AMS filaments
+            fils = info.get("filaments", [])
+            if fils:
+                print(f"   🧵 AMS ({len(fils)} slots):")
+                for f in fils:
+                    ftype = f.get("type", "")
+                    fname = f.get("name", "")
+                    color = f.get("color", "")
+                    if ftype or fname:
+                        print(f"      Slot {f.get('slot','?')}: {ftype} {fname} #{color}")
+        else:
+            print("   ⚠️ Could not reach printer, using config defaults")
+
+    printer = printer or _cfg.get("model", "H2D")
+    nozzle = nozzle or "0.4"
+
     slice_model(
         stl_path=args.model,
         output_path=args.output,
-        printer_model=args.printer,
-        nozzle=args.nozzle,
+        printer_model=printer,
+        nozzle=nozzle,
         quality=args.quality,
-        filament=args.filament,
+        filament=filament,
         orient=args.orient,
         arrange=args.arrange,
     )

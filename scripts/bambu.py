@@ -335,6 +335,74 @@ def get_backend():
 
 SPEED_NAMES = {1: "Silent", 2: "Standard", 3: "Sport", 4: "Ludicrous"}
 
+def cmd_info(json_output=False):
+    """Get printer hardware info for slicing: model, nozzle, AMS filaments."""
+    info = {
+        "model": _config.get("model", "Unknown"),
+        "nozzle_diameter": None,
+        "nozzle_type": None,
+        "filaments": [],
+    }
+
+    if MODE == "local":
+        backend = get_backend()
+        try:
+            printer = backend.printer
+            # Nozzle info
+            try:
+                nd = printer.nozzle_diameter
+                info["nozzle_diameter"] = nd() if callable(nd) else nd
+            except: pass
+            try:
+                nt = printer.nozzle_type
+                info["nozzle_type"] = nt() if callable(nt) else nt
+            except: pass
+
+            # AMS filaments
+            try:
+                ams = backend.get_ams()
+                if isinstance(ams, list):
+                    for slot in ams:
+                        if isinstance(slot, dict):
+                            info["filaments"].append({
+                                "slot": slot.get("tray_id", slot.get("slot", "?")),
+                                "color": slot.get("tray_color", slot.get("color", "")),
+                                "type": slot.get("tray_type", slot.get("type", "")),
+                                "name": slot.get("tray_sub_brands", slot.get("name", "")),
+                            })
+                elif hasattr(ams, '__iter__'):
+                    for item in ams:
+                        info["filaments"].append({"raw": str(item)})
+            except: pass
+        finally:
+            backend.disconnect()
+    else:
+        # Cloud mode — limited info
+        pass
+
+    if json_output:
+        import json as _json
+        print(_json.dumps(info, ensure_ascii=False))
+    else:
+        print(f"🖨️  Model: {info['model']}")
+        nd = info.get('nozzle_diameter')
+        nt = info.get('nozzle_type')
+        if nd:
+            print(f"🔧 Nozzle: {nd}mm" + (f" ({nt})" if nt else ""))
+        if info['filaments']:
+            print(f"🧵 AMS Filaments:")
+            for f in info['filaments']:
+                if 'raw' in f:
+                    print(f"   {f['raw']}")
+                else:
+                    color = f.get('color', '')
+                    ftype = f.get('type', '')
+                    fname = f.get('name', '')
+                    print(f"   Slot {f.get('slot','?')}: {ftype} {fname} #{color}")
+        else:
+            print(f"🧵 No AMS filament info available")
+
+
 def cmd_status(json_output=False):
     backend = get_backend()
     try:
@@ -567,6 +635,7 @@ def main():
         epilog=f"Current mode: {MODE.upper()} | Set BAMBU_MODE=cloud or BAMBU_MODE=local"
     )
     sub = parser.add_subparsers(dest="command")
+    sp_info = sub.add_parser("info"); sp_info.add_argument("--json", action="store_true", help="JSON output")
     sp_status = sub.add_parser("status"); sp_status.add_argument("--json", action="store_true", help="JSON output")
     sub.add_parser("progress")
     sub.add_parser("pause")
