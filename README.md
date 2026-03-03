@@ -38,12 +38,15 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 🖨️ **Printer Control** | Status, print, pause, resume, cancel, speed, light, G-code |
 | 🔎 **Model Search** | Search Printables, MakerWorld, Thingiverse, Thangs for existing models |
 | 🎨 **AI 3D Generation** | Text-to-3D and Image-to-3D via Meshy, Tripo3D, Printpal, or 3D AI Studio |
-| 🔍 **Model Analysis** | 11-point printability check before every print |
-| 🔧 **Auto Mesh Repair** | Fix non-manifold edges, holes, bad normals automatically |
-| 🔄 **Format Conversion** | Auto-convert GLB/OBJ to 3MF/STL (Bambu Lab compatible) |
-| 📸 **Camera** | Live snapshots from printer camera (LAN mode) |
-| 🔍 **AI Print Monitoring** | Periodic snapshots → AI anomaly detection → auto-pause |
-| 📦 **AMS Management** | Filament slot status, low-filament alerts (LAN mode) |
+| 🎨 **Multi-Color AMS** | Auto-detect AMS filaments, GLB→OBJ+MTL color pipeline for multi-color printing |
+| 🔆 **AI Color Optimization** | Delight (shadow removal) + CIELAB K-means clustering + texture smoothing |
+| 🔍 **11-Point Analysis** | Printability check: walls, overhangs, tolerance, infill, layer height, floating parts |
+| 🔧 **Auto Mesh Repair** | Fix non-manifold edges, holes, bad normals, tiered by severity |
+| 📏 **Auto Orient & Scale** | Optimal print orientation (stable poses), auto unit detection (m→mm) |
+| 🔄 **Format Conversion** | Auto GLB→STL (single-color) or GLB→OBJ+MTL (multi-color) |
+| 📸 **Camera** | RTSP snapshots from printer camera (LAN mode, all models incl. H2D) |
+| 🤖 **AI Print Monitoring** | Periodic snapshots → anomaly detection → auto-pause on failure |
+| 📦 **AMS Management** | Auto-detect filament colors/types, low-filament alerts |
 | 🔔 **Notifications** | Print complete/fail alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
 | 🌐 **Dual Mode** | LAN (recommended, full features) + Cloud (remote, limited) |
 
