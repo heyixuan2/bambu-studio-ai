@@ -335,10 +335,14 @@ def get_backend():
 
 SPEED_NAMES = {1: "Silent", 2: "Standard", 3: "Sport", 4: "Ludicrous"}
 
-def cmd_status():
+def cmd_status(json_output=False):
     backend = get_backend()
     try:
         s = backend.get_status()
+        if json_output:
+            import json as _json
+            print(_json.dumps(s))
+            return
         mode_label = "☁️ Cloud" if MODE == "cloud" else "🔌 LAN"
         print(f"{mode_label} | Bambu Lab {_config.get('model', 'Unknown')}")
 
@@ -563,7 +567,7 @@ def main():
         epilog=f"Current mode: {MODE.upper()} | Set BAMBU_MODE=cloud or BAMBU_MODE=local"
     )
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("status")
+    sp_status = sub.add_parser("status"); sp_status.add_argument("--json", action="store_true", help="JSON output")
     sub.add_parser("progress")
     sub.add_parser("pause")
     sub.add_parser("resume")
@@ -572,6 +576,7 @@ def main():
     sub.add_parser("snapshot")
     p = sub.add_parser("print"); p.add_argument("--confirmed", action="store_true", help="Confirm previewed in Bambu Studio"); p.add_argument("filename")
     p = sub.add_parser("gcode", help="Send raw G-code (local only)"); p.add_argument("code")
+    p = sub.add_parser("notify", help="Send notification"); p.add_argument("--title", default="Bambu Studio AI"); p.add_argument("--message", required=True); p.add_argument("--image")
     p = sub.add_parser("light"); p.add_argument("state", choices=["on", "off"])
     p = sub.add_parser("speed"); p.add_argument("mode", choices=["silent", "standard", "sport", "ludicrous"])
 

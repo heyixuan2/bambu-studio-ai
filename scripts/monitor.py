@@ -1,214 +1,381 @@
 #!/usr/bin/env python3
 """
-Bambu Lab H2D Print Monitor — AI-powered anomaly detection
-Usage: python3 monitor.py [--interval 120] [--notify discord|imessage] [--auto-pause]
+Bambu Lab Print Monitor — Smart anomaly detection with notifications.
 
-Designed to be triggered by OpenClaw cron or manually.
-The agent should ASK the user before enabling this monitor.
+Monitoring: every 2 min
+Notifications:
+  - ALERT: anomaly detected (stalled, temp spike, failure, pause) → immediate
+  - PROGRESS: every 30 min summary
+  - COMPLETE: print finished
+
+Usage:
+  python3 monitor.py                     # Start monitoring (2min interval)
+  python3 monitor.py --once              # Single check
+  python3 monitor.py --status            # Show log (offline, no printer needed)
+  python3 monitor.py --interval 60       # Custom interval
+  python3 monitor.py --auto-pause        # Auto-pause on anomaly
 """
 
-import os
-import sys
-import time
-import argparse
-import subprocess
-import json
-from datetime import datetime
+import os, sys, time, argparse, subprocess, json
+from datetime import datetime, timedelta
 
-# Load config + secrets
+# ─── Config ───
 _skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _cfg = {}
 for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".secrets.json")]:
     if os.path.exists(_p):
-        import json as _j
         with open(_p) as _f:
-            _cfg.update(_j.load(_f))
+            _cfg.update(json.load(_f))
 
 BAMBU_IP = os.environ.get("BAMBU_IP", _cfg.get("printer_ip", ""))
 BAMBU_ACCESS_CODE = os.environ.get("BAMBU_ACCESS_CODE", _cfg.get("access_code", ""))
-SNAPSHOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "snapshots")
+SNAPSHOT_DIR = os.path.join(_skill_dir, "output", "snapshots")
 LOG_FILE = os.path.join(SNAPSHOT_DIR, "monitor-log.json")
+STATE_FILE = os.path.join(SNAPSHOT_DIR, "monitor-state.json")
+
+# Thresholds
+STALL_MINUTES = 10       # Alert if progress unchanged for this long
+TEMP_MAX_NOZZLE = 280    # °C — above this is dangerous
+TEMP_MAX_BED = 120       # °C
+PROGRESS_REPORT_MIN = 30 # Minutes between progress reports
+
+# ─── Helpers ───
+
+def _load_state():
+    """Load persistent monitor state."""
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE) as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "last_progress": None,
+        "last_progress_time": None,
+        "last_report_time": None,
+        "alerts_sent": [],
+        "print_started": None,
+    }
+
+def _save_state(state):
+    os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
 
 def take_snapshot():
-    """Capture a frame from H2D camera via RTSP."""
+    """Capture a frame from printer camera via RTSP."""
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    outpath = os.path.join(SNAPSHOT_DIR, f"snap_{timestamp}.jpg")
-    
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    outpath = os.path.join(SNAPSHOT_DIR, f"snap_{ts}.jpg")
     try:
-        result = subprocess.run(
+        r = subprocess.run(
             ["ffmpeg", "-y", "-rtsp_transport", "tcp", "-loglevel", "error",
              "-i", f"rtsps://bblp:{BAMBU_ACCESS_CODE}@{BAMBU_IP}:322/streaming/live/1",
              "-frames:v", "1", outpath],
-            capture_output=True, timeout=15
-        )
-        if result.returncode == 0 and os.path.exists(outpath):
-            return outpath
-        else:
-            print(f"⚠️ Snapshot failed: {result.stderr.decode()[:200]}")
-            return None
-    except FileNotFoundError:
-        print("❌ ffmpeg not installed. Run: brew install ffmpeg")
-        return None
-    except Exception as e:
-        print(f"❌ Snapshot error: {e}")
+            capture_output=True, timeout=15)
+        return outpath if r.returncode == 0 and os.path.exists(outpath) else None
+    except:
         return None
 
-def get_print_status():
-    """Quick status check via bambu.py."""
+def get_status_dict():
+    """Get structured printer status via bambu.py."""
     script = os.path.join(os.path.dirname(__file__), "bambu.py")
     try:
-        result = subprocess.run(
-            ["python3", script, "progress"],
+        r = subprocess.run(
+            ["python3", script, "status", "--json"],
             capture_output=True, text=True, timeout=30,
-            env={**os.environ, "BAMBU_MODE": os.environ.get("BAMBU_MODE", "local")}
-        )
-        return result.stdout.strip()
-    except Exception as e:
-        return f"Error getting status: {e}"
-
-def log_pause_attempt(reason):
-    """Log auto-pause attempt with result."""
-    import subprocess
+            env={**os.environ, "BAMBU_MODE": os.environ.get("BAMBU_MODE", "local")})
+        if r.returncode == 0:
+            return json.loads(r.stdout)
+    except:
+        pass
+    # Fallback: parse text output
     try:
-        result = subprocess.run(
-            ["python3", os.path.join(os.path.dirname(__file__), "bambu.py"), "pause"],
-            capture_output=True, text=True, timeout=30)
-        success = result.returncode == 0
-        log_event("auto_pause", {
-            "reason": reason,
-            "success": success,
-            "output": result.stdout[:200] if result.stdout else "",
-            "error": result.stderr[:200] if result.stderr else ""
-        })
-        if success:
-            print(f"⏸️ Auto-pause SUCCESS: {reason}")
-        else:
-            print(f"❌ Auto-pause FAILED: {reason} — {result.stderr[:100]}")
-        return success
+        r = subprocess.run(
+            ["python3", script, "status"],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "BAMBU_MODE": os.environ.get("BAMBU_MODE", "local")})
+        return {"raw": r.stdout.strip()}
     except Exception as e:
-        log_event("auto_pause", {"reason": reason, "success": False, "error": str(e)})
-        print(f"❌ Auto-pause ERROR: {e}")
-        return False
+        return {"error": str(e)}
 
+def notify(title, message, snapshot=None):
+    """Send notification via bambu.py notify()."""
+    script = os.path.join(os.path.dirname(__file__), "bambu.py")
+    try:
+        cmd = ["python3", script, "notify", "--title", title, "--message", message]
+        if snapshot:
+            cmd.extend(["--image", snapshot])
+        subprocess.run(cmd, capture_output=True, timeout=15)
+    except:
+        pass
+    # Also try macOS notification as fallback
+    try:
+        subprocess.run(["osascript", "-e",
+            f'display notification "{message}" with title "🖨️ {title}"'],
+            capture_output=True, timeout=5)
+    except:
+        pass
+    print(f"📢 NOTIFY: {title} — {message}")
 
-def log_event(event_type, details, snapshot_path=None):
-    """Append event to monitor log."""
+def log_event(event_type, details, snapshot=None):
+    """Append to monitor log (keep last 200)."""
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
     entry = {
         "timestamp": datetime.now().isoformat(),
         "type": event_type,
         "details": details,
-        "snapshot": snapshot_path
+        "snapshot": snapshot
     }
-    
     logs = []
     if os.path.exists(LOG_FILE):
         try:
             with open(LOG_FILE) as f:
                 logs = json.load(f)
         except:
-            logs = []
-    
+            pass
     logs.append(entry)
-    
-    # Keep last 100 entries
-    if len(logs) > 100:
-        logs = logs[-100:]
-    
+    if len(logs) > 200:
+        logs = logs[-200:]
     with open(LOG_FILE, "w") as f:
         json.dump(logs, f, indent=2, ensure_ascii=False)
 
+def pause_print():
+    """Send pause command."""
+    script = os.path.join(os.path.dirname(__file__), "bambu.py")
+    try:
+        r = subprocess.run(["python3", script, "pause"],
+                          capture_output=True, text=True, timeout=30)
+        return r.returncode == 0
+    except:
+        return False
+
+# ─── Anomaly Detection ───
+
+def check_anomalies(status, state):
+    """Check for anomalies. Returns list of (severity, message) tuples."""
+    alerts = []
+    now = datetime.now()
+    
+    progress = status.get("progress")
+    nozzle = status.get("nozzle_temp")
+    bed = status.get("bed_temp")
+    printer_state = str(status.get("state", "")).upper()
+    
+    # 1. Print failure/error states
+    for bad_state in ["FAILED", "ERROR", "FAULT", "ABORT"]:
+        if bad_state in printer_state:
+            alerts.append(("critical", f"🚨 打印异常状态: {printer_state}"))
+    
+    # 2. Unexpected pause (not by us)
+    if "PAUSE" in printer_state and "auto_pause" not in [a.get("type") for a in state.get("alerts_sent", [])[-3:]]:
+        alerts.append(("warning", f"⏸️ 打印机暂停了 (状态: {printer_state})"))
+    
+    # 3. Temperature anomaly
+    try:
+        if nozzle and float(nozzle) > TEMP_MAX_NOZZLE:
+            alerts.append(("critical", f"🔥 喷头温度过高: {nozzle}°C (上限 {TEMP_MAX_NOZZLE}°C)"))
+        if bed and float(bed) > TEMP_MAX_BED:
+            alerts.append(("critical", f"🔥 热床温度过高: {bed}°C (上限 {TEMP_MAX_BED}°C)"))
+    except (ValueError, TypeError):
+        pass
+    
+    # 4. Progress stall detection
+    if progress is not None:
+        try:
+            progress = float(progress)
+        except:
+            progress = None
+    
+    if progress is not None:
+        last_p = state.get("last_progress")
+        last_t = state.get("last_progress_time")
+        
+        if last_p is not None and last_t:
+            try:
+                last_time = datetime.fromisoformat(last_t)
+                minutes_since = (now - last_time).total_seconds() / 60
+                
+                if float(last_p) == progress and minutes_since >= STALL_MINUTES:
+                    alerts.append(("warning", 
+                        f"⚠️ 进度停滞: {progress}% 已保持 {minutes_since:.0f} 分钟未变化"))
+            except:
+                pass
+        
+        # Update progress tracking
+        if last_p is None or float(last_p) != progress:
+            state["last_progress"] = progress
+            state["last_progress_time"] = now.isoformat()
+    
+    return alerts
+
+# ─── Main Monitor ───
+
 def monitor_once(auto_pause=False):
-    """
-    Run a single monitoring cycle:
-    1. Check if printing
-    2. Take snapshot
-    3. Return snapshot path + status for AI analysis
+    """Single monitoring cycle with anomaly detection."""
+    status = get_status_dict()
+    state = _load_state()
+    now = datetime.now()
     
-    The AI agent handles the actual image analysis and decision making.
-    This script just collects data.
-    """
-    # Get status
-    status = get_print_status()
-    
-    # Check if actually printing
-    if "No active print" in status or "IDLE" in status:
-        print("📄 Not printing. Monitor inactive.")
-        log_event("idle", "No active print")
+    # Handle raw/error responses
+    if "error" in status:
+        print(f"❌ Status error: {status['error']}")
         return {"printing": False, "status": status}
+    
+    if "raw" in status:
+        raw = status["raw"]
+        if "IDLE" in raw.upper() or "No active" in raw:
+            # Check if we were tracking a print (= just finished)
+            if state.get("print_started"):
+                notify("打印完成 ✅", f"打印已完成！开始于 {state['print_started']}")
+                state["print_started"] = None
+                _save_state(state)
+                log_event("complete", "Print finished")
+            return {"printing": False, "status": status}
+        print(f"📊 {raw}")
+        return {"printing": True, "status": status}
+    
+    printer_state = str(status.get("state", "")).upper()
+    progress = status.get("progress")
+    
+    # Not printing
+    if "IDLE" in printer_state or progress is None:
+        if state.get("print_started"):
+            notify("打印完成 ✅", f"打印已完成！")
+            state["print_started"] = None
+            _save_state(state)
+            log_event("complete", "Print finished")
+        return {"printing": False, "status": status}
+    
+    # Mark print start
+    if not state.get("print_started"):
+        state["print_started"] = now.isoformat()
     
     # Take snapshot
     snapshot = take_snapshot()
     
-    result = {
-        "printing": True,
-        "status": status,
-        "snapshot": snapshot,
-        "timestamp": datetime.now().isoformat()
-    }
+    # Check anomalies
+    alerts = check_anomalies(status, state)
     
-    log_event("check", status, snapshot)
+    # Handle alerts
+    for severity, message in alerts:
+        snapshot_note = f"\n📸 截图已保存: {snapshot}" if snapshot else ""
+        remaining = status.get("remaining", "?")
+        context = f"\n进度: {progress}% | 剩余: {remaining}"
+        
+        notify(f"打印警报 {'🚨' if severity == 'critical' else '⚠️'}", 
+               message + context + snapshot_note, snapshot)
+        
+        if severity == "critical" and auto_pause:
+            if pause_print():
+                notify("已自动暂停 ⏸️", f"原因: {message}")
+        
+        state.setdefault("alerts_sent", []).append({
+            "type": severity, "message": message, "time": now.isoformat()
+        })
+        # Keep only last 20 alerts in state
+        state["alerts_sent"] = state["alerts_sent"][-20:]
+        
+        log_event(f"alert_{severity}", message, snapshot)
     
-    # Output for the AI agent to process
-    print(f"📊 {status}")
+    # Progress report (every 30 min, only if no alerts this cycle)
+    if not alerts:
+        last_report = state.get("last_report_time")
+        should_report = False
+        if not last_report:
+            should_report = True
+        else:
+            try:
+                minutes_since_report = (now - datetime.fromisoformat(last_report)).total_seconds() / 60
+                if minutes_since_report >= PROGRESS_REPORT_MIN:
+                    should_report = True
+            except:
+                should_report = True
+        
+        if should_report:
+            remaining = status.get("remaining", "?")
+            nozzle = status.get("nozzle_temp", "?")
+            bed = status.get("bed_temp", "?")
+            file_name = status.get("file", "")
+            
+            msg = f"📊 进度: {progress}%"
+            if remaining and remaining != "?":
+                msg += f" | 剩余: {remaining}"
+            msg += f"\n🔥 喷头: {nozzle}°C | 🛏️ 热床: {bed}°C"
+            if file_name:
+                msg += f"\n📁 {file_name}"
+            
+            notify("打印进度", msg)
+            state["last_report_time"] = now.isoformat()
+            log_event("progress_report", {"progress": progress, "remaining": remaining})
+    
+    _save_state(state)
+    
+    # Console output
+    print(f"📊 Progress: {progress}% | State: {printer_state}")
     if snapshot:
-        print(f"📸 Snapshot: {snapshot}")
-    else:
-        print("⚠️ No snapshot available")
+        print(f"📸 {snapshot}")
+    if alerts:
+        print(f"🚨 {len(alerts)} alert(s)")
     
-    return result
+    log_event("check", {
+        "progress": progress, "state": printer_state,
+        "alerts": len(alerts)
+    }, snapshot)
+    
+    return {"printing": True, "status": status, "alerts": alerts, "snapshot": snapshot}
 
 def monitor_loop(interval=120, auto_pause=False):
-    """
-    Continuous monitoring loop.
-    Outputs status + snapshot path each cycle for AI to analyze.
-    """
-    print(f"🔍 Print Monitor Started")
-    print(f"   Interval: {interval}s")
-    print(f"   Auto-pause on anomaly: {'YES' if auto_pause else 'NO'}")
-    print(f"   Snapshots: {SNAPSHOT_DIR}")
-    print(f"   Log: {LOG_FILE}")
+    """Continuous monitoring loop."""
+    print(f"🔍 打印监控已启动")
+    print(f"   检测间隔: {interval}s")
+    print(f"   自动暂停: {'是' if auto_pause else '否'}")
+    print(f"   进度报告: 每 {PROGRESS_REPORT_MIN} 分钟")
+    print(f"   异常报告: 实时")
+    print(f"   截图目录: {SNAPSHOT_DIR}")
     print()
+    
+    # Reset state for new session
+    state = _load_state()
+    state["last_report_time"] = None  # Force first report
+    _save_state(state)
     
     cycle = 0
     consecutive_failures = 0
-    max_failures = 3  # Stop after 3 consecutive failures
+    max_failures = 5
+    
     while True:
         cycle += 1
         print(f"--- Cycle {cycle} ({datetime.now().strftime('%H:%M:%S')}) ---")
         
         try:
             result = monitor_once(auto_pause)
-            consecutive_failures = 0  # Reset on success
+            consecutive_failures = 0
             
             if not result.get("printing"):
-                print("🏁 Print finished or not active. Stopping monitor.")
+                print("🏁 打印完成或未在打印，监控结束。")
                 break
         except Exception as e:
             consecutive_failures += 1
-            print(f"❌ Check failed ({consecutive_failures}/{max_failures}): {e}")
+            print(f"❌ 检测失败 ({consecutive_failures}/{max_failures}): {e}")
             if consecutive_failures >= max_failures:
-                print(f"⛔ Too many consecutive failures, stopping monitor.")
+                notify("监控异常 ⛔", f"连续 {max_failures} 次检测失败，监控已停止: {e}")
                 break
         
-        print(f"⏳ Next check in {interval}s...\n")
         time.sleep(interval)
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Bambu Lab H2D Print Monitor",
-        epilog="The agent should ASK the user before starting this monitor."
-    )
+        description="Bambu Lab Print Monitor — smart anomaly detection",
+        epilog="Agent should ASK user before starting monitor.")
     parser.add_argument("--interval", type=int, default=120,
                        help="Check interval in seconds (default: 120)")
     parser.add_argument("--auto-pause", action="store_true",
-                       help="Auto-pause on detected anomaly")
+                       help="Auto-pause on critical anomaly")
     parser.add_argument("--once", action="store_true",
-                       help="Run single check then exit")
+                       help="Single check then exit")
     parser.add_argument("--status", action="store_true",
-                       help="Show monitor log summary")
-    
+                       help="Show log summary (offline, no printer needed)")
     args = parser.parse_args()
     
     if args.status:
@@ -216,16 +383,24 @@ def main():
             with open(LOG_FILE) as f:
                 logs = json.load(f)
             print(f"📋 Monitor Log: {len(logs)} entries")
-            for entry in logs[-5:]:
+            for entry in logs[-10:]:
                 print(f"  [{entry['timestamp'][:19]}] {entry['type']}: {str(entry.get('details',''))[:80]}")
         else:
             print("📋 No monitor log yet")
+        
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE) as f:
+                state = json.load(f)
+            if state.get("print_started"):
+                print(f"\n🖨️ Active print since: {state['print_started'][:19]}")
+            if state.get("last_progress"):
+                print(f"   Last progress: {state['last_progress']}%")
         return
     
     if not BAMBU_IP or not BAMBU_ACCESS_CODE:
         print("❌ Monitor requires local mode:")
-        print("   export BAMBU_IP='192.168.1.xxx'")
-        print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
+        print("   Set printer_ip and access_code in config.json")
+        print("   Or: export BAMBU_IP='x.x.x.x' BAMBU_ACCESS_CODE='xxxxxxxx'")
         sys.exit(1)
     
     if args.once:
