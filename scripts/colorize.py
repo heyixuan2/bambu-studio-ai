@@ -485,7 +485,7 @@ def colorize(input_path, output_path, colors, height=0, subdivide=2,
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
         for line in result.stdout.split('\n'):
             line = line.strip()
             if line and (line.startswith(('Mesh:', 'Texture:', 'Filament', '✅', '📋', '📐', '🔆', '🎯', '🔄', '🧹', '🏝', '  ')) or 'ERROR' in line or 'WARNING' in line):

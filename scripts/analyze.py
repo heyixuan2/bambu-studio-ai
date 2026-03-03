@@ -512,6 +512,14 @@ def main():
         print(f"ERROR: Failed to load '{args.file}': {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Auto-detect units: glTF models are in meters, need conversion to mm
+    bounds = mesh.bounds
+    max_dim = max(bounds[1] - bounds[0])
+    if max_dim < 10:  # Likely in meters (glTF standard)
+        print(f"📐 Detected meter-scale model (max dimension: {max_dim:.3f}m)")
+        mesh.apply_scale(1000)  # Convert to mm
+        print(f"   Converted to mm: {(mesh.bounds[1] - mesh.bounds[0])[0]:.1f} × {(mesh.bounds[1] - mesh.bounds[0])[1]:.1f} × {(mesh.bounds[1] - mesh.bounds[0])[2]:.1f} mm")
+
     # Auto-scale if target height specified
     if args.height and args.height > 0:
         bounds = mesh.bounds
