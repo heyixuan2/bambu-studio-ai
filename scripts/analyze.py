@@ -11,6 +11,30 @@ Output: JSON report with issues, warnings, suggestions, and optional rendered vi
 """
 
 import argparse
+import signal
+
+
+def _safe_split(mesh, timeout_sec=30):
+    """Split mesh into connected components with timeout protection.
+    Some complex topologies cause trimesh.split() to hang indefinitely."""
+    def _alarm(signum, frame):
+        raise TimeoutError("mesh.split() timed out")
+    
+    old_handler = signal.signal(signal.SIGALRM, _alarm)
+    signal.alarm(timeout_sec)
+    try:
+        bodies = mesh.split(only_watertight=False)
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+        return bodies, False
+    except TimeoutError:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+        return [mesh], True
+    except Exception:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+        return [mesh], False
 
 
 def auto_orient(mesh):
@@ -254,8 +278,12 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     check5b = {"name": "Floating/disconnected parts", "status": "pass"}
     try:
         # trimesh can split mesh into connected components
-        bodies = mesh.split(only_watertight=False)
-        if len(bodies) > 1:
+        bodies, split_timeout = _safe_split(mesh)
+        if split_timeout:
+            check5b["status"] = "warning"
+            check5b["detail"] = "Mesh too complex for split analysis (timed out)"
+            report["warnings"].append("Could not analyze disconnected parts — mesh topology too complex. Visual check recommended.")
+        elif len(bodies) > 1:
             sizes = sorted([b.volume for b in bodies], reverse=True)
             check5b["status"] = "fail"
             check5b["components"] = len(bodies)
@@ -591,11 +619,8 @@ def main():
     # Tiered repair: don't over-process good models
     has_holes = not mesh.is_watertight
     has_nonmanifold = not mesh.is_volume
-    try:
-        bodies = mesh.split(only_watertight=False)
-        has_disconnected = len(bodies) > 1
-    except:
-        has_disconnected = False
+    bodies, split_timeout = _safe_split(mesh)
+    has_disconnected = len(bodies) > 1 and not split_timeout
 
     if has_holes or has_nonmanifold or has_disconnected:
         severity = "minor" if (has_holes and not has_nonmanifold) else "major" if has_nonmanifold else "disconnected"
