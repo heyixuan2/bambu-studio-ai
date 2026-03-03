@@ -406,6 +406,9 @@ def get_backend():
 # ─── Commands ────────────────────────────────────────────────────────
 
 def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
+    if not prompt or not prompt.strip():
+        print("❌ Empty prompt. Please describe what you want to generate.")
+        return
     backend = get_backend()
 
     # Enhance prompt for printability
@@ -488,7 +491,7 @@ def cmd_download(task_id, fmt="3mf"):
         print(f"         python3 bambu.py print {os.path.basename(path)}")
     return path
 
-def _wait_and_download(backend, task_id, fmt="3mf"):
+def _wait_and_download(backend, task_id, fmt="glb"):
     """Poll until complete, then download."""
     print(f"\n⏳ Waiting for generation...")
     
@@ -578,4 +581,20 @@ def main():
         cmd_download(args.task_id, args.format)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⏹️ Cancelled.")
+    except Exception as e:
+        err = str(e)
+        if "401" in err or "Unauthorized" in err:
+            print(f"❌ API authentication failed. Check your API key.")
+            print(f"   export BAMBU_3D_API_KEY='your_key'")
+        elif "403" in err or "Forbidden" in err:
+            print(f"❌ API access denied. Your plan may not support this feature.")
+        elif "429" in err or "rate" in err.lower():
+            print(f"❌ Rate limited. Wait a moment and try again.")
+        elif "timeout" in err.lower():
+            print(f"❌ Request timed out. The API may be slow. Try again.")
+        else:
+            print(f"❌ Error: {e}")

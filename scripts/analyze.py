@@ -514,6 +514,9 @@ def main():
 
     # Auto-detect units: glTF models are in meters, need conversion to mm
     bounds = mesh.bounds
+    if bounds is None:
+        print("❌ Cannot determine model dimensions. File may be corrupt.")
+        sys.exit(1)
     max_dim = max(bounds[1] - bounds[0])
     if max_dim < 10:  # Likely in meters (glTF standard)
         print(f"📐 Detected meter-scale model (max dimension: {max_dim:.3f}m)")
@@ -602,4 +605,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⏹️ Cancelled.")
+    except SystemExit:
+        pass
+    except Exception as e:
+        print(f"❌ Analysis failed: {e}")
+        print(f"   Try opening the model in Bambu Studio directly — it has built-in repair.")

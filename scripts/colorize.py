@@ -465,12 +465,27 @@ def find_blender():
     return None
 
 
+def _validate_colors(colors_str):
+    """Validate hex color string."""
+    import re
+    colors = [c.strip() for c in colors_str.split(",")]
+    for c in colors:
+        if not re.match(r'^#?[0-9A-Fa-f]{6}$', c):
+            print(f"❌ Invalid color: '{c}'. Use hex format: #FF0000,#00FF00,#0000FF")
+            return None
+    return colors_str
+
+
 def colorize(input_path, output_path, colors, height=0, subdivide=2,
              min_island=50, cleanup=3, clusters=16, tex_smooth=9,
              tex_smooth_passes=5, delight_floor=0.7, delight_bright=2.0,
              delight_sat=1.5):
     """Convert GLB to multi-color OBJ+MTL using full pipeline."""
     blender = find_blender()
+    # Validate colors first
+    if not _validate_colors(colors):
+        return None
+
     if not blender:
         print("❌ Blender not found.")
         print("   Install: brew install --cask blender")
