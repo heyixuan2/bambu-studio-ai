@@ -141,6 +141,12 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh
 | Auto-orient for printing | `python3 scripts/analyze.py model.stl --orient` |
 | Orient + repair combo | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
 | Convert to multi-color OBJ | `python3 scripts/colorize.py model.glb --colors "#FF0,#000,#F00,#FFF" --height 80` |
+| Slice model for printing | `python3 scripts/slice.py model.stl --orient --arrange` |
+| Slice with quality preset | `python3 scripts/slice.py model.stl --quality fine` |
+| Slice with specific printer | `python3 scripts/slice.py model.stl --printer H2D --nozzle 0.4` |
+| List available profiles | `python3 scripts/slice.py --list-profiles` |
+| Get printer hardware info | `python3 scripts/bambu.py info` |
+| Send notification | `python3 scripts/bambu.py notify --message "done"` |
 | Single print check | `python3 scripts/monitor.py --once` |
 | Continuous monitoring | `python3 scripts/monitor.py --interval 120` |
 | Monitor with auto-pause | `python3 scripts/monitor.py --interval 120 --auto-pause` |
@@ -158,6 +164,8 @@ Activate this skill when you see:
 | "print this" / "start printing" | Pre-gen flow → `bambu.py print` |
 | "print a ..." / "make me a ..." | Ask: search online or AI generate? |
 | "turn image into 3D" / sends photo | `generate.py image` |
+| "slice this" / "prepare for printing" | `slice.py` with auto-detect |
+| "what nozzle is installed?" | `bambu.py info` |
 | "pause" / "stop" / "resume" printing | `bambu.py pause\|cancel\|resume` |
 | "speed up" / "quiet mode" / "ludicrous" | `bambu.py speed` |
 | "how much filament?" / "AMS" | `bambu.py ams` |
@@ -798,6 +806,39 @@ python3 scripts/bambu.py speed ludicrous  # Max (H2S: 1000mm/s)
 ---
 
 ## Version History
+
+### 0.20.0
+- **NEW**: `slice.py` — CLI slicer with OrcaSlicer backend
+  - Auto-resolves Bambu Studio profile inheritance chains
+  - Auto-detects printer model, nozzle size from live printer
+  - Quality presets: draft/standard/fine/extra
+  - Auto-orient + auto-arrange flags
+  - 3MF post-processing for BS compatibility
+  - All 9 Bambu Lab printer models supported
+- **NEW**: `bambu.py info` — printer hardware info (model, nozzle, AMS filaments)
+- **NEW**: `bambu.py notify` — send notifications
+- **NEW**: Smart print monitor with anomaly detection
+  - Progress stall detection (>10min)
+  - Temperature anomaly alerts
+  - 30-min progress summaries, immediate anomaly alerts
+  - Auto-pause on critical anomalies
+- Fixed: `bambu.py` dispatch for info/notify/status --json
+- Fixed: `generate.py` --format 3mf now correctly produces .3mf
+- Fixed: `colorize.py` auto-adds .obj extension
+- Fixed: `doctor.py` checks OrcaSlicer installation
+- Fixed: Relative output paths in slice.py
+- Fixed: 3MF compatibility with Bambu Studio 2.5.0
+
+### 0.19.2
+- Fixed: `_safe_split()` with 30s SIGALRM timeout for mesh.split() hang protection
+- Verified with stress test model T12 (Eiffel Tower lattice)
+
+### 0.19.1
+- 17 bug fixes from 3-round audit (B1-B17, R1-R4, D1-D5, O3-O6)
+- `search.py` rewritten to use `ddgs` package (DDG HTML scraping broken)
+- `analyze.py` stdlib imports moved to top
+- Monitor `--status` works offline
+
 
 - **0.19.0** — 13 bug fixes, doctor.py, --confirmed safety gate, color pipeline overhaul (AO delight, shadow-aware mapping, border vote), search rewrite (ddgs), monitor retry logic
 - **0.18.0** — Model search (4 sources), notification system

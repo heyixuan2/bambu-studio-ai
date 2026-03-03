@@ -169,14 +169,14 @@ def check_anomalies(status, state):
     
     # 2. Unexpected pause (not by us)
     if "PAUSE" in printer_state and "auto_pause" not in [a.get("type") for a in state.get("alerts_sent", [])[-3:]]:
-        alerts.append(("warning", f"⏸️ Printer paused (状态: {printer_state})"))
+        alerts.append(("warning", f"⏸️ Printer paused (state: {printer_state})"))
     
     # 3. Temperature anomaly
     try:
         if nozzle and float(nozzle) > TEMP_MAX_NOZZLE:
-            alerts.append(("critical", f"🔥 Nozzle temp too high: {nozzle}°C (上限 {TEMP_MAX_NOZZLE}°C)"))
+            alerts.append(("critical", f"🔥 Nozzle temp too high: {nozzle}°C (max {TEMP_MAX_NOZZLE}°C)"))
         if bed and float(bed) > TEMP_MAX_BED:
-            alerts.append(("critical", f"🔥 Bed temp too high: {bed}°C (上限 {TEMP_MAX_BED}°C)"))
+            alerts.append(("critical", f"🔥 Bed temp too high: {bed}°C (max {TEMP_MAX_BED}°C)"))
     except (ValueError, TypeError):
         pass
     
@@ -227,7 +227,7 @@ def monitor_once(auto_pause=False):
         if "IDLE" in raw.upper() or "No active" in raw:
             # Check if we were tracking a print (= just finished)
             if state.get("print_started"):
-                notify("Print Complete ✅", f"Print finished!开始于 {state['print_started']}")
+                notify("Print Complete ✅", f"Print finished!Started at {state['print_started']}")
                 state["print_started"] = None
                 _save_state(state)
                 log_event("complete", "Print finished")
@@ -330,7 +330,7 @@ def monitor_loop(interval=120, auto_pause=False):
     print(f"🔍 Print monitor started")
     print(f"   Check interval: {interval}s")
     print(f"   Auto-pause: {'Yes' if auto_pause else 'No'}")
-    print(f"   Progress报告: Every {PROGRESS_REPORT_MIN} min")
+    print(f"   Progressreport: Every {PROGRESS_REPORT_MIN} min")
     print(f"   Anomaly alert: Realtime")
     print(f"   Snapshot dir: {SNAPSHOT_DIR}")
     print()
@@ -353,13 +353,13 @@ def monitor_loop(interval=120, auto_pause=False):
             consecutive_failures = 0
             
             if not result.get("printing"):
-                print("🏁 Print Complete或未在打印，监控结束。")
+                print("🏁 Print complete or idle, monitor stopped。")
                 break
         except Exception as e:
             consecutive_failures += 1
             print(f"❌ Check failed ({consecutive_failures}/{max_failures}): {e}")
             if consecutive_failures >= max_failures:
-                notify("Monitor Error ⛔", f"Consecutive {max_failures} 次Check failed，监控已停止: {e}")
+                notify("Monitor Error ⛔", f"Consecutive {max_failures}  check failures, monitor stopped: {e}")
                 break
         
         time.sleep(interval)

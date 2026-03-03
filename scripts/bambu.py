@@ -375,8 +375,8 @@ def cmd_info(json_output=False):
                         info["filaments"].append({"raw": str(item)})
             except: pass
         except (Exception, SystemExit):
-            # Printer not reachable — still show config info
-            pass
+            # Printer not reachable — show config info only
+            info["_offline"] = True
     else:
         # Cloud mode — limited info
         pass
@@ -385,6 +385,8 @@ def cmd_info(json_output=False):
         import json as _json
         print(_json.dumps(info, ensure_ascii=False))
     else:
+        if info.get("_offline"):
+            print("⚠️  Printer offline — showing config defaults")
         print(f"🖨️  Model: {info['model']}")
         nd = info.get('nozzle_diameter')
         nt = info.get('nozzle_type')

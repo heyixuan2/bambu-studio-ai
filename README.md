@@ -486,8 +486,16 @@ python3 scripts/bambu.py print model.3mf           # Start printing
 python3 scripts/bambu.py pause                     # Pause print
 python3 scripts/bambu.py resume                    # Resume print
 python3 scripts/bambu.py cancel                    # Cancel print
+python3 scripts/bambu.py info                      # Printer hardware info
+python3 scripts/bambu.py notify --message "Done!"  # Send notification
 python3 scripts/bambu.py speed silent              # Quiet mode (night)
 python3 scripts/bambu.py speed standard            # Normal
+
+# Slicing
+python3 scripts/slice.py model.stl                 # Slice with auto-detect
+python3 scripts/slice.py model.stl --orient        # Auto-orient + slice
+python3 scripts/slice.py model.stl --quality fine  # 0.12mm layer height
+python3 scripts/slice.py --list-profiles           # Show available profiles
 python3 scripts/bambu.py speed sport               # Fast
 python3 scripts/bambu.py speed ludicrous           # Maximum
 python3 scripts/bambu.py light on|off              # Chamber light
@@ -620,7 +628,8 @@ bambu-studio-ai/
     ├── generate.py             — AI 3D generation (4 providers, auto-convert, prompt enhancement)
     ├── analyze.py              — 11-point printability analysis + mesh repair
     ├── colorize.py             — Multi-color pipeline (AO delight, CIELAB NN, OBJ+MTL export)
-    ├── monitor.py              — AI print monitoring (anomaly detection)
+    ├── monitor.py              — Smart print monitor (anomaly detection, notifications)
+    ├── slice.py                — CLI slicer (OrcaSlicer backend, auto profile merging)
     ├── search.py               — Model search (MakerWorld, Printables, Thingiverse, Thangs)
     ├── doctor.py               — Dependency doctor (verify all deps + API symbols)
     └── test_boundary.py        — Boundary condition tests
