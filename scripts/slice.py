@@ -309,6 +309,38 @@ def resolve_profiles(printer_model, nozzle, quality, filament_name, profiles_dir
 
 # ─── Main Slice ───
 
+
+def _fix_3mf_compat(path):
+    """Patch 3MF config to use BS 2.5.0 compatible values."""
+    import zipfile, shutil, tempfile
+    
+    # Values that OrcaSlicer writes but BS considers outdated
+    replacements = {
+        '"ensure_vertical_shell_thickness": "ensure_all"': '"ensure_vertical_shell_thickness": "enabled"',
+        '"ironing_pattern": "rectilinear"': '"ironing_pattern": "zig-zag"',
+        '"support_ironing_pattern": "rectilinear"': '"support_ironing_pattern": "zig-zag"',
+    }
+    
+    tmppath = path + ".tmp"
+    changed = False
+    with zipfile.ZipFile(path, 'r') as zin, zipfile.ZipFile(tmppath, 'w') as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.endswith('.config') or item.filename.endswith('.json'):
+                text = data.decode('utf-8', errors='replace')
+                for old_val, new_val in replacements.items():
+                    if old_val in text:
+                        text = text.replace(old_val, new_val)
+                        changed = True
+                data = text.encode('utf-8')
+            zout.writestr(item, data)
+    
+    if changed:
+        shutil.move(tmppath, path)
+        print("   🔧 Patched OrcaSlicer→BS compat values")
+    else:
+        os.remove(tmppath)
+
 def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
                 quality="standard", filament="Bambu PLA Basic",
                 orient=False, arrange=False):
@@ -408,6 +440,13 @@ def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
             size_str = f"{size/1024/1024:.1f}MB" if size > 1024*1024 else f"{size/1024:.0f}KB"
             print(f"\n✅ Sliced successfully!")
             print(f"   📦 Output: {output_path} ({size_str})")
+
+            # Post-process 3MF: fix OrcaSlicer values that BS flags as outdated
+            try:
+                import zipfile
+                _fix_3mf_compat(output_path)
+            except Exception as e:
+                print(f"   ⚠️ Post-process warning: {e}")
 
             # Quick 3MF validation
             try:
