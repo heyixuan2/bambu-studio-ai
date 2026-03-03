@@ -2,7 +2,7 @@
 """
 🎨 Multi-Color Converter — GLB to OBJ+MTL for Bambu Lab AMS
 
-Pipeline: GLB texture → Delight → CIELAB K-means → Texture smoothing → Face sampling → Cleanup → OBJ+MTL
+Pipeline: GLB texture → [Optional AO Delight] → CIELAB nearest-neighbor → Shadow border vote → Texture smoothing → Face sampling → Cleanup → OBJ+MTL
 
 Requires: Blender 4.0+ (brew install --cask blender)
 
@@ -38,7 +38,6 @@ import bmesh
 import numpy as np
 import sys
 import os
-import colorsys
 from collections import defaultdict, deque
 
 argv = sys.argv
@@ -53,11 +52,11 @@ parser.add_argument("--height", type=float, default=0)
 parser.add_argument("--subdivide", type=int, default=2)
 parser.add_argument("--min_island", type=int, default=50)
 parser.add_argument("--cleanup", type=int, default=3)
-parser.add_argument("--clusters", type=int, default=16)
 parser.add_argument("--tex_smooth", type=int, default=9)
 parser.add_argument("--tex_smooth_passes", type=int, default=5)
 parser.add_argument("--delight_floor", type=float, default=0.7)
 parser.add_argument("--delight_bright", type=float, default=2.0)
+parser.add_argument("--no_delight", action="store_true", help="Skip delight entirely")
 parser.add_argument("--delight_sat", type=float, default=1.5)
 args = parser.parse_args(argv)
 
@@ -93,20 +92,6 @@ def rgb_to_lab(r, g, b):
 
 filament_lab = [rgb_to_lab(*c) for c in filament_colors]
 
-def delta_e(lab1, lab2):
-    """CIE76 color difference."""
-    return sum((a - b) ** 2 for a, b in zip(lab1, lab2)) ** 0.5
-
-def nearest_filament(lab):
-    """Find nearest filament color index by deltaE."""
-    best_i = 0
-    best_d = float('inf')
-    for i, flab in enumerate(filament_lab):
-        d = delta_e(lab, flab)
-        if d < best_d:
-            best_d = d
-            best_i = i
-    return best_i
 
 # ─── Import model ───
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -195,31 +180,93 @@ else:
     w, h = image.size
     print(f"Texture: {w}x{h} ({len(pixels)} pixels)")
 
-    # ─── Step 1: Delight (remove baked shadows) — vectorized ───
-    # Smart delight: if dark filaments exist, reduce floor to preserve dark regions
-    effective_floor = args.delight_floor
-    dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
-    if dark_filaments:
-        effective_floor = min(args.delight_floor, 0.3)
-        print(f"\n🔆 Step 1: Delight (floor adjusted {args.delight_floor}→{effective_floor} — dark filament detected)")
+    # ─── Step 1: Mesh-aware AO delighting ───
+    # Bake AO map from mesh geometry, then divide texture by AO to remove geometric shadows
+    # This knows "dark because of geometry concavity" vs "dark because it's a dark color"
+    if getattr(args, 'no_delight', False):
+        print(f"\n🔆 Step 1: Delight SKIPPED (--no_delight)")
+        delit = pixels.copy()
+        effective_floor = 0.01
+        ao_pixels = np.ones(len(pixels))  # Dummy AO — no shadow detection
     else:
-        print(f"\n🔆 Step 1: Delight (floor={args.delight_floor}, bright={args.delight_bright}, sat={args.delight_sat})")
-    delit = pixels.copy()
-    # Vectorized HSV conversion
-    r_ch, g_ch, b_ch = delit[:, 0], delit[:, 1], delit[:, 2]
-    maxc = np.maximum(np.maximum(r_ch, g_ch), b_ch)
-    minc = np.minimum(np.minimum(r_ch, g_ch), b_ch)
-    v = maxc
-    s = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
-    # Boost brightness and saturation
-    v = np.clip(v * args.delight_bright, effective_floor, 1.0)
-    s = np.clip(s * args.delight_sat, 0, 1.0)
-    # Convert back to RGB (simplified: adjust original pixels by brightness ratio)
-    old_v = maxc + 1e-10
-    ratio = v / old_v
-    delit = delit * ratio[:, np.newaxis]
-    delit = np.clip(delit, 0, 1)
-    print(f"   Delight applied to {len(delit)} pixels (vectorized)")
+        dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
+        effective_floor = min(args.delight_floor, 0.3) if dark_filaments else args.delight_floor
+        dark_note = " (dark filament detected)" if dark_filaments else ""
+        print(f"\n🔆 Step 1: Mesh-aware AO delight{dark_note}")
+
+        # Step 1a: Bake AO map using Blender's Cycles renderer
+        ao_image = None
+        try:
+            bpy.context.scene.render.engine = 'CYCLES'
+            bpy.context.scene.cycles.device = 'CPU'
+            bpy.context.scene.cycles.samples = 32  # Fast but good enough
+
+            # Create AO bake target image (same size as texture)
+            ao_image = bpy.data.images.new("AO_Bake", width=w, height=h, alpha=False)
+
+            # Set up material for AO baking
+            mat = obj.data.materials[0]
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+
+            # Add image texture node for AO target
+            ao_node = nodes.new('ShaderNodeTexImage')
+            ao_node.image = ao_image
+            ao_node.name = "AO_Target"
+            # Make it the active node (Blender bakes to active image node)
+            nodes.active = ao_node
+
+            # Bake AO
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            print(f"   Baking AO map ({w}x{h}, 32 samples)...")
+            bpy.ops.object.bake(type='AO', margin=2)
+
+            # Read AO pixels
+            ao_pixels = np.array(ao_image.pixels[:]).reshape(-1, 4)[:, 0]  # AO is grayscale, take R channel
+            print(f"   AO range: {ao_pixels.min():.3f} - {ao_pixels.max():.3f}")
+
+            # Clean up bake nodes
+            nodes.remove(ao_node)
+
+            # Step 1b: Divide texture by AO to recover albedo
+            # albedo = texture / max(ao, floor)
+            # Where AO is dark (concavity), we brighten; where AO is bright (exposed), minimal change
+            ao_clamped = np.clip(ao_pixels, effective_floor, 1.0)
+            delit = pixels / ao_clamped[:, np.newaxis]
+
+            # Step 1c: Mild additional brightness/saturation boost for remaining shadows
+            r_ch, g_ch, b_ch = delit[:, 0], delit[:, 1], delit[:, 2]
+            maxc = np.maximum(np.maximum(r_ch, g_ch), b_ch)
+            minc = np.minimum(np.minimum(r_ch, g_ch), b_ch)
+            v = maxc
+            s = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
+            # Gentler boost now that AO is removed (1.3x instead of 2.0x)
+            mild_bright = min(args.delight_bright, 1.3)
+            v = np.clip(v * mild_bright, 0, 1.0)
+            old_v = maxc + 1e-10
+            ratio = v / old_v
+            delit = delit * ratio[:, np.newaxis]
+            delit = np.clip(delit, 0, 1)
+
+            print(f"   ✅ AO-based delight applied ({len(delit)} pixels)")
+
+        except Exception as e:
+            print(f"   ⚠️ AO bake failed ({e}), falling back to HSV delight")
+            # Fallback: original HSV-based delight
+            delit = pixels.copy()
+            r_ch, g_ch, b_ch = delit[:, 0], delit[:, 1], delit[:, 2]
+            maxc = np.maximum(np.maximum(r_ch, g_ch), b_ch)
+            minc = np.minimum(np.minimum(r_ch, g_ch), b_ch)
+            v = maxc
+            s = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
+            v = np.clip(v * args.delight_bright, effective_floor, 1.0)
+            s = np.clip(s * args.delight_sat, 0, 1.0)
+            old_v = maxc + 1e-10
+            ratio = v / old_v
+            delit = delit * ratio[:, np.newaxis]
+            delit = np.clip(delit, 0, 1)
+            print(f"   Fallback delight applied to {len(delit)} pixels")
 
     # Batch RGB→Lab conversion (vectorized)
     def batch_rgb_to_lab(rgb):
@@ -244,78 +291,96 @@ else:
 
     pixel_lab = batch_rgb_to_lab(delit)
 
-    # ─── Step 2: CIELAB K-means clustering — vectorized ───
-    # Convert pixels to CIELAB for color matching
-    pixel_lab = batch_rgb_to_lab(delit)
-
-    # For large palettes (>20 filament colors), direct nearest-neighbor is more accurate
-    if n_colors > 20:
-        print(f"\n🎯 Step 2: Direct nearest-neighbor mapping ({n_colors} filament colors)")
-        filament_lab_np = np.array(filament_lab)
-        # Vectorized: compute distance from each pixel to each filament
-        # Process in chunks to avoid memory explosion
-        chunk_size = 100000
-        quantized = np.zeros(len(pixel_lab), dtype=np.int32)
-        for start in range(0, len(pixel_lab), chunk_size):
-            end = min(start + chunk_size, len(pixel_lab))
-            chunk = pixel_lab[start:end]
-            # Broadcast: (chunk, 1, 3) - (1, n_colors, 3)
-            dists = np.sqrt(np.sum((chunk[:, None, :] - filament_lab_np[None, :, :]) ** 2, axis=2))
-            quantized[start:end] = np.argmin(dists, axis=1)
-        # Print distribution
-        for i in range(n_colors):
-            count = np.sum(quantized == i)
-            pct = count / len(quantized) * 100
-            if count > 0:
-                r, g, b = filament_colors[i]
-                print(f"Filament {i+1}: {count} pixels ({pct:.1f}%) — #{int(r*255):02X}{int(g*255):02X}{int(b*255):02X}")
-    else:
-        print(f"\n🎯 Step 2: K-means clustering ({args.clusters} clusters in CIELAB)")
-
-
-    if n_colors <= 20:
-        # Vectorized K-means
-        # Auto-adjust: clusters should be at least 2x filament colors for accurate mapping
-        auto_clusters = max(args.clusters, n_colors * 3)
-        n_clusters = min(auto_clusters, len(np.unique(delit.round(2), axis=0)))
-        if n_clusters != args.clusters:
-            print(f"   Auto-adjusted clusters: {args.clusters} → {n_clusters} (need ≥{n_colors*3} for {n_colors} filaments)")
-        rng = np.random.RandomState(42)
-        idx = rng.choice(len(pixel_lab), size=n_clusters, replace=False)
-        centroids = pixel_lab[idx].copy()
-
-        labels = np.zeros(len(pixel_lab), dtype=np.int32)
-        for iteration in range(20):
-            # Vectorized distance: (N, 1, 3) - (1, K, 3) → (N, K)
-            diffs = pixel_lab[:, np.newaxis, :] - centroids[np.newaxis, :, :]
-            dists = np.sum(diffs ** 2, axis=2)
-            labels = np.argmin(dists, axis=1)
-            # Update centroids
-            new_centroids = np.zeros_like(centroids)
-            counts = np.zeros(n_clusters)
-            np.add.at(new_centroids, labels, pixel_lab)
-            np.add.at(counts, labels, 1)
-            mask = counts > 0
-            new_centroids[mask] /= counts[mask, np.newaxis]
-            changed = np.sum(np.sum((new_centroids - centroids) ** 2, axis=1) > 0.01)
-            centroids = new_centroids
-            if changed == 0:
+    # ─── Step 2: Shadow-aware color mapping ───
+    # Shadow pixels take the color of their nearest NON-SHADOW physical neighbor.
+    # Non-shadow pixels get normal CIELAB mapping and are NOT modified.
+    print(f"\n🎯 Step 2: Shadow-aware color mapping ({n_colors} filament colors)")
+    
+    filament_lab_np = np.array(filament_lab)
+    
+    # 2a: Identify shadow pixels using AO map
+    ao_threshold = effective_floor + 0.1
+    try:
+        shadow_mask_flat = ao_pixels < ao_threshold
+    except:
+        brightness = np.max(pixels, axis=1)
+        shadow_mask_flat = brightness < 0.3
+    
+    shadow_mask = shadow_mask_flat.reshape(h, w)
+    shadow_count = int(np.sum(shadow_mask))
+    nonshadow_count = len(shadow_mask_flat) - shadow_count
+    print(f"   Non-shadow: {nonshadow_count:,} px ({nonshadow_count*100//len(shadow_mask_flat)}%)")
+    print(f"   Shadow: {shadow_count:,} px ({shadow_count*100//len(shadow_mask_flat)}%)")
+    
+    # 2b: Map ALL pixels using CIELAB nearest-neighbor (standard, no chromaticity hack)
+    quantized = np.zeros(len(pixel_lab), dtype=np.int32)
+    chunk_size = 100000
+    for start in range(0, len(pixel_lab), chunk_size):
+        end = min(start + chunk_size, len(pixel_lab))
+        chunk = pixel_lab[start:end]
+        diff = chunk[:, None, :] - filament_lab_np[None, :, :]
+        dists = np.sqrt(np.sum(diff ** 2, axis=2))
+        quantized[start:end] = np.argmin(dists, axis=1)
+    
+    # 2c: Shadow pixels → iterative edge erosion (vectorized, no scipy)
+    # Shadow regions shrink from edges: border shadow pixels adopt the dominant
+    # non-shadow neighbor color. Repeat until all shadows absorbed.
+    if 0 < shadow_count < len(shadow_mask_flat) * 0.7:
+        quant_2d = quantized.reshape(h, w)
+        remaining = shadow_mask.copy()  # True = still shadow
+        total_fixed = 0
+        
+        for iteration in range(100):
+            # Pad for neighbor access
+            pad_r = np.pad(remaining, 1, mode='constant', constant_values=True)
+            pad_q = np.pad(quant_2d, 1, mode='edge')
+            
+            # For each shadow pixel, count non-shadow neighbor colors
+            # Build 8 neighbor arrays (shifted views)
+            shifts = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
+            
+            # Find border shadow pixels: shadow pixels with at least 1 non-shadow neighbor
+            has_nonshadow_neighbor = np.zeros((h, w), dtype=bool)
+            for dy, dx in shifts:
+                has_nonshadow_neighbor |= ~pad_r[1+dy:h+1+dy, 1+dx:w+1+dx]
+            
+            border = remaining & has_nonshadow_neighbor
+            border_count = int(np.sum(border))
+            if border_count == 0:
                 break
-        print(f"   K-means converged in {iteration+1} iterations")
-
-        # Map each cluster to nearest filament
-        cluster_to_filament = {}
-        for c in range(n_clusters):
-            cluster_to_filament[c] = nearest_filament(tuple(centroids[c]))
-
-        # Quantize: pixel → cluster → filament
-        quantized = np.array([cluster_to_filament[l] for l in labels], dtype=np.int32)
-
-        # Count per filament
-        for fi in range(n_colors):
-            count = np.sum(quantized == fi)
-            pct = count / len(quantized) * 100
-            print(f"   Filament {fi+1}: {count} pixels ({pct:.1f}%)")
+            
+            # For border pixels, find dominant non-shadow neighbor color
+            by, bx = np.where(border)
+            for idx in range(len(by)):
+                y, x = int(by[idx]), int(bx[idx])
+                votes = {}
+                for dy, dx in shifts:
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w and not remaining[ny, nx]:
+                        c = int(quant_2d[ny, nx])
+                        votes[c] = votes.get(c, 0) + 1
+                if votes:
+                    quant_2d[y, x] = max(votes, key=votes.get)
+            
+            remaining[border] = False
+            total_fixed += border_count
+            
+            if iteration < 3 or iteration % 10 == 0:
+                print(f"   Pass {iteration+1}: {border_count} border pixels absorbed")
+        
+        quantized = quant_2d.reshape(-1)
+        unfixed = int(np.sum(remaining))
+        print(f"   ✅ {total_fixed:,} shadow pixels fixed in {iteration+1} passes")
+        if unfixed > 0:
+            print(f"   ⚠️ {unfixed} isolated shadow pixels remain")
+    
+    # Print final distribution
+    for i in range(n_colors):
+        count = int(np.sum(quantized == i))
+        pct = count / len(quantized) * 100
+        if count > 0:
+            r, g, b = filament_colors[i]
+            print(f"Filament {i+1}: {count} pixels ({pct:.1f}%) — #{int(r*255):02X}{int(g*255):02X}{int(b*255):02X}")
 
     # ─── Step 3: Texture-space smoothing — vectorized mode filter ───
     print(f"\n🔄 Step 3: Texture smoothing (window={args.tex_smooth}, passes={args.tex_smooth_passes})")
@@ -584,9 +649,9 @@ def _validate_colors(colors_str):
 
 
 def colorize(input_path, output_path, colors, height=0, subdivide=2,
-             min_island=50, cleanup=3, clusters=16, tex_smooth=9,
+             min_island=50, cleanup=3, tex_smooth=9,
              tex_smooth_passes=5, delight_floor=0.7, delight_bright=2.0,
-             delight_sat=1.5):
+             delight_sat=1.5, no_delight=False):
     """Convert GLB to multi-color OBJ+MTL using full pipeline."""
     blender = find_blender()
     # Validate colors first
@@ -611,7 +676,8 @@ def colorize(input_path, output_path, colors, height=0, subdivide=2,
     print(f"   Input:    {input_path}")
     print(f"   Output:   {output_path}")
     print(f"   Colors:   {colors}")
-    print(f"   Pipeline: Delight → CIELAB K-means({clusters}) → Tex smooth({tex_smooth}×{tex_smooth_passes}) → Subdivide({subdivide}) → Sample → Clean")
+    delight_label = "No delight" if no_delight else "AO Delight"
+    print(f"   Pipeline: {delight_label} → CIELAB NN → Shadow vote → Tex smooth({tex_smooth}×{tex_smooth_passes}) → Subdivide({subdivide}) → Sample → Clean")
     print()
 
     cmd = [
@@ -623,19 +689,20 @@ def colorize(input_path, output_path, colors, height=0, subdivide=2,
         "--subdivide", str(subdivide),
         "--min_island", str(min_island),
         "--cleanup", str(cleanup),
-        "--clusters", str(clusters),
         "--tex_smooth", str(tex_smooth),
         "--tex_smooth_passes", str(tex_smooth_passes),
         "--delight_floor", str(delight_floor),
         "--delight_bright", str(delight_bright),
         "--delight_sat", str(delight_sat),
     ]
+    if no_delight:
+        cmd.append("--no_delight")
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
         for line in result.stdout.split('\n'):
             line = line.strip()
-            if line and (line.startswith(('Mesh:', 'Texture:', 'Filament', 'Faces:', 'Non-manifold', 'Repaired', '✅', '📋', '📐', '🔆', '🎯', '🔄', '🧹', '🏝', '🔧', '⚡', '  ')) or 'ERROR' in line or 'WARNING' in line or 'Step' in line):
+            if line and (line.startswith(('Mesh:', 'Texture:', 'Filament', 'Faces:', 'Non-manifold', 'Repaired', '✅', '📋', '📐', '🔆', '🎯', '🔄', '🧹', '🏝', '🔧', '⚡', '🧩', '  ')) or 'ERROR' in line or 'WARNING' in line or 'Step' in line):
                 print(line)
 
         if result.returncode != 0:
@@ -667,7 +734,7 @@ def colorize(input_path, output_path, colors, height=0, subdivide=2,
 def main():
     parser = argparse.ArgumentParser(
         description="🎨 Multi-color converter for Bambu Lab AMS (GLB → OBJ+MTL)",
-        epilog="Pipeline: Delight → CIELAB K-means → Texture smooth → Face sample → Cleanup → OBJ+MTL"
+        epilog="Pipeline: [AO Delight] → CIELAB NN → Shadow vote → Texture smooth → Face sample → Cleanup → OBJ+MTL"
     )
     parser.add_argument("input", help="Input model (GLB/GLTF/OBJ/FBX/STL)")
     parser.add_argument("--output", "-o", help="Output OBJ path")
@@ -677,11 +744,11 @@ def main():
     parser.add_argument("--subdivide", type=int, default=2, choices=[0, 1, 2, 3], help="Subdivision (0=raw, 2=recommended, 3=max)")
     parser.add_argument("--min_island", type=int, default=50, help="Min faces per color island")
     parser.add_argument("--cleanup", type=int, default=3, help="Neighbor cleanup rounds")
-    parser.add_argument("--clusters", type=int, default=16, help="K-means color clusters")
     parser.add_argument("--tex_smooth", type=int, default=9, help="Texture smoothing window size")
     parser.add_argument("--tex_smooth_passes", type=int, default=5, help="Texture smoothing passes")
     parser.add_argument("--delight_floor", type=float, default=0.7, help="Min brightness after delight (0-1)")
     parser.add_argument("--delight_bright", type=float, default=2.0, help="Brightness multiplier")
+    parser.add_argument("--no_delight", action="store_true", help="Skip delight entirely")
     parser.add_argument("--delight_sat", type=float, default=1.5, help="Saturation multiplier")
 
     args = parser.parse_args()
@@ -702,9 +769,9 @@ def main():
             print("   Provide colors: --colors '#FF0000,#00FF00,#0000FF'")
             sys.exit(1)
     colorize(args.input, args.output, colors, args.height, args.subdivide,
-             args.min_island, args.cleanup, args.clusters, args.tex_smooth,
+             args.min_island, args.cleanup, args.tex_smooth,
              args.tex_smooth_passes, args.delight_floor, args.delight_bright,
-             args.delight_sat)
+             args.delight_sat, no_delight=getattr(args, "no_delight", False))
 
 
 if __name__ == "__main__":

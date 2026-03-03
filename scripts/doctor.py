@@ -24,7 +24,6 @@ def check_version(pkg_name, min_ver, import_name):
     try:
         mod = importlib.import_module(import_name)
         ver = getattr(mod, "__version__", getattr(mod, "VERSION", "unknown"))
-        ok = True
         return True, ver
     except ImportError:
         return False, None
@@ -60,6 +59,33 @@ def check_api_symbols():
         issues.append("bambulabs-api not installed (needed for LAN mode)")
     return issues
 
+def check_cloud_api_symbols():
+    """Check bambu-lab-cloud-api has required classes."""
+    issues = []
+    try:
+        from bambu_lab_cloud_api import BambuClient
+        c_methods = dir(BambuClient)
+        for method in ["login", "get_device_list"]:
+            if method not in c_methods:
+                issues.append(f"BambuClient missing .{method}()")
+    except ImportError:
+        issues.append("bambu-lab-cloud-api not installed (needed for Cloud mode)")
+    except Exception as e:
+        issues.append(f"bambu-lab-cloud-api import error: {e}")
+    return issues
+
+def check_search_backend():
+    """Check search dependencies."""
+    try:
+        from ddgs import DDGS
+        return True, "ddgs"
+    except ImportError:
+        try:
+            from duckduckgo_search import DDGS
+            return True, "duckduckgo_search"
+        except ImportError:
+            return False, None
+
 def main():
     print("🩺 Bambu Studio AI — Dependency Doctor\n")
     all_ok = True
@@ -85,13 +111,28 @@ def main():
     else:
         print("  ⚠️ Not found (needed for multi-color)")
     
-    print("\nAPI compatibility:")
+    print("\nAPI compatibility (LAN):")
     issues = check_api_symbols()
     if issues:
         for issue in issues:
             print(f"  ⚠️ {issue}")
     else:
-        print("  ✅ All symbols verified")
+        print("  ✅ bambulabs-api symbols verified")
+
+    print("\nAPI compatibility (Cloud):")
+    cloud_issues = check_cloud_api_symbols()
+    if cloud_issues:
+        for issue in cloud_issues:
+            print(f"  ⚠️ {issue}")
+    else:
+        print("  ✅ bambu-lab-cloud-api symbols verified")
+
+    print("\nSearch backend:")
+    search_ok, search_pkg = check_search_backend()
+    if search_ok:
+        print(f"  ✅ {search_pkg}")
+    else:
+        print("  ⚠️ Not found — install: pip install ddgs")
     
     print("\nConfig files:")
     skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

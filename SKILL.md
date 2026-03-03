@@ -1,6 +1,6 @@
 ---
 name: bambu-studio-ai
-description: "From chat to finished print — the first full-pipeline AI 3D printing skill. Single-color (STL) and multi-color AMS (OBJ+MTL) with AI-optimized color pipeline: shadow removal, CIELAB K-means clustering, texture smoothing. Auto-orient, auto-scale, 11-point printability analysis, mesh repair. All 9 Bambu Lab printers. 4 AI 3D generation providers."
+description: "From chat to finished print — the first full-pipeline AI 3D printing skill. Single-color (STL) and multi-color AMS (OBJ+MTL) with AI-optimized color pipeline: shadow removal, CIELAB nearest-neighbor color mapping, texture smoothing. Auto-orient, auto-scale, 11-point printability analysis, mesh repair. All 9 Bambu Lab printers. 4 AI 3D generation providers."
 version: "0.19.0"
 author: TieGaier
 metadata:
@@ -609,7 +609,7 @@ Default `--format 3mf` unless user specifies otherwise.
 AI-generated models frequently have mesh errors (non-manifold edges, holes, intersections).
 The user MUST visually verify before printing.
 
-#### The 10-Point Printability Check
+#### The 11-Point Printability Check
 
 | # | Check | What It Does |
 |---|-------|-------------|
@@ -799,11 +799,21 @@ python3 scripts/bambu.py speed ludicrous  # Max (H2S: 1000mm/s)
 
 ## Version History
 
-- **0.9.0** — Cloud login: token caching (24h), verification code patience, LAN recommended by default
-- **0.8.x** — Model sourcing (search before generate), user choice (search/generate/auto)
-- **0.7.x** — analyze.py (10-point check), model requirements table, security scan fixes, README
-- **0.6.0** — Monitor intensity levels, 3MF priority format, mandatory Bambu Studio preview
-- **0.5.x** — Pre-generation research flow, .secrets.example.json, QA fixes
+- **0.19.0** — 13 bug fixes, doctor.py, --confirmed safety gate, color pipeline overhaul (AO delight, shadow-aware mapping, border vote), search rewrite (ddgs), monitor retry logic
+- **0.18.0** — Model search (4 sources), notification system
+- **0.17.x** — Bambu Lab official 43-color palette, direct CIELAB NN (K-means removed), default LAN mode
+- **0.16.x** — Unit detection fix, start_print fix, MTL color fixes, OBJ meter→mm fix
+- **0.15.x** — OBJ mtllib reference fix after rename
+- **0.14.x** — Multi-color AMS: mesh-aware delight, CIELAB mapping, texture smoothing, island cleanup
+- **0.13.x** — GLB→STL/OBJ+MTL conversion, auto-orient, auto-scale
+- **0.12.x** — AI 3D generation (4 providers), prompt enhancement
+- **0.11.0** — Multi-color AMS printing (colorize.py), auto-detect AMS colors
+- **0.10.0** — 11-point analysis, auto mesh repair, requirements.txt
+- **0.9.0** — Cloud login: token caching (24h), verification code patience, LAN recommended
+- **0.8.x** — Model sourcing (search before generate), user choice
+- **0.7.x** — analyze.py, model requirements table, security scan fixes, README
+- **0.6.0** — Monitor intensity levels, 3MF priority, mandatory Bambu Studio preview
+- **0.5.x** — Pre-generation research flow, .secrets.example.json
 - **0.4.0** — 3-phase setup (configure → test → summary)
 - **0.3.x** — Security fixes, config/secrets separation
 - **0.2.0** — Full 9-model support, Cloud+Local dual mode, AI monitoring

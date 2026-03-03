@@ -39,7 +39,7 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 🔎 **Model Search** | Search Printables, MakerWorld, Thingiverse, Thangs for existing models |
 | 🎨 **AI 3D Generation** | Text-to-3D and Image-to-3D via Meshy, Tripo3D, Printpal, or 3D AI Studio |
 | 🎨 **Multi-Color AMS** | Auto-detect AMS filaments, GLB→OBJ+MTL color pipeline for multi-color printing |
-| 🔆 **AI Color Optimization** | Delight (shadow removal) + CIELAB K-means clustering + texture smoothing |
+| 🔆 **AI Color Optimization** | Delight (shadow removal) + CIELAB nearest-neighbor + shadow-aware mapping + texture smoothing |
 | 🔍 **11-Point Analysis** | Printability check: walls, overhangs, tolerance, infill, layer height, floating parts |
 | 🔧 **Auto Mesh Repair** | Fix non-manifold edges, holes, bad normals, tiered by severity |
 | 📏 **Auto Orient & Scale** | Optimal print orientation (stable poses), auto unit detection (m→mm) |
@@ -614,11 +614,16 @@ bambu-studio-ai/
 │   ├── 3d-generation-apis.md   — 3D provider API endpoints
 │   ├── 3d-prompt-guide.md      — Prompt engineering for 3D models
 │   └── model-specs.md          — All 9 printer specifications
+├── requirements.txt            — Python dependencies
 └── scripts/
     ├── bambu.py                — Printer control (Cloud + LAN, token caching)
     ├── generate.py             — AI 3D generation (4 providers, auto-convert, prompt enhancement)
     ├── analyze.py              — 11-point printability analysis + mesh repair
-    └── monitor.py              — AI print monitoring (anomaly detection)
+    ├── colorize.py             — Multi-color pipeline (AO delight, CIELAB NN, OBJ+MTL export)
+    ├── monitor.py              — AI print monitoring (anomaly detection)
+    ├── search.py               — Model search (MakerWorld, Printables, Thingiverse, Thangs)
+    ├── doctor.py               — Dependency doctor (verify all deps + API symbols)
+    └── test_boundary.py        — Boundary condition tests
 ```
 
 ---
@@ -638,6 +643,7 @@ PRs welcome! Areas that need help:
 
 | Version | Changes |
 |---------|---------|
+| **0.19.0** | Bug fixes (17), color pipeline overhaul (AO delight, shadow-aware mapping, border vote), search rewrite (ddgs), doctor.py cloud+search checks, monitor retry logic, --no_delight flag, --confirmed safety gate |
 | **0.18.0** 🏷️ | Model search (MakerWorld/Printables/Thingiverse/Thangs), notification system, default Bambu Lab color palette |
 | **0.17.0** | Bambu Lab official 43-color palette, direct nearest-neighbor mapping, default LAN mode |
 | **0.16.0** | Unit detection fix, start_print plate_number, MTL color fix |

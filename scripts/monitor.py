@@ -75,8 +75,7 @@ def log_pause_attempt(reason):
             ["python3", os.path.join(os.path.dirname(__file__), "bambu.py"), "pause"],
             capture_output=True, text=True, timeout=30)
         success = result.returncode == 0
-        log_event({
-            "type": "auto_pause",
+        log_event("auto_pause", {
             "reason": reason,
             "success": success,
             "output": result.stdout[:200] if result.stdout else "",
@@ -88,7 +87,7 @@ def log_pause_attempt(reason):
             print(f"❌ Auto-pause FAILED: {reason} — {result.stderr[:100]}")
         return success
     except Exception as e:
-        log_event({"type": "auto_pause", "reason": reason, "success": False, "error": str(e)})
+        log_event("auto_pause", {"reason": reason, "success": False, "error": str(e)})
         print(f"❌ Auto-pause ERROR: {e}")
         return False
 
@@ -179,11 +178,19 @@ def monitor_loop(interval=120, auto_pause=False):
         cycle += 1
         print(f"--- Cycle {cycle} ({datetime.now().strftime('%H:%M:%S')}) ---")
         
-        result = monitor_once(auto_pause)
-        
-        if not result.get("printing"):
-            print("🏁 Print finished or not active. Stopping monitor.")
-            break
+        try:
+            result = monitor_once(auto_pause)
+            consecutive_failures = 0  # Reset on success
+            
+            if not result.get("printing"):
+                print("🏁 Print finished or not active. Stopping monitor.")
+                break
+        except Exception as e:
+            consecutive_failures += 1
+            print(f"❌ Check failed ({consecutive_failures}/{max_failures}): {e}")
+            if consecutive_failures >= max_failures:
+                print(f"⛔ Too many consecutive failures, stopping monitor.")
+                break
         
         print(f"⏳ Next check in {interval}s...\n")
         time.sleep(interval)
@@ -204,22 +211,22 @@ def main():
     
     args = parser.parse_args()
     
-    if not BAMBU_IP or not BAMBU_ACCESS_CODE:
-        print("❌ Monitor requires local mode:")
-        print("   export BAMBU_IP='192.168.1.xxx'")
-        print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
-        sys.exit(1)
-    
     if args.status:
         if os.path.exists(LOG_FILE):
             with open(LOG_FILE) as f:
                 logs = json.load(f)
             print(f"📋 Monitor Log: {len(logs)} entries")
             for entry in logs[-5:]:
-                print(f"  [{entry['timestamp'][:19]}] {entry['type']}: {entry['details'][:80]}")
+                print(f"  [{entry['timestamp'][:19]}] {entry['type']}: {str(entry.get('details',''))[:80]}")
         else:
             print("📋 No monitor log yet")
         return
+    
+    if not BAMBU_IP or not BAMBU_ACCESS_CODE:
+        print("❌ Monitor requires local mode:")
+        print("   export BAMBU_IP='192.168.1.xxx'")
+        print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
+        sys.exit(1)
     
     if args.once:
         monitor_once(args.auto_pause)

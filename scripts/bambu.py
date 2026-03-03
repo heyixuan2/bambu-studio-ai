@@ -233,9 +233,9 @@ class LocalBackend:
         p = self.printer
         return {
             "nozzle_temp": p.get_nozzle_temperature(),
-            "nozzle_target": p.get_nozzle_temperature(),
+            "nozzle_target": getattr(p, "get_target_nozzle_temperature", p.get_nozzle_temperature)(),
             "bed_temp": p.get_bed_temperature(),
-            "bed_target": p.get_bed_temperature(),
+            "bed_target": p.get_bed_temperature(),  # API limitation: no target temp method
             "state": p.get_current_state(),
             "progress": p.get_percentage(),
             "remaining": p.get_time(),
@@ -440,8 +440,8 @@ def cmd_speed(mode):
     try: b.set_speed(level); print(f"🏎️ Speed: {mode.capitalize()}")
     finally: b.disconnect()
 
-def cmd_print(filename):
-    if not args.confirmed:
+def cmd_print(filename, confirmed=False):
+    if not confirmed:
         print("⛔ Safety: Preview in Bambu Studio first, then re-run with --confirmed")
         print(f"   python3 bambu.py print {filename} --confirmed")
         sys.exit(1)
@@ -570,7 +570,7 @@ def main():
     sub.add_parser("cancel")
     sub.add_parser("ams")
     sub.add_parser("snapshot")
-    p = sub.add_parser("print"); p.add_argument("filename")
+    p = sub.add_parser("print"); p.add_argument("--confirmed", action="store_true", help="Confirm previewed in Bambu Studio"); p.add_argument("filename")
     p = sub.add_parser("gcode", help="Send raw G-code (local only)"); p.add_argument("code")
     p = sub.add_parser("light"); p.add_argument("state", choices=["on", "off"])
     p = sub.add_parser("speed"); p.add_argument("mode", choices=["silent", "standard", "sport", "ludicrous"])
@@ -586,7 +586,7 @@ def main():
     if args.command in cmds:
         cmds[args.command]()
     elif args.command == "print":
-        cmd_print(args.filename)
+        cmd_print(args.filename, confirmed=args.confirmed)
     elif args.command == "gcode":
         cmd_gcode(args.code)
     elif args.command == "light":

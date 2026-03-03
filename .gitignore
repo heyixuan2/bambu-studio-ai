@@ -8,3 +8,4 @@ output/
 .verify_code
 .agents/
 skills-lock.json
+*.bak

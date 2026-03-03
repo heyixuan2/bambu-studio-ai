@@ -85,7 +85,12 @@ def auto_orient(mesh):
         print(f"🔄 Auto-oriented: base area optimized, placed on build plate (z=0)")
         bounds = mesh.bounds
         dims = bounds[1] - bounds[0]
-        print(f"   Dimensions: {dims[0]*1000:.1f} × {dims[1]*1000:.1f} × {dims[2]*1000:.1f} mm")
+        # Detect if still in meters or already mm
+        max_d = max(dims)
+        if max_d < 10:  # Still meters
+            print(f"   Dimensions: {dims[0]*1000:.1f} × {dims[1]*1000:.1f} × {dims[2]*1000:.1f} mm")
+        else:
+            print(f"   Dimensions: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
         return mesh
     except Exception as e:
         print(f"⚠️ Auto-orient failed: {e}")
@@ -395,8 +400,7 @@ def repair_mesh(mesh, output_path=None):
     
     if not issues:
         print("✅ Mesh is clean — no repair needed.")
-        return {"attempted": False, "success": True, "reason": "already clean"}
-        return mesh, False
+        return mesh, False  # Clean mesh, no repair needed
     
     print(f"🔧 Repairing mesh ({', '.join(issues)})...")
     
@@ -577,7 +581,7 @@ def main():
     if args.orient:
         mesh = auto_orient(mesh)
         # Export oriented model
-        orient_path = os.path.splitext(args.file)[0] + "_oriented" + os.path.splitext(args.file)[1]
+        orient_path = os.path.splitext(args.file)[0] + "_oriented.stl"  # Always STL after unit conversion
         mesh.export(orient_path)
         print(f"📁 Oriented model: {orient_path}")
 
@@ -602,17 +606,23 @@ def main():
 
         if severity == "minor":
             # Small holes only — light repair
-            print(f"\n🔧 Light repair (filling holes, fixing normals)...")
-            repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
-            mesh, was_repaired = repair_mesh(mesh, repair_path)
+            if args.repair:
+                print(f"\n🔧 Light repair (filling holes, fixing normals)...")
+                repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+                mesh, was_repaired = repair_mesh(mesh, repair_path)
+            else:
+                print(f"\n💡 Minor issues found. Run with --repair to auto-fix.")
         elif severity == "major":
             # Non-manifold — full repair
             print(f"\n🔧 Full repair (voxel remesh may be needed for severe cases)...")
             print(f"   💡 If auto-repair fails, try in Blender:")
             print(f"      Remesh modifier → Voxel (size: 0.15-0.25mm) → Smooth")
             print(f"      ⚠️ Use smallest voxel size that preserves detail")
-            repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
-            mesh, was_repaired = repair_mesh(mesh, repair_path)
+            if args.repair:
+                repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+                mesh, was_repaired = repair_mesh(mesh, repair_path)
+            else:
+                print(f"\n💡 Major issues found. Run with --repair to auto-fix.")
         else:
             print(f"\n⚠️ Disconnected parts — repair may not help.")
             print(f"   Consider re-generating or manually merging in Blender.")
