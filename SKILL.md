@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "From chat to finished print — the first full-pipeline AI 3D printing skill. Single-color (STL) and multi-color AMS (OBJ+MTL) with AI-optimized color pipeline: shadow removal, CIELAB nearest-neighbor color mapping, texture smoothing. Auto-orient, auto-scale, 11-point printability analysis, mesh repair. All 9 Bambu Lab printers. 4 AI 3D generation providers."
-version: "0.19.0"
+version: "0.19.1"
 author: TieGaier
 metadata:
   openclaw:
