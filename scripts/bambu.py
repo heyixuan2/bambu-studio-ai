@@ -346,7 +346,10 @@ def cmd_info(json_output=False):
 
     if MODE == "local":
         try:
-            backend = get_backend()
+            import io, contextlib
+            _buf = io.StringIO()
+            with contextlib.redirect_stdout(_buf), contextlib.redirect_stderr(_buf):
+                backend = get_backend()
             printer = backend.printer
             # Nozzle info
             try:
