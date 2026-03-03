@@ -110,7 +110,23 @@ def main():
         print(f"     Path: {path}")
     else:
         print("  ⚠️ Not found (needed for multi-color)")
-    
+
+    print("\nOrcaSlicer (for slicing):")
+    orca_paths = [
+        "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+        os.path.expanduser("~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer"),
+    ]
+    orca_found = False
+    for op in orca_paths:
+        if os.path.exists(op):
+            print(f"  ✅ OrcaSlicer found")
+            print(f"     Path: {op}")
+            orca_found = True
+            break
+    if not orca_found:
+        print("  ⚠️ OrcaSlicer not installed (needed for slice.py)")
+        print("     Install from: https://github.com/SoftFever/OrcaSlicer")
+
     print("\nAPI compatibility (LAN):")
     issues = check_api_symbols()
     if issues:

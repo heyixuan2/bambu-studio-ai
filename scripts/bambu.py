@@ -654,10 +654,16 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    cmds = {"status": cmd_status, "progress": cmd_progress, "pause": cmd_pause,
+    cmds = {"progress": cmd_progress, "pause": cmd_pause,
             "resume": cmd_resume, "cancel": cmd_cancel, "ams": cmd_ams, "snapshot": cmd_snapshot}
 
-    if args.command in cmds:
+    if args.command == "status":
+        cmd_status(json_output=getattr(args, "json", False))
+    elif args.command == "info":
+        cmd_info(json_output=getattr(args, "json", False))
+    elif args.command == "notify":
+        notify(args.title, args.message)
+    elif args.command in cmds:
         cmds[args.command]()
     elif args.command == "print":
         cmd_print(args.filename, confirmed=args.confirmed)

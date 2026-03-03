@@ -165,18 +165,18 @@ def check_anomalies(status, state):
     # 1. Print failure/error states
     for bad_state in ["FAILED", "ERROR", "FAULT", "ABORT"]:
         if bad_state in printer_state:
-            alerts.append(("critical", f"🚨 打印异常状态: {printer_state}"))
+            alerts.append(("critical", f"🚨 Print error state: {printer_state}"))
     
     # 2. Unexpected pause (not by us)
     if "PAUSE" in printer_state and "auto_pause" not in [a.get("type") for a in state.get("alerts_sent", [])[-3:]]:
-        alerts.append(("warning", f"⏸️ 打印机暂停了 (状态: {printer_state})"))
+        alerts.append(("warning", f"⏸️ Printer paused (状态: {printer_state})"))
     
     # 3. Temperature anomaly
     try:
         if nozzle and float(nozzle) > TEMP_MAX_NOZZLE:
-            alerts.append(("critical", f"🔥 喷头温度过高: {nozzle}°C (上限 {TEMP_MAX_NOZZLE}°C)"))
+            alerts.append(("critical", f"🔥 Nozzle temp too high: {nozzle}°C (上限 {TEMP_MAX_NOZZLE}°C)"))
         if bed and float(bed) > TEMP_MAX_BED:
-            alerts.append(("critical", f"🔥 热床温度过高: {bed}°C (上限 {TEMP_MAX_BED}°C)"))
+            alerts.append(("critical", f"🔥 Bed temp too high: {bed}°C (上限 {TEMP_MAX_BED}°C)"))
     except (ValueError, TypeError):
         pass
     
@@ -198,7 +198,7 @@ def check_anomalies(status, state):
                 
                 if float(last_p) == progress and minutes_since >= STALL_MINUTES:
                     alerts.append(("warning", 
-                        f"⚠️ 进度停滞: {progress}% 已保持 {minutes_since:.0f} 分钟未变化"))
+                        f"⚠️ Progress stalled: {progress}% stalled for {minutes_since:.0f} min unchanged"))
             except:
                 pass
         
@@ -227,7 +227,7 @@ def monitor_once(auto_pause=False):
         if "IDLE" in raw.upper() or "No active" in raw:
             # Check if we were tracking a print (= just finished)
             if state.get("print_started"):
-                notify("打印完成 ✅", f"打印已完成！开始于 {state['print_started']}")
+                notify("Print Complete ✅", f"Print finished!开始于 {state['print_started']}")
                 state["print_started"] = None
                 _save_state(state)
                 log_event("complete", "Print finished")
@@ -241,7 +241,7 @@ def monitor_once(auto_pause=False):
     # Not printing
     if "IDLE" in printer_state or progress is None:
         if state.get("print_started"):
-            notify("打印完成 ✅", f"打印已完成！")
+            notify("Print Complete ✅", f"Print finished!")
             state["print_started"] = None
             _save_state(state)
             log_event("complete", "Print finished")
@@ -259,16 +259,16 @@ def monitor_once(auto_pause=False):
     
     # Handle alerts
     for severity, message in alerts:
-        snapshot_note = f"\n📸 截图已保存: {snapshot}" if snapshot else ""
+        snapshot_note = f"\n📸 Snapshot saved: {snapshot}" if snapshot else ""
         remaining = status.get("remaining", "?")
-        context = f"\n进度: {progress}% | 剩余: {remaining}"
+        context = f"\nProgress: {progress}% | Remaining: {remaining}"
         
-        notify(f"打印警报 {'🚨' if severity == 'critical' else '⚠️'}", 
+        notify(f"Print Alert {'🚨' if severity == 'critical' else '⚠️'}", 
                message + context + snapshot_note, snapshot)
         
         if severity == "critical" and auto_pause:
             if pause_print():
-                notify("已自动暂停 ⏸️", f"原因: {message}")
+                notify("Auto-paused ⏸️", f"Reason: {message}")
         
         state.setdefault("alerts_sent", []).append({
             "type": severity, "message": message, "time": now.isoformat()
@@ -298,14 +298,14 @@ def monitor_once(auto_pause=False):
             bed = status.get("bed_temp", "?")
             file_name = status.get("file", "")
             
-            msg = f"📊 进度: {progress}%"
+            msg = f"📊 Progress: {progress}%"
             if remaining and remaining != "?":
-                msg += f" | 剩余: {remaining}"
-            msg += f"\n🔥 喷头: {nozzle}°C | 🛏️ 热床: {bed}°C"
+                msg += f" | Remaining: {remaining}"
+            msg += f"\n🔥 Nozzle: {nozzle}°C | 🛏️ Bed: {bed}°C"
             if file_name:
                 msg += f"\n📁 {file_name}"
             
-            notify("打印进度", msg)
+            notify("Print Progress", msg)
             state["last_report_time"] = now.isoformat()
             log_event("progress_report", {"progress": progress, "remaining": remaining})
     
@@ -327,12 +327,12 @@ def monitor_once(auto_pause=False):
 
 def monitor_loop(interval=120, auto_pause=False):
     """Continuous monitoring loop."""
-    print(f"🔍 打印监控已启动")
-    print(f"   检测间隔: {interval}s")
-    print(f"   自动暂停: {'是' if auto_pause else '否'}")
-    print(f"   进度报告: 每 {PROGRESS_REPORT_MIN} 分钟")
-    print(f"   异常报告: 实时")
-    print(f"   截图目录: {SNAPSHOT_DIR}")
+    print(f"🔍 Print monitor started")
+    print(f"   Check interval: {interval}s")
+    print(f"   Auto-pause: {'Yes' if auto_pause else 'No'}")
+    print(f"   Progress报告: Every {PROGRESS_REPORT_MIN} min")
+    print(f"   Anomaly alert: Realtime")
+    print(f"   Snapshot dir: {SNAPSHOT_DIR}")
     print()
     
     # Reset state for new session
@@ -353,13 +353,13 @@ def monitor_loop(interval=120, auto_pause=False):
             consecutive_failures = 0
             
             if not result.get("printing"):
-                print("🏁 打印完成或未在打印，监控结束。")
+                print("🏁 Print Complete或未在打印，监控结束。")
                 break
         except Exception as e:
             consecutive_failures += 1
-            print(f"❌ 检测失败 ({consecutive_failures}/{max_failures}): {e}")
+            print(f"❌ Check failed ({consecutive_failures}/{max_failures}): {e}")
             if consecutive_failures >= max_failures:
-                notify("监控异常 ⛔", f"连续 {max_failures} 次检测失败，监控已停止: {e}")
+                notify("Monitor Error ⛔", f"Consecutive {max_failures} 次Check failed，监控已停止: {e}")
                 break
         
         time.sleep(interval)

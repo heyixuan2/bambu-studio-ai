@@ -147,7 +147,6 @@ def _simplify_start_gcode(gcode, profile):
     """
     return """;===== Bambu Lab start (OrcaSlicer-compatible) =====
 G28 ; home all axes
-M420 S1 ; restore bed leveling
 G90 ; absolute positioning
 M83 ; relative extruder
 M140 S[bed_temperature_initial_layer_single] ; set bed temp
