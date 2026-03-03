@@ -526,26 +526,33 @@ def main():
     if bounds is None:
         print("❌ Cannot determine model dimensions. File may be corrupt.")
         sys.exit(1)
-    max_dim = max(bounds[1] - bounds[0])
-    if max_dim < 10:  # Likely in meters (glTF standard)
-        print(f"📐 Detected meter-scale model (max dimension: {max_dim:.3f}m)")
-        mesh.apply_scale(1000)  # Convert to mm
-        print(f"   Converted to mm: {(mesh.bounds[1] - mesh.bounds[0])[0]:.1f} × {(mesh.bounds[1] - mesh.bounds[0])[1]:.1f} × {(mesh.bounds[1] - mesh.bounds[0])[2]:.1f} mm")
+    dims = bounds[1] - bounds[0]
+    max_dim = max(dims)
+    converted_to_mm = False
+
+    if max_dim < 1:  # Very likely meters (glTF standard: 0.001 - 0.5m typical)
+        print(f"📐 Detected meter-scale model (max dimension: {max_dim:.4f}m)")
+        mesh.apply_scale(1000)
+        converted_to_mm = True
+        dims = mesh.bounds[1] - mesh.bounds[0]
+        print(f"   Converted to mm: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
+    elif max_dim < 10:  # Ambiguous zone (1-10): could be cm or small mm
+        print(f"⚠️ Ambiguous scale (max dim: {max_dim:.2f}). Assuming millimeters.")
 
     # Auto-scale if target height specified
     if args.height and args.height > 0:
         bounds = mesh.bounds
         current_h = (bounds[1][2] - bounds[0][2])
-        # Tripo models are in ~1 unit scale, detect if too small
-        current_h_mm = current_h * 1000 if current_h < 1 else current_h
-        if current_h_mm < 1:
-            current_h_mm = current_h * 1000
-        scale = args.height / current_h_mm
-        mesh.apply_scale(scale)
-        print(f"📏 Scaled to {args.height}mm height (scale factor: {scale:.2f}x)")
-        bounds = mesh.bounds
-        dims = bounds[1] - bounds[0]
-        print(f"   New dimensions: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
+        # After unit conversion, current_h should already be in mm
+        if current_h < 0.01:
+            print(f"⚠️ Model height near zero ({current_h:.6f}). Skipping scale.")
+        else:
+            scale = args.height / current_h
+            mesh.apply_scale(scale)
+            print(f"📏 Scaled to {args.height}mm height (scale factor: {scale:.2f}x)")
+            bounds = mesh.bounds
+            dims = bounds[1] - bounds[0]
+            print(f"   New dimensions: {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} mm")
 
     # Auto-orient if requested
     if args.orient:

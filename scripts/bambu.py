@@ -181,8 +181,8 @@ class CloudBackend:
         self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
                            json={"print": {"command": "print_speed", "param": str(level)}})
 
-    def start_print(self, filename):
-        self.client.start_cloud_print(self.device_id, filename)
+    def start_print(self, filename, plate_number=1):
+        self.client.start_cloud_print(self.device_id, filename, plate_number=plate_number)
 
     def disconnect(self):
         pass
@@ -263,8 +263,8 @@ class LocalBackend:
     def set_speed(self, level):
         self.printer.set_speed_level(level)
 
-    def start_print(self, filename):
-        self.printer.start_print(filename)
+    def start_print(self, filename, plate_number=1):
+        self.printer.start_print(filename, plate_number=plate_number)
 
     def disconnect(self):
         self.printer.disconnect()
@@ -387,7 +387,7 @@ def cmd_speed(mode):
 
 def cmd_print(filename):
     b = get_backend()
-    try: b.start_print(filename); print(f"✅ Started printing: {filename}")
+    try: b.start_print(filename, plate_number=1); print(f"✅ Started printing: {filename}")
     except Exception as e: print(f"❌ Error: {e}")
     finally: b.disconnect()
 
