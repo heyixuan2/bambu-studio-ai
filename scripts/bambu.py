@@ -241,7 +241,12 @@ class LocalBackend:
 
     def get_ams(self):
         try:
-            return self.printer.get_ams()
+            if hasattr(self.printer, 'get_ams'):
+                return self.printer.get_ams()
+            elif hasattr(self.printer, 'ams_hub'):
+                return self.printer.ams_hub
+            else:
+                return None
         except:
             return None
 
@@ -261,7 +266,12 @@ class LocalBackend:
             self.printer.turn_light_off()
 
     def set_speed(self, level):
-        self.printer.set_speed_level(level)
+        if hasattr(self.printer, 'set_print_speed'):
+            self.printer.set_print_speed(level)
+        elif hasattr(self.printer, 'set_speed_level'):
+            self.printer.set_speed_level(level)
+        else:
+            print("⚠️ Speed control not supported by this bambulabs-api version")
 
     def start_print(self, filename, plate_number=1):
         self.printer.start_print(filename, plate_number=plate_number)
