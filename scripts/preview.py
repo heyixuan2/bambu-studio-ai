@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Model Preview Generator — Renders 3D model preview images for chat.
+Model Preview Generator — Renders 3D model preview images via Blender.
 
-Uses matplotlib for quick previews (no extra deps).
-Uses Blender for high-quality renders (if available).
+Auto-loads PBR materials/textures from GLB. Supports STL, OBJ, GLB/GLTF, FBX.
+Uses TRACK_TO constraint for auto-aiming and model dimensions for camera distance.
+
+Requires: Blender 4.0+ (brew install --cask blender)
 
 Usage:
-  python3 scripts/preview.py model.stl                    # Quick matplotlib preview
-  python3 scripts/preview.py model.stl --hq               # High-quality Blender render
-  python3 scripts/preview.py model.stl --output preview.png
-
+  python3 scripts/preview.py model.glb                      # Perspective render
+  python3 scripts/preview.py model.stl --output preview.png  # Custom output
+  python3 scripts/preview.py model.obj --views all           # Front + side + top + perspective
 """
 
 import os, sys, subprocess, argparse, tempfile, json
@@ -19,98 +20,52 @@ BLENDER_PATHS = [
     "blender",
 ]
 
+
 def find_blender():
     for p in BLENDER_PATHS:
         if os.path.exists(p):
             return p
+        result = subprocess.run(["which", p], capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.strip()
     return None
 
-def preview_matplotlib(model_path, output_path, title=None):
-    """Quick preview using matplotlib (always available)."""
-    import trimesh
-    import numpy as np
 
-    try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-    except ImportError:
-        print("❌ matplotlib not installed: pip3 install matplotlib")
-        sys.exit(1)
-
-    m = trimesh.load(model_path, force='mesh')
-    verts, faces = np.array(m.vertices), np.array(m.faces)
-
-    # Decimate for rendering performance
-    max_render_faces = 50000
-    if len(faces) > max_render_faces:
-        idx = np.random.choice(len(faces), max_render_faces, replace=False)
-        faces = faces[idx]
-
-    fig = plt.figure(figsize=(10, 8), facecolor='#1e1e2e')
-    ax = fig.add_subplot(111, projection='3d', facecolor='#1e1e2e')
-
-    mesh_col = Poly3DCollection(verts[faces], alpha=0.9,
-                                 edgecolor='none', facecolor='#5b9bd5',
-                                 linewidths=0)
-    ax.add_collection3d(mesh_col)
-
-    mins, maxs = verts.min(axis=0), verts.max(axis=0)
-    center = (mins + maxs) / 2
-    r = (maxs - mins).max() / 2 * 1.2
-    ax.set_xlim(center[0]-r, center[0]+r)
-    ax.set_ylim(center[1]-r, center[1]+r)
-    ax.set_zlim(center[2]-r, center[2]+r)
-
-    ax.view_init(elev=25, azim=135)
-    ax.set_axis_off()
-
-    dims = m.bounding_box.extents
-    if not title:
-        name = os.path.splitext(os.path.basename(model_path))[0]
-        # Warn if dimensions look like meters (all < 1)
-    unit = "mm"
-    if all(d < 1.0 for d in dims):
-        unit = "m (run analyze.py to convert)"
-    title = f"{name} — {dims[0]:.1f} × {dims[1]:.1f} × {dims[2]:.1f} {unit}"
-
-    ax.set_title(title, color='white', fontsize=14, pad=20)
-
-    # Add info text
-    info = f"{len(m.faces):,} faces | {'watertight' if m.is_watertight else 'not watertight'}"
-    fig.text(0.5, 0.02, info, ha='center', color='#888888', fontsize=10)
-
-    plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='#1e1e2e')
-    plt.close()
-
-    size = os.path.getsize(output_path)
-    print(f"📸 Preview: {output_path} ({size//1024}KB)")
-    return output_path
-
-def preview_blender(model_path, output_path):
-    """High-quality render using Blender (headless)."""
+def preview(model_path, output_path, views="perspective"):
+    """Render model preview using Blender.
+    
+    Args:
+        model_path: Input model file
+        output_path: Output PNG path
+        views: 'perspective' (single), 'front', 'side', 'top', or 'all' (4 views)
+    
+    Returns: output path on success, None on failure
+    """
     blender = find_blender()
     if not blender:
-        print("⚠️ Blender not found, falling back to matplotlib")
-        return preview_matplotlib(model_path, output_path)
+        print("❌ Blender not found. Install: brew install --cask blender")
+        return None
 
-    # Pass paths via argv to avoid f-string injection issues
-    import json as _json
-    model_escaped = _json.dumps(model_path)
-    output_escaped = _json.dumps(output_path)
-    
+    if not os.path.exists(model_path):
+        print(f"❌ File not found: {model_path}")
+        return None
+
+    model_repr = json.dumps(os.path.abspath(model_path))
+    output_repr = json.dumps(os.path.abspath(output_path))
+    views_repr = json.dumps(views)
+
     script = f'''
-import bpy, os, sys, math, json
+import bpy, os, sys, math, mathutils
 
-MODEL_PATH = {model_escaped}
-OUTPUT_PATH = {output_escaped}
+MODEL_PATH = {model_repr}
+OUTPUT_PATH = {output_repr}
+VIEWS = {views_repr}
 
-# Clear scene
+# Clear scene completely
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
 
-# Import model
+# Import model (GLB auto-loads PBR materials + textures)
 ext = os.path.splitext(MODEL_PATH)[1].lower()
 if ext == ".stl":
     bpy.ops.wm.stl_import(filepath=MODEL_PATH)
@@ -118,28 +73,48 @@ elif ext == ".obj":
     bpy.ops.wm.obj_import(filepath=MODEL_PATH)
 elif ext in (".glb", ".gltf"):
     bpy.ops.import_scene.gltf(filepath=MODEL_PATH)
+elif ext == ".fbx":
+    bpy.ops.import_scene.fbx(filepath=MODEL_PATH)
+else:
+    print(f"ERROR: Unsupported format: {{ext}}")
+    sys.exit(1)
 
-# Select all mesh objects
+# Get all mesh objects
 objs = [o for o in bpy.context.scene.objects if o.type == 'MESH']
 if not objs:
-    print("No mesh found")
-    quit()
+    print("ERROR: No mesh found")
+    sys.exit(1)
 
-# Compute bounding box
-import mathutils
-mins = mathutils.Vector((1e9, 1e9, 1e9))
-maxs = mathutils.Vector((-1e9, -1e9, -1e9))
-for obj in objs:
-    for v in obj.bound_box:
-        world = obj.matrix_world @ mathutils.Vector(v)
-        mins = mathutils.Vector((min(mins[i], world[i]) for i in range(3)))
-        maxs = mathutils.Vector((max(maxs[i], world[i]) for i in range(3)))
+# Join if multiple
+bpy.context.view_layer.objects.active = objs[0]
+for o in objs:
+    o.select_set(True)
+if len(objs) > 1:
+    bpy.ops.object.join()
+obj = bpy.context.active_object
 
-center = (mins + maxs) / 2
-size = max(maxs[i] - mins[i] for i in range(3))
+# Compute model size from dimensions (accounts for transforms)
+bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+dims = obj.dimensions
+size = max(dims)
+center = mathutils.Vector(obj.bound_box[0]) + (mathutils.Vector(obj.bound_box[6]) - mathutils.Vector(obj.bound_box[0])) / 2
+center = obj.matrix_world @ center
 
-# Add material (light blue)
-for obj in objs:
+print(f"MODEL_INFO: {{dims.x:.3f}} x {{dims.y:.3f}} x {{dims.z:.3f}} | {{len(obj.data.polygons):,}} faces | size={{size:.4f}}")
+
+# Check if model has textures (GLB PBR auto-loaded)
+has_texture = False
+for mat in obj.data.materials:
+    if mat and mat.use_nodes:
+        for node in mat.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                has_texture = True
+                break
+    if has_texture:
+        break
+
+if not has_texture:
+    # No texture — apply clean preview material
     mat = bpy.data.materials.new("Preview")
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
@@ -147,84 +122,177 @@ for obj in objs:
     bsdf.inputs["Roughness"].default_value = 0.4
     obj.data.materials.clear()
     obj.data.materials.append(mat)
+    print("No texture found — using preview material")
+else:
+    print("PBR texture loaded from model")
 
-# Camera
-cam = bpy.data.cameras.new("Cam")
-cam_obj = bpy.data.objects.new("Cam", cam)
+# Create empty at model center (for camera tracking)
+empty = bpy.data.objects.new("Target", None)
+bpy.context.scene.collection.objects.link(empty)
+empty.location = center
+
+# Camera — distance based on model size
+cam_data = bpy.data.cameras.new("Cam")
+cam_obj = bpy.data.objects.new("Cam", cam_data)
 bpy.context.scene.collection.objects.link(cam_obj)
 bpy.context.scene.camera = cam_obj
+cam_data.lens = 50
 
-dist = size * 2.5
-cam_obj.location = (center.x + dist*0.6, center.y - dist*0.8, center.z + dist*0.5)
-direction = center - cam_obj.location
-rot = direction.to_track_quat('-Z', 'Y')
-cam_obj.rotation_euler = rot.to_euler()
+# TRACK_TO constraint — camera always aims at model center
+track = cam_obj.constraints.new(type='TRACK_TO')
+track.target = empty
+track.track_axis = 'TRACK_NEGATIVE_Z'
+track.up_axis = 'UP_Y'
 
-# Lighting
-light = bpy.data.lights.new("Key", 'SUN')
-light.energy = 3
-light_obj = bpy.data.objects.new("Key", light)
-bpy.context.scene.collection.objects.link(light_obj)
-light_obj.rotation_euler = (math.radians(45), 0, math.radians(45))
+# Lighting — key (SUN) + fill (AREA)
+key_data = bpy.data.lights.new("Key", 'SUN')
+key_data.energy = 3.0
+key_data.angle = math.radians(5)
+key_obj = bpy.data.objects.new("Key", key_data)
+bpy.context.scene.collection.objects.link(key_obj)
+key_obj.rotation_euler = (math.radians(50), 0, math.radians(40))
 
-fill = bpy.data.lights.new("Fill", 'SUN')
-fill.energy = 1.5
-fill_obj = bpy.data.objects.new("Fill", fill)
+fill_data = bpy.data.lights.new("Fill", 'AREA')
+fill_data.energy = max(20.0, min(200.0, 50.0 * size))  # Scale with model size
+fill_data.size = size * 2
+fill_obj = bpy.data.objects.new("Fill", fill_data)
 bpy.context.scene.collection.objects.link(fill_obj)
-fill_obj.rotation_euler = (math.radians(60), 0, math.radians(-135))
+fill_obj.location = (center.x - size*2, center.y + size*2, center.z + size)
+fill_track = fill_obj.constraints.new(type='TRACK_TO')
+fill_track.target = empty
+fill_track.track_axis = 'TRACK_NEGATIVE_Z'
+fill_track.up_axis = 'UP_Y'
+
+rim_data = bpy.data.lights.new("Rim", 'SUN')
+rim_data.energy = 1.0
+rim_obj = bpy.data.objects.new("Rim", rim_data)
+bpy.context.scene.collection.objects.link(rim_obj)
+rim_obj.rotation_euler = (math.radians(10), 0, math.radians(180))
 
 # World background
-bpy.context.scene.world = bpy.data.worlds.new("World")
-bpy.context.scene.world.use_nodes = True
-bg = bpy.context.scene.world.node_tree.nodes["Background"]
-bg.inputs["Color"].default_value = (0.12, 0.12, 0.18, 1)
+world = bpy.data.worlds.new("World")
+bpy.context.scene.world = world
+world.use_nodes = True
+bg = world.node_tree.nodes["Background"]
+bg.inputs["Color"].default_value = (0.118, 0.118, 0.176, 1)
 
-# Render settings
-try:
-    bpy.context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
-except TypeError:
-    bpy.context.scene.render.engine = 'BLENDER_EEVEE'
-bpy.context.scene.render.resolution_x = 1200
-bpy.context.scene.render.resolution_y = 900
-bpy.context.scene.render.film_transparent = False
-bpy.context.scene.render.filepath = OUTPUT_PATH
+# Render engine — try EEVEE variants (name changed across Blender versions)
+for engine in ['BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE']:
+    try:
+        bpy.context.scene.render.engine = engine
+        print(f"Render engine: {{engine}}")
+        break
+    except TypeError:
+        continue
+
 bpy.context.scene.render.image_settings.file_format = 'PNG'
+bpy.context.scene.render.film_transparent = False
 
-bpy.ops.render.render(write_still=True)
-print("RENDER_OK")
+# Camera distance based on model size
+dist = size * 3
+
+# View positions (relative to center)
+view_configs = {{
+    "perspective": (center.x + dist*0.6, center.y - dist*0.8, center.z + dist*0.4),
+    "front": (center.x, center.y - dist, center.z + size*0.3),
+    "side": (center.x + dist, center.y, center.z + size*0.3),
+    "top": (center.x + 0.001, center.y + 0.001, center.z + dist),
+}}
+
+if VIEWS == "all":
+    bpy.context.scene.render.resolution_x = 600
+    bpy.context.scene.render.resolution_y = 600
+    
+    import tempfile as _tf
+    view_imgs = []
+    for vname in ["perspective", "front", "side", "top"]:
+        cam_obj.location = mathutils.Vector(view_configs[vname])
+        bpy.context.view_layer.update()
+        tmp = os.path.join(_tf.gettempdir(), f"preview_{{vname}}.png")
+        bpy.context.scene.render.filepath = tmp
+        bpy.ops.render.render(write_still=True)
+        view_imgs.append(tmp)
+        print(f"  Rendered {{vname}}")
+    
+    # Composite 2x2 grid
+    try:
+        from PIL import Image
+        imgs = [Image.open(p) for p in view_imgs]
+        grid = Image.new('RGB', (1200, 1200))
+        grid.paste(imgs[0], (0, 0))
+        grid.paste(imgs[1], (600, 0))
+        grid.paste(imgs[2], (0, 600))
+        grid.paste(imgs[3], (600, 600))
+        grid.save(OUTPUT_PATH)
+        print("RENDER_OK_ALL")
+    except ImportError:
+        # No PIL in Blender Python — save perspective only
+        import shutil
+        shutil.copy(view_imgs[0], OUTPUT_PATH)
+        print("WARNING: PIL not available in Blender — saved perspective view only (install Pillow for 2x2 grid)")
+        print("RENDER_OK_SINGLE")
+else:
+    bpy.context.scene.render.resolution_x = 1200
+    bpy.context.scene.render.resolution_y = 900
+    
+    loc = view_configs.get(VIEWS, view_configs["perspective"])
+    cam_obj.location = mathutils.Vector(loc)
+    bpy.context.view_layer.update()
+    bpy.context.scene.render.filepath = OUTPUT_PATH
+    bpy.ops.render.render(write_still=True)
+    print("RENDER_OK")
 '''
 
-    tmp_script = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
-    tmp_script.write(script)
-    tmp_script.close()
+    script_file = os.path.join(tempfile.gettempdir(), "bambu_preview.py")
+    with open(script_file, "w") as f:
+        f.write(script)
 
+    print(f"📸 Rendering preview ({views})...")
     try:
         result = subprocess.run(
-            [blender, "--background", "--python", tmp_script.name],
-            capture_output=True, text=True, timeout=60)
+            [blender, "--background", "--python", script_file],
+            capture_output=True, text=True, timeout=120
+        )
 
-        if "RENDER_OK" in result.stdout and os.path.exists(output_path):
+        rendered = False
+        for line in result.stdout.split('\n'):
+            if "RENDER_OK" in line:
+                rendered = True
+            if "MODEL_INFO:" in line:
+                print(f"   {line.split('MODEL_INFO: ')[1]}")
+            if "PBR texture" in line or "No texture" in line or "preview material" in line:
+                print(f"   {line.strip()}")
+
+        if rendered and os.path.exists(output_path):
             size = os.path.getsize(output_path)
-            print(f"📸 Preview (HQ): {output_path} ({size//1024}KB)")
+            print(f"   ✅ {output_path} ({size//1024}KB)")
             return output_path
         else:
-            print(f"⚠️ Blender render failed, falling back to matplotlib")
-            stderr = result.stderr[-200:] if result.stderr else ""
-            if stderr:
-                print(f"   {stderr}")
-            return preview_matplotlib(model_path, output_path)
+            print("   ❌ Render failed")
+            if result.stderr:
+                for line in result.stderr.split('\n')[-3:]:
+                    if line.strip():
+                        print(f"   {line.strip()}")
+            return None
+
     except subprocess.TimeoutExpired:
-        print("⚠️ Blender timeout, falling back to matplotlib")
-        return preview_matplotlib(model_path, output_path)
+        print("   ❌ Render timeout (120s)")
+        return None
     finally:
-        os.unlink(tmp_script.name)
+        if os.path.exists(script_file):
+            os.unlink(script_file)
+
 
 def main():
-    parser = argparse.ArgumentParser(description="3D Model Preview Generator")
-    parser.add_argument("model", help="Model file (STL/OBJ/GLB)")
+    parser = argparse.ArgumentParser(
+        description="📸 3D Model Preview Generator (Blender)",
+        epilog="Requires: Blender 4.0+ (brew install --cask blender)"
+    )
+    parser.add_argument("model", help="Model file (STL/OBJ/GLB/GLTF/FBX)")
     parser.add_argument("--output", "-o", help="Output PNG path")
-    parser.add_argument("--hq", action="store_true", help="High-quality Blender render")
-    parser.add_argument("--title", help="Custom title text")
+    parser.add_argument("--views", "-v", default="perspective",
+                        choices=["perspective", "front", "side", "top", "all"],
+                        help="View angle (default: perspective, 'all' = 2x2 grid)")
     args = parser.parse_args()
 
     if not os.path.exists(args.model):
@@ -232,15 +300,12 @@ def main():
         sys.exit(1)
 
     if not args.output:
-        base = os.path.splitext(args.model)[0]
-        args.output = base + "_preview.png"
+        args.output = os.path.splitext(args.model)[0] + "_preview.png"
 
-    args.output = os.path.abspath(args.output)
+    result = preview(args.model, os.path.abspath(args.output), views=args.views)
+    if result is None:
+        sys.exit(1)
 
-    if args.hq:
-        preview_blender(args.model, args.output)
-    else:
-        preview_matplotlib(args.model, args.output, title=args.title)
 
 if __name__ == "__main__":
     main()

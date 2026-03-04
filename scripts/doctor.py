@@ -159,7 +159,7 @@ def main():
         import matplotlib
         print(f"  ✅ matplotlib {matplotlib.__version__}")
     except ImportError:
-        print("  ❌ matplotlib not installed (pip3 install matplotlib) — needed for preview.py")
+        print("  ❌ matplotlib not installed (pip3 install matplotlib) — needed for analysis charts")
         all_ok = False
 
     print("\nSearch backend:")
