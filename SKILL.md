@@ -327,7 +327,16 @@ Auto-detects printer + nozzle. Quality: draft(0.24) / standard(0.20) / fine(0.12
 ### Workflow F — Manual Print
 - Model already open in Bambu Studio
 - User adjusts settings and prints manually from BS/Handy
-- **Agent MUST offer to monitor**: "I see you started a print. Want me to monitor and send updates?"
+
+**Print detection — two methods:**
+
+1. **Active listen (after model handoff):** When agent opens a model in BS (Workflow B/C/D), immediately start a background MQTT listener (30 min window). If printer state changes to RUNNING → notify user and offer monitoring.
+   - Implementation: background `exec` running paho-mqtt subscribe loop, poll every 30s for state change
+   - Auto-stop after 30 min if no print detected
+   - On detection: "🖨️ I see you started printing [filename]! Want me to monitor with live updates and snapshots?"
+
+2. **Heartbeat fallback:** During regular heartbeats, check printer MQTT status. If RUNNING and not already monitoring → notify user.
+
 - If user accepts → Start Monitoring (Step 6)
 
 ---
