@@ -326,28 +326,52 @@ Auto-detects printer + nozzle. Quality: draft(0.24) / standard(0.20) / fine(0.12
 
 ### Workflow F — Manual Print
 - Model already open in Bambu Studio
-- User adjusts settings and prints manually
-- Agent does NOT auto-print or auto-monitor
-- CAN monitor on request
+- User adjusts settings and prints manually from BS/Handy
+- **Agent MUST offer to monitor**: "I see you started a print. Want me to monitor and send updates?"
+- If user accepts → Start Monitoring (Step 6)
 
 ---
 
 ## Step 6: Print Monitoring
 
-Trigger: Auto print (Workflow E) or user request. Requires LAN mode + consent.
+Trigger: Auto print (Workflow E), manual print (Workflow F), or user request. Requires LAN mode.
 
 ⚠️ Always ask: "Want me to monitor? Auto-pause on serious issues?"
 
+**Monitoring method:** Direct MQTT subscription via paho-mqtt (NOT bambulabs_api — it has SSL issues).
+Connect to `{printer_ip}:8883`, subscribe to `device/{serial}/report`, parse `print` messages.
+
+**Camera snapshots are MANDATORY during monitoring:**
+- Capture via RTSP: `bambu.py snapshot` (ffmpeg → rtsps://bblp:{code}@{ip}:322/streaming/live/1)
+- Send snapshot with EVERY progress update to user
+- Include snapshot in anomaly alerts
+
+**Monitoring schedule:**
+| Event | Frequency | Action |
+|---|---|---|
+| Print detected (RUNNING state) | Once | Offer to monitor |
+| Normal progress | Every 30 min | Status + 📸 snapshot to user |
+| Anomaly detected | Immediate | Alert + 📸 snapshot + auto-pause (if enabled) |
+| Print complete | Once | Completion notification + 📸 final snapshot |
+
+**Anomaly detection:**
 | Anomaly | Severity | Action |
 |---|---|---|
-| Progress stall >10min | Warning | Alert user |
-| Temperature anomaly | Critical | Alert + auto-pause |
-| Print failure/error | Critical | Alert + auto-pause |
-| Unexpected pause | Warning | Alert user |
-| Bed detachment | Critical | Auto-pause + alert |
-| Spaghetti | Critical | Auto-pause + alert |
+| Progress stall >10min | Warning | Alert user + snapshot |
+| Temperature anomaly | Critical | Alert + snapshot + auto-pause |
+| Print failure/error | Critical | Alert + snapshot + auto-pause |
+| Unexpected pause | Warning | Alert user + snapshot |
+| Bed detachment | Critical | Auto-pause + alert + snapshot |
+| Spaghetti | Critical | Auto-pause + alert + snapshot |
 
-Silent when normal. Progress summary every 30 min. Completion notification.
+**Status report format (send to user):**
+```
+🖨️ Print Update — {filename}
+📊 Progress: {percent}% | Layer {current}/{total}
+⏱️ Remaining: {time}
+🔥 Nozzle: {temp}°C | 🛏️ Bed: {temp}°C
+📸 [attached snapshot]
+```
 
 ---
 
