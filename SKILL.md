@@ -355,13 +355,17 @@ Connect to `{printer_ip}:8883`, subscribe to `device/{serial}/report`, parse `pr
 - Send snapshot with EVERY progress update to user
 - Include snapshot in anomaly alerts
 
-**Monitoring schedule:**
-| Event | Frequency | Action |
+**Default monitoring schedule (milestone-based, ~5 messages per print):**
+| Event | Trigger | Action |
 |---|---|---|
-| Print detected (RUNNING state) | Once | Offer to monitor |
-| Normal progress | Every 30 min | Status + 📸 snapshot to user |
-| Anomaly detected | Immediate | Alert + 📸 snapshot + auto-pause (if enabled) |
-| Print complete | Once | Completion notification + 📸 final snapshot |
+| Print start | State → RUNNING | Notify + 📸 snapshot |
+| 25% progress | mc_percent ≥ 25 | Status + 📸 snapshot |
+| 50% progress | mc_percent ≥ 50 | Status + 📸 snapshot |
+| 75% progress | mc_percent ≥ 75 | Status + 📸 snapshot |
+| Print complete | State → FINISH/IDLE | Completion + 📸 final snapshot |
+| Anomaly | Any time | Immediate alert + 📸 snapshot + auto-pause (if enabled) |
+
+User can adjust frequency. Track reported milestones to avoid duplicates.
 
 **Anomaly detection:**
 | Anomaly | Severity | Action |
