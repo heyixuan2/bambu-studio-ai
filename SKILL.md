@@ -131,7 +131,7 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Generate 3D (image) | `python3 scripts/generate.py image photo.jpg --wait` |
 | Download model | `python3 scripts/generate.py download <task_id>` |
 | Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
-| Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 --output out.obj` |
+| Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`) |
 | Slice | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
 | Slice (specific setup) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
 | List slicer profiles | `python3 scripts/slice.py --list-profiles` |
@@ -234,7 +234,28 @@ If no good results → offer AI generate.
 4. `colorize.py model.glb --height <size> --max_colors 8` → vertex-color OBJ
    - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
    - No shadow removal needed — HSV classification bypasses baked lighting
-5. → Model Processing
+5. **Show quantized texture preview to user** — send the `_preview.png` image
+6. **Analyze results and suggest tuning** if needed:
+   - Report detected colors with names, hex codes, and percentages
+   - If small but meaningful colors were lost (e.g., <1% features like eyes, accessories):
+     → Suggest: `--min-pct 0` (keep all colors above 0.1%)
+   - If similar colors are merged incorrectly (e.g., yellow body + brown pants):
+     → Suggest: `--no-merge` (disable family mutual exclusion)
+   - If too many artifact colors appear:
+     → Suggest: higher `--min-pct` or `--island-size`
+   - If boundaries are too noisy or too smooth:
+     → Suggest: adjust `--smooth` (0=none, 5=default, higher=smoother)
+7. If user requests changes → re-run colorize with adjusted params → show new preview
+8. When user approves → Model Processing
+
+**Colorize tunable parameters:**
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `--max_colors N` | 8 | Maximum colors (hard limit ≤8 for AMS) |
+| `--min-pct X` | 0.1 | Min family % threshold (0=keep all, 5=aggressive filter) |
+| `--no-merge` | off | Disable family group exclusion (all 12 families independent) |
+| `--island-size N` | 1000 | Remove isolated patches < N pixels (0=disabled) |
+| `--smooth N` | 5 | Majority vote boundary passes (0=raw, higher=smoother) |
 
 ### Workflow D — User-Provided File
 

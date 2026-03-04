@@ -136,7 +136,7 @@ FAMILY_GROUPS = {
     0: [0, 1], 1: [0, 1],       # black ↔ dark_gray
     2: [2, 3], 3: [2, 3],       # light_gray ↔ white
     4: [4, 11], 11: [4, 11],    # red ↔ pink
-    5: [5, 6], 6: [5, 6],       # orange ↔ yellow
+    # orange and yellow are independent (e.g. SpongeBob yellow body + brown pants)
     7: [7, 8], 8: [7, 8],       # green ↔ cyan
     9: [9, 10], 10: [9, 10],    # blue ↔ purple
 }
@@ -187,7 +187,7 @@ def classify_pixels(pixels):
 # Step 3: Greedy color-mode selection
 # ═══════════════════════════════════════════════════════════════
 
-def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pct=0.02):
+def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pct=0.001, no_merge=False):
     """
     Greedy select representative colors:
     1. Find largest pixel family
@@ -215,19 +215,15 @@ def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
         if best_fid < 0 or best_count == 0:
             break
 
-        # Skip small chromatic families (<2%) — likely shadow/transition artifacts
-        # Black and white families are exempt (eyes, highlights are small but real)
-        pct_check = best_count / N
-        exempt_fids = {0, 1, 3}  # black, dark_gray, white
-        if best_fid not in exempt_fids and pct_check < min_pct:
-            excluded_fids.add(best_fid)
-            for gf in FAMILY_GROUPS.get(best_fid, [best_fid]):
-                excluded_fids.add(gf)
-            continue
+        # Floor threshold: skip noise families (<0.1%)
+        if best_count / N < 0.001:
+            break
 
 
 
-        group = FAMILY_GROUPS.get(best_fid, [best_fid])
+
+
+        group = [best_fid] if no_merge else FAMILY_GROUPS.get(best_fid, [best_fid])
         group_mask = np.zeros(N, dtype=bool)
         for gf in group:
             group_mask |= (pixel_families == gf)
@@ -527,6 +523,7 @@ def _snap_vertex_colors(obj_path, selected_colors):
     """
     import numpy as np
     sel_rgb = np.array([sc["rgb"] for sc in selected_colors])  # float 0-1
+    sel_lab = np.array([sc["lab"] for sc in selected_colors])
     
     lines_out = []
     snapped = 0
@@ -536,8 +533,10 @@ def _snap_vertex_colors(obj_path, selected_colors):
                 parts = line.strip().split()
                 xyz = parts[1:4]
                 rgb = np.array([float(parts[4]), float(parts[5]), float(parts[6])])
-                # Find nearest selected color
-                dist = np.sum((sel_rgb - rgb) ** 2, axis=1)
+                # Find nearest selected color using CIELAB distance
+                rgb_reshaped = rgb.reshape(1, -1)
+                lab = srgb_to_lab(rgb_reshaped)[0]
+                dist = np.sum((sel_lab - lab) ** 2, axis=1)
                 nearest = sel_rgb[np.argmin(dist)]
                 nearest = sel_rgb[np.argmin(dist)]
                 vline = "v %s %s %s %.4f %.4f %.4f\n" % (xyz[0], xyz[1], xyz[2], nearest[0], nearest[1], nearest[2])
@@ -551,7 +550,7 @@ def _snap_vertex_colors(obj_path, selected_colors):
 
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
-             colors=None, min_pct=0.02):
+             colors=None, min_pct=0.001, no_merge=False, island_size=1000, smooth=5):
     """
     Convert GLB to multi-color vertex-color OBJ.
 
@@ -668,7 +667,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
     # ── Step 3: Greedy color selection ──
     print(f"\n🎯 Step 3: Greedy color selection (≤{max_colors})")
     pixel_lab = srgb_to_lab(pixels)
-    selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors, min_pct=min_pct)
+    selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors, min_pct=min_pct, no_merge=no_merge)
 
     for i, sc in enumerate(selected):
         rgb_int = (sc["rgb"] * 255).astype(int)
@@ -701,9 +700,9 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
             best[better] = lbl
             best_score[better] = density[better]
         labels_2d = best
-    print(f"   Boundary smoothing (5-pass majority vote, 7×7 window)")
+    print(f"   Boundary smoothing ({smooth}-pass majority vote, 7×7 window)")
     
-    labels_2d = cleanup_labels(labels_2d, min_island=1000)
+    labels_2d = cleanup_labels(labels_2d, min_island=island_size)
     # Median filter to smooth thin strips and jagged edges
     from scipy.ndimage import median_filter
     labels_2d = median_filter(labels_2d, size=7)
@@ -756,7 +755,7 @@ def main():
     )
     parser.add_argument("input", help="Input model (GLB/GLTF/OBJ/FBX/STL)")
     parser.add_argument("--output", "-o", help="Output OBJ path")
-    parser.add_argument("--min-pct", type=float, default=2.0,
+    parser.add_argument("--min-pct", type=float, default=1.0,
                         help="Min %% for small color families (default 2.0, set 0 to keep all)")
     parser.add_argument("--max_colors", "-n", type=int, default=8, choices=range(1, 9),
                         help="Maximum colors (1-8, default 8)")
@@ -764,6 +763,12 @@ def main():
     parser.add_argument("--subdivide", type=int, default=1, choices=[0, 1, 2, 3],
                         help="Subdivision (0=raw, 1=default, 2-3=high)")
     parser.add_argument("--colors", "-c", help="Manual hex colors (legacy, comma-separated)")
+    parser.add_argument("--no-merge", action="store_true",
+                            help="Disable family mutual exclusion (all 12 families independent)")
+    parser.add_argument("--island-size", type=int, default=1000,
+                            help="Island cleanup threshold in pixels (0=disabled)")
+    parser.add_argument("--smooth", type=int, default=5,
+                            help="Majority vote smoothing passes (0=disabled)")
 
     args = parser.parse_args()
 
