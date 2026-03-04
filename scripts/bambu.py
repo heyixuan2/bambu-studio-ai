@@ -610,6 +610,8 @@ def notify(title, message, channel="auto", image=None):
     # Try macOS notification
     try:
         import subprocess
+        msg_escaped = message.replace('"', '\"')
+        title_escaped = title.replace('"', '\"')
         subprocess.run([
             "osascript", "-e",
             f'display notification "{msg_escaped}" with title "Bambu Studio AI" subtitle "{title_escaped}"'
