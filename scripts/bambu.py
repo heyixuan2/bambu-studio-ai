@@ -942,8 +942,8 @@ def cmd_gcode(code):
 
 def cmd_upload(filename):
     """Upload a file to the printer via FTP."""
-    import os as _uos
-    if not _uos.path.exists(filename):
+
+    if not os.path.exists(filename):
         print(f"❌ File not found: {filename}")
         sys.exit(1)
     
@@ -956,7 +956,7 @@ def cmd_upload(filename):
         if not access_code: print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
         sys.exit(1)
     
-    remote_filename = _uos.path.basename(filename)
+    remote_filename = os.path.basename(filename)
     
     print(f"📤 Uploading {filename} to {ip}:990...")
     try:
@@ -1004,8 +1004,10 @@ def main():
         notify(args.title, args.message, image=getattr(args, "image", None))
     elif args.command in cmds:
         cmds[args.command]()
+    elif args.command == "upload":
+        cmd_upload(args.filename)
     elif args.command == "print":
-        cmd_print(args.filename, confirmed=args.confirmed)
+        cmd_print(args.filename, confirmed=args.confirmed, ams_mapping=getattr(args, "ams_mapping", None))
     elif args.command == "gcode":
         cmd_gcode(args.code)
     elif args.command == "light":
