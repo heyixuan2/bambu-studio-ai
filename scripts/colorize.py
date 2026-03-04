@@ -1,29 +1,33 @@
 #!/usr/bin/env python3
 """
-🎨 Multi-Color Converter — GLB to OBJ+MTL for Bambu Lab AMS
+🎨 Multi-Color Converter v4 — GLB to vertex-color OBJ for Bambu Lab AMS
 
-Pipeline: GLB texture → [Optional AO Delight] → CIELAB nearest-neighbor → Shadow border vote → Texture smoothing → Face sampling → Cleanup → OBJ+MTL
+Pipeline: GLB → Extract texture (pygltflib) → Pixel family classification (HSV)
+          → Greedy color-mode selection (≤8 colors) → Per-pixel CIELAB assign
+          → Blender vertex color bake → OBJ export
 
 Requires: Blender 4.0+ (brew install --cask blender)
+          pygltflib (pip3 install pygltflib)
 
 Usage:
-  # Recommended (most models):
+  # Auto-detect colors (recommended):
+  python3 scripts/colorize.py model.glb --height 80
+
+  # Limit to 4 colors:
+  python3 scripts/colorize.py model.glb --height 80 --max_colors 4
+
+  # Manual colors (legacy mode):
   python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80
-
-  # High precision:
-  python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80 \
-    --subdivide 3 --min_island 80 --tex_smooth 11 --tex_smooth_passes 8
-
-  # Vinyl toy / cartoon style (less shadow removal needed):
-  python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000" --height 50 --delight_floor 0.5
 """
 
 import os
 import sys
+import io
 import json
 import argparse
 import subprocess
 import tempfile
+import numpy as np
 
 _skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,88 +36,275 @@ BLENDER_PATHS = [
     "blender",
 ]
 
-BLENDER_SCRIPT = r'''
-import bpy
-import bmesh
-import numpy as np
-import sys
-import os
-from collections import defaultdict, deque
 
-argv = sys.argv
-argv = argv[argv.index("--") + 1:]
+# ═══════════════════════════════════════════════════════════════
+# Color Science Utilities
+# ═══════════════════════════════════════════════════════════════
 
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument("--input", required=True)
-parser.add_argument("--output", required=True)
-parser.add_argument("--colors", required=True)
-parser.add_argument("--height", type=float, default=0)
-parser.add_argument("--subdivide", type=int, default=2)
-parser.add_argument("--min_island", type=int, default=50)
-parser.add_argument("--cleanup", type=int, default=3)
-parser.add_argument("--tex_smooth", type=int, default=9)
-parser.add_argument("--tex_smooth_passes", type=int, default=5)
-parser.add_argument("--delight_floor", type=float, default=0.7)
-parser.add_argument("--delight_bright", type=float, default=2.0)
-parser.add_argument("--no_delight", action="store_true", help="Skip delight entirely")
-parser.add_argument("--delight_sat", type=float, default=1.5)
-args = parser.parse_args(argv)
-
-# ─── Parse filament colors ───
-def hex_to_rgb(h):
-    h = h.lstrip('#')
-    return tuple(int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4))
-
-filament_colors = [hex_to_rgb(c) for c in args.colors.split(",")]
-n_colors = len(filament_colors)
-print(f"Filament colors: {n_colors}")
-
-# ─── RGB ↔ CIELAB conversion ───
-def rgb_to_lab(r, g, b):
-    """Convert sRGB [0,1] to CIELAB."""
-    # sRGB → linear RGB
-    def linearize(c):
-        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-    rl, gl, bl = linearize(r), linearize(g), linearize(b)
-    # Linear RGB → XYZ (D65)
-    x = rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375
-    y = rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750
-    z = rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041
-    # XYZ → Lab
-    xn, yn, zn = 0.95047, 1.0, 1.08883
+def srgb_to_lab(rgb):
+    """Vectorized sRGB [0,1] (N,3) → CIELAB (N,3)."""
+    linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    r, g, b = linear[:, 0], linear[:, 1], linear[:, 2]
+    x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375
+    y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750
+    z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+    x /= 0.95047; z /= 1.08883
     def f(t):
-        return t ** (1/3) if t > 0.008856 else 7.787 * t + 16/116
-    fx, fy, fz = f(x/xn), f(y/yn), f(z/zn)
-    L = 116 * fy - 16
-    a = 500 * (fx - fy)
-    b_val = 200 * (fy - fz)
-    return (L, a, b_val)
-
-filament_lab = [rgb_to_lab(*c) for c in filament_colors]
+        return np.where(t > 0.008856, t ** (1/3), 7.787 * t + 16/116)
+    return np.stack([116*f(y)-16, 500*(f(x)-f(y)), 200*(f(y)-f(z))], axis=1)
 
 
-# ─── Import model ───
+
+# ═══════════════════════════════════════════════════════════════
+# Step 1: Extract texture from GLB (no Blender needed)
+# ═══════════════════════════════════════════════════════════════
+
+def extract_texture(glb_path):
+    """Extract base color texture from GLB using pygltflib. Returns PIL Image or None."""
+    try:
+        import pygltflib
+    except ImportError:
+        print("   ⚠️ pygltflib not installed, falling back to Blender extraction")
+        return None
+
+    from PIL import Image
+
+    glb = pygltflib.GLTF2().load(glb_path)
+    for mat in glb.materials:
+        if mat.pbrMetallicRoughness and mat.pbrMetallicRoughness.baseColorTexture:
+            tex_idx = mat.pbrMetallicRoughness.baseColorTexture.index
+            tex = glb.textures[tex_idx]
+            image = glb.images[tex.source]
+
+            if image.bufferView is not None:
+                bv = glb.bufferViews[image.bufferView]
+                data = glb.binary_blob()[bv.byteOffset:bv.byteOffset + bv.byteLength]
+            elif image.uri and image.uri.startswith("data:"):
+                import base64
+                data = base64.b64decode(image.uri.split(",")[1])
+            else:
+                return None
+
+            return Image.open(io.BytesIO(data)).convert("RGB")
+    return None
+
+
+def extract_texture_blender(glb_path, blender_path):
+    """Fallback: extract texture via Blender."""
+    from PIL import Image
+
+    out_png = os.path.join(tempfile.gettempdir(), "bambu_extracted_texture.png")
+    glb_repr = repr(glb_path)
+    out_repr = repr(out_png)
+    script = f'''
+import bpy
+bpy.ops.wm.read_factory_settings(use_empty=True)
+bpy.ops.import_scene.gltf(filepath={glb_repr})
+obj = [o for o in bpy.context.scene.objects if o.type == 'MESH'][0]
+for mat in obj.data.materials:
+    if mat and mat.use_nodes:
+        for link in mat.node_tree.links:
+            if link.to_node.type == 'BSDF_PRINCIPLED' and link.to_socket.name == 'Base Color':
+                if link.from_node.type == 'TEX_IMAGE':
+                    img = link.from_node.image
+                    img.filepath_raw = {out_repr}
+                    img.file_format = 'PNG'
+                    img.save()
+                    print("SAVED")
+                    break
+'''
+    script_file = os.path.join(tempfile.gettempdir(), "extract_tex.py")
+    with open(script_file, "w") as f:
+        f.write(script)
+
+    result = subprocess.run([blender_path, "--background", "--python", script_file],
+                           capture_output=True, text=True, timeout=60)
+    if os.path.exists(out_png):
+        return Image.open(out_png).convert("RGB")
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 2: Pixel family classification (vectorized HSV)
+# ═══════════════════════════════════════════════════════════════
+
+FAMILY_NAMES = ["black", "dark_gray", "light_gray", "white",
+                "red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink"]
+
+# Families that exclude each other during greedy selection
+FAMILY_GROUPS = {
+    0: [0, 1], 1: [0, 1],       # black ↔ dark_gray
+    2: [2, 3], 3: [2, 3],       # light_gray ↔ white
+    4: [4, 11], 11: [4, 11],    # red ↔ pink
+    5: [5, 6], 6: [5, 6],       # orange ↔ yellow
+    7: [7, 8], 8: [7, 8],       # green ↔ cyan
+    9: [9, 10], 10: [9, 10],    # blue ↔ purple
+}
+
+
+def classify_pixels(pixels):
+    """Classify each pixel into a color family by HSV. Returns int32 array of family IDs."""
+    N = len(pixels)
+    r, g, b = pixels[:, 0], pixels[:, 1], pixels[:, 2]
+    maxc = np.maximum(np.maximum(r, g), b)
+    minc = np.minimum(np.minimum(r, g), b)
+    delta = maxc - minc
+
+    s = np.zeros(N, dtype=np.float64)
+    np.divide(delta, maxc, out=s, where=maxc > 0)
+    v = maxc
+
+    h = np.zeros(N)
+    mr = (maxc == r) & (delta > 0)
+    mg = (maxc == g) & (delta > 0)
+    mb = (maxc == b) & (delta > 0)
+    h[mr] = 60 * (((g[mr] - b[mr]) / delta[mr]) % 6)
+    h[mg] = 60 * ((b[mg] - r[mg]) / delta[mg] + 2)
+    h[mb] = 60 * ((r[mb] - g[mb]) / delta[mb] + 4)
+
+    pf = np.full(N, 1, dtype=np.int32)  # default: dark_gray
+    # Force very dark pixels to achromatic regardless of saturation
+    # (at v < 0.1, hue is meaningless noise)
+    achro = (s < 0.15) | (v < 0.1)
+    pf[achro & (v < 0.2)] = 0                          # black
+    pf[achro & (v >= 0.2) & (v < 0.5)] = 1             # dark_gray
+    pf[achro & (v >= 0.5) & (v < 0.8)] = 2             # light_gray
+    pf[achro & (v >= 0.8)] = 3                          # white
+    chro = ~achro
+    pf[chro & ((h < 15) | (h >= 345))] = 4             # red
+    pf[chro & (h >= 15) & (h < 40)] = 5                # orange
+    pf[chro & (h >= 40) & (h < 70)] = 6                # yellow
+    pf[chro & (h >= 70) & (h < 160)] = 7               # green
+    pf[chro & (h >= 160) & (h < 200)] = 8              # cyan
+    pf[chro & (h >= 200) & (h < 260)] = 9              # blue
+    pf[chro & (h >= 260) & (h < 310)] = 10             # purple
+    pf[chro & (h >= 310) & (h < 345)] = 11             # pink
+
+    return pf
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 3: Greedy color-mode selection
+# ═══════════════════════════════════════════════════════════════
+
+def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8):
+    """
+    Greedy select representative colors:
+    1. Find largest pixel family
+    2. Take median of that family's pixels as representative color
+    3. Exclude the family group
+    4. Repeat until max_colors or all pixels assigned
+
+    Returns: list of dicts with rgb, lab, family, percentage, etc.
+    """
+    N = len(pixels)
+    selected = []
+    excluded_fids = set()
+
+    for rnd in range(max_colors):
+        best_fid = -1
+        best_count = 0
+        for fid in range(12):
+            if fid in excluded_fids:
+                continue
+            c = int(np.sum(pixel_families == fid))
+            if c > best_count:
+                best_count = c
+                best_fid = fid
+
+        if best_fid < 0 or best_count == 0:
+            break
+
+        group = FAMILY_GROUPS.get(best_fid, [best_fid])
+        group_mask = np.zeros(N, dtype=bool)
+        for gf in group:
+            group_mask |= (pixel_families == gf)
+        total = int(np.sum(group_mask))
+        if total == 0:
+            break
+
+        # Representative: median in RGB and LAB
+        median_rgb = np.median(pixels[group_mask], axis=0)
+        median_lab = np.median(pixel_lab[group_mask], axis=0)
+
+        pct = total / N * 100
+        group_names = [FAMILY_NAMES[gf] for gf in group]
+
+        selected.append({
+            "rgb": median_rgb,
+            "lab": median_lab,
+            "family": FAMILY_NAMES[best_fid],
+            "group_names": group_names,
+            "pixel_count": total,
+            "percentage": pct,
+        })
+
+        for gf in group:
+            excluded_fids.add(gf)
+
+    return selected
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 4: Per-pixel assignment (CIELAB nearest neighbor)
+# ═══════════════════════════════════════════════════════════════
+
+def assign_pixels(pixel_lab, selected_colors):
+    """Assign each pixel to nearest selected color by CIELAB distance."""
+    N = len(pixel_lab)
+    sel_lab = np.array([sc["lab"] for sc in selected_colors])
+    labels = np.zeros(N, dtype=np.int32)
+    CHUNK = 500000
+
+    for i in range(0, N, CHUNK):
+        chunk = pixel_lab[i:i+CHUNK]
+        dist = np.sum((chunk[:, None, :] - sel_lab[None, :, :]) ** 2, axis=2)
+        labels[i:i+CHUNK] = np.argmin(dist, axis=1)
+
+    return labels
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 5: Build quantized texture
+# ═══════════════════════════════════════════════════════════════
+
+def build_quantized_texture(pixels, labels, selected_colors, width, height):
+    """Build quantized RGB texture from labels. Returns uint8 (H,W,3)."""
+    sel_rgb = np.array([sc["rgb"] for sc in selected_colors])
+    return (sel_rgb[labels].reshape(height, width, 3) * 255).astype(np.uint8)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 6: Apply to mesh via Blender (vertex color)
+# ═══════════════════════════════════════════════════════════════
+
+def apply_vertex_colors(glb_path, quantized_npy_path, output_path, blender_path,
+                        height_mm=0, subdivide=1):
+    """Load GLB in Blender, sample quantized texture to vertex colors, export OBJ."""
+
+    # Use repr() for safe path embedding
+    glb_esc = repr(glb_path)
+    npy_esc = repr(quantized_npy_path)
+    out_esc = repr(output_path)
+
+    script = f'''
+import bpy
+import numpy as np
+import os
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
-ext = os.path.splitext(args.input)[1].lower()
+ext = os.path.splitext({glb_esc})[1].lower()
 if ext in ['.glb', '.gltf']:
-    bpy.ops.import_scene.gltf(filepath=args.input)
+    bpy.ops.import_scene.gltf(filepath={glb_esc})
 elif ext == '.obj':
-    bpy.ops.wm.obj_import(filepath=args.input)
+    bpy.ops.wm.obj_import(filepath={glb_esc})
 elif ext == '.fbx':
-    bpy.ops.import_scene.fbx(filepath=args.input)
+    bpy.ops.import_scene.fbx(filepath={glb_esc})
 elif ext == '.stl':
-    bpy.ops.wm.stl_import(filepath=args.input)
-else:
-    print(f"ERROR: Unsupported format: {ext}")
-    sys.exit(1)
+    bpy.ops.wm.stl_import(filepath={glb_esc})
 
 meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
-if not meshes:
-    print("ERROR: No mesh objects found")
-    sys.exit(1)
-
 bpy.context.view_layer.objects.active = meshes[0]
 for o in meshes:
     o.select_set(True)
@@ -122,617 +313,110 @@ if len(meshes) > 1:
 
 obj = bpy.context.active_object
 
-# ─── Scale to target height ───
-if args.height > 0:
+# Scale to target height
+height_mm = {height_mm}
+if height_mm > 0:
     bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
     z_min = min(v.z for v in bbox)
     z_max = max(v.z for v in bbox)
     current_h = (z_max - z_min) * 1000
     if current_h > 0:
-        scale = args.height / current_h
+        scale = height_mm / current_h
         obj.scale *= scale
         bpy.ops.object.transform_apply(scale=True)
         bbox2 = [obj.matrix_world @ v.co for v in obj.data.vertices]
         z_min2 = min(v.z for v in bbox2)
         obj.location.z -= z_min2
 
-# ─── Pre-subdivide decimation (prevent giant OBJ files) ───
-face_count = len(obj.data.polygons)
-if face_count > 200000 and args.subdivide >= 2:
-    target_ratio = 100000 / face_count
-    print(f"\n⚡ Pre-decimation: {face_count:,} faces → ~100K (prevents >500MB output)")
-    mod = obj.modifiers.new('Decimate', 'DECIMATE')
-    mod.ratio = target_ratio
-    bpy.ops.object.modifier_apply(modifier=mod.name)
-    print(f"   Result: {len(obj.data.polygons):,} faces")
+# Subdivide for vertex color resolution
+subdivide = {subdivide}
+if subdivide > 0:
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    for _ in range(subdivide):
+        bpy.ops.mesh.subdivide(number_cuts=1)
+    bpy.ops.object.mode_set(mode='OBJECT')
 
-# ─── Subdivide ───
-if args.subdivide > 0:
-    mod = obj.modifiers.new("Subdivide", 'SUBSURF')
-    mod.levels = args.subdivide
-    mod.render_levels = args.subdivide
-    bpy.ops.object.modifier_apply(modifier=mod.name)
+mesh = obj.data
+print(f"Mesh: {{len(mesh.polygons):,}} faces, {{len(mesh.vertices):,}} verts")
 
-print(f"Mesh: {len(obj.data.polygons)} faces, {len(obj.data.vertices)} verts")
+# Load quantized texture (uint8 sRGB, Y-flipped for UV)
+tex_srgb = np.load({npy_esc})
+th, tw = tex_srgb.shape[:2]
+tex_f = tex_srgb.astype(np.float32) / 255.0
 
-# ─── Get texture ───
-image = None
-for mat in obj.data.materials:
-    if mat and mat.use_nodes:
-        for node in mat.node_tree.nodes:
-            if node.type == 'TEX_IMAGE' and node.image:
-                image = node.image
-                break
-    if image:
-        break
+# sRGB → linear for Blender vertex colors
+tex_linear = np.where(tex_f <= 0.04045, tex_f / 12.92, ((tex_f + 0.055) / 1.055) ** 2.4)
 
-if not image:
-    print("WARNING: No texture found — single color mode")
-    mat = bpy.data.materials.new("Color_01")
-    r, g, b = filament_colors[0]
-    mat.diffuse_color = (r, g, b, 1.0)
-    obj.data.materials.clear()
-    obj.data.materials.append(mat)
-    for poly in obj.data.polygons:
-        poly.material_index = 0
-else:
-    pixels = np.array(image.pixels[:]).reshape(-1, 4)[:, :3]
-    w, h = image.size
-    print(f"Texture: {w}x{h} ({len(pixels)} pixels)")
+# Create vertex color attribute
+if "Col" not in mesh.color_attributes:
+    mesh.color_attributes.new(name="Col", type='BYTE_COLOR', domain='CORNER')
+mesh.color_attributes.active_color = mesh.color_attributes["Col"]
+cl = mesh.color_attributes["Col"]
+if not mesh.uv_layers.active:
+    print("ERROR: No UV mapping found. Colorize requires a textured model (GLB/GLTF).")
+    import sys; sys.exit(1)
+uv = mesh.uv_layers.active.data
 
-    # ─── Step 1: Intrinsic albedo extraction ───
-    # Instead of trying to remove shadows from the baked texture,
-    # we re-bake a PURE DIFFUSE (albedo-only) texture using Blender Cycles.
-    # This gives us the material color without ANY lighting, shadows, or specular.
-    
-    if getattr(args, 'no_delight', False):
-        print(f"\n🔆 Step 1: Delight SKIPPED (--no_delight)")
-        delit = pixels.copy()
-        effective_floor = 0.01
-        ao_pixels = np.ones(len(pixels))
-    else:
-        print(f"\n🔆 Step 1: Intrinsic albedo extraction (Cycles diffuse-only bake)")
-        
-        ao_pixels = np.ones(len(pixels))  # Not used in new approach, kept for shadow detection
-        effective_floor = 0.3
-        
-        try:
-            bpy.context.scene.render.engine = 'CYCLES'
-            bpy.context.scene.cycles.device = 'CPU'
-            bpy.context.scene.cycles.samples = 1  # Diffuse color doesn't need many samples
-            
-            # Create bake target image (same size as original texture)
-            bake_img = bpy.data.images.new("Albedo_Bake", width=w, height=h, alpha=False)
-            
-            # Set up the material for baking
-            mat = obj.data.materials[0]
-            nodes = mat.node_tree.nodes
-            
-            # Add image texture node as bake target
-            bake_node = nodes.new('ShaderNodeTexImage')
-            bake_node.image = bake_img
-            bake_node.name = "Albedo_Target"
-            nodes.active = bake_node
-            
-            # Bake DIFFUSE with only COLOR contribution (no direct/indirect light)
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-            print(f"   Baking pure albedo ({w}x{h}, diffuse color only)...")
-            bpy.ops.object.bake(
-                type='DIFFUSE',
-                pass_filter={'COLOR'},  # ONLY color, no DIRECT or INDIRECT light
-                margin=2
-            )
-            
-            # Read the baked albedo
-            albedo_raw = np.array(bake_img.pixels[:]).reshape(h, w, 4)[:, :, :3]
-            albedo_flat = albedo_raw.reshape(-1, 3)
-            
-            # Verify we got meaningful data
-            mean_val = np.mean(albedo_flat)
-            print(f"   Albedo mean brightness: {mean_val:.3f}")
-            
-            if mean_val < 0.01:
-                print(f"   ⚠️ Albedo too dark, falling back to AO delight")
-                raise ValueError("Albedo bake produced near-black image")
-            
-            # Use albedo directly as our delit texture
-            delit = np.clip(albedo_flat, 0, 1)
-            
-            # Clean up
-            nodes.remove(bake_node)
-            bpy.data.images.remove(bake_img)
-            
-            # Also bake AO for shadow detection (used in shadow border vote)
-            ao_image = bpy.data.images.new("AO_Bake", width=w, height=h, alpha=False)
-            ao_node = nodes.new('ShaderNodeTexImage')
-            ao_node.image = ao_image
-            ao_node.name = "AO_Target"
-            nodes.active = ao_node
-            bpy.context.scene.cycles.samples = 16
-            print(f"   Baking AO for shadow detection...")
-            bpy.ops.object.bake(type='AO', margin=2)
-            ao_pixels = np.array(ao_image.pixels[:]).reshape(-1, 4)[:, 0]
-            nodes.remove(ao_node)
-            bpy.data.images.remove(ao_image)
-            
-            dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
-            effective_floor = min(0.3, 0.3) if dark_filaments else 0.3
-            
-            print(f"   ✅ Pure albedo extracted ({len(delit)} pixels, no lighting artifacts)")
-            
-            # Step 1b: Per-channel brightness recovery using original texture as reference
-            # Albedo bake is ~30% darker due to Cycles energy conservation.
-            # Strategy: for each pixel, compute ratio = original / albedo per channel,
-            # then scale albedo by the per-channel ratio (preserving hue from albedo).
-            # This recovers original brightness while keeping albedo's shadow-free colors.
-            
-            # Per-channel ratio: use original brightness to scale albedo back up
-            safe_delit = np.maximum(delit, 0.01)  # avoid div-by-zero
-            channel_ratios = pixels / safe_delit  # shape: (N, 3)
-            
-            # For each pixel, use the MAXIMUM channel ratio (brightest channel determines scale)
-            # This prevents color shift while maximizing brightness recovery
-            max_ratio = np.max(channel_ratios, axis=1, keepdims=True)
-            # Clamp ratio to [1.0, 2.5] — don't darken, don't over-brighten
-            max_ratio = np.clip(max_ratio, 1.0, 2.5)
-            
-            delit = np.clip(delit * max_ratio, 0, 1)
-            
-            mean_ratio = float(np.mean(max_ratio))
-            print(f"   Brightness recovery: mean ×{mean_ratio:.2f}")
-            
-            # Step 1c: White point recovery
-            # Near-neutral pixels (low saturation) that are bright should be pushed to pure white.
-            # Albedo bake makes white appear as ~0.70 gray, which maps to silver C0C0C0.
-            r, g, b = delit[:, 0], delit[:, 1], delit[:, 2]
-            maxc = np.maximum(np.maximum(r, g), b)
-            minc = np.minimum(np.minimum(r, g), b)
-            saturation = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
-            
-            # Neutral (sat < 0.15) and bright (max > 0.5) → push toward white
-            near_white = (saturation < 0.15) & (maxc > 0.5)
-            white_count = int(np.sum(near_white))
-            if white_count > 0:
-                # Scale these pixels to reach 0.98 brightness
-                scale = np.where(near_white, 0.98 / (maxc + 1e-10), 1.0)
-                scale = np.clip(scale, 1.0, 3.0)
-                delit = delit * scale[:, np.newaxis]
-                delit = np.clip(delit, 0, 1)
-                print(f"   White recovery: {white_count:,} near-neutral pixels boosted to white")
-            
-        except Exception as e:
-            print(f"   ⚠️ Albedo bake failed ({e}), falling back to AO delight")
-            # Fallback: original AO-based delight
-            delit = pixels.copy()
-            try:
-                bpy.context.scene.render.engine = 'CYCLES'
-                bpy.context.scene.cycles.device = 'CPU'
-                bpy.context.scene.cycles.samples = 32
-                ao_image = bpy.data.images.new("AO_Bake", width=w, height=h, alpha=False)
-                mat = obj.data.materials[0]
-                nodes = mat.node_tree.nodes
-                ao_node = nodes.new('ShaderNodeTexImage')
-                ao_node.image = ao_image
-                ao_node.name = "AO_Target"
-                nodes.active = ao_node
-                bpy.context.view_layer.objects.active = obj
-                obj.select_set(True)
-                bpy.ops.object.bake(type='AO', margin=2)
-                ao_pixels = np.array(ao_image.pixels[:]).reshape(-1, 4)[:, 0]
-                nodes.remove(ao_node)
-                
-                dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
-                effective_floor = min(args.delight_floor, 0.3) if dark_filaments else args.delight_floor
-                ao_clamped = np.clip(ao_pixels, effective_floor, 1.0)
-                delit = pixels / ao_clamped[:, np.newaxis]
-                delit = np.clip(delit, 0, 1)
-                print(f"   AO fallback applied")
-            except Exception as e2:
-                print(f"   ⚠️ AO fallback also failed ({e2}), using raw texture")
-                delit = pixels.copy()
-                ao_pixels = np.ones(len(pixels))
+print("Writing vertex colors...")
+for fi, poly in enumerate(mesh.polygons):
+    for li in poly.loop_indices:
+        u, v_coord = uv[li].uv
+        px = int(u * tw) % tw
+        py = int(v_coord * th) % th
+        r, g, b = tex_linear[py, px]
+        cl.data[li].color = (r, g, b, 1.0)
+    if fi % 300000 == 0 and fi > 0:
+        print(f"  {{fi:,}}/{{len(mesh.polygons):,}}")
 
-        # Batch RGB→Lab conversion (vectorized)
-    def batch_rgb_to_lab(rgb):
-        """Vectorized sRGB→CIELAB for numpy array (N,3)."""
-        # Linearize sRGB
-        linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
-        # Linear RGB → XYZ (D65)
-        M = np.array([[0.4124564, 0.3575761, 0.1804375],
-                       [0.2126729, 0.7151522, 0.0721750],
-                       [0.0193339, 0.1191920, 0.9503041]])
-        xyz = linear @ M.T
-        # Normalize
-        xyz[:, 0] /= 0.95047
-        xyz[:, 2] /= 1.08883
-        # XYZ → Lab
-        mask = xyz > 0.008856
-        xyz_f = np.where(mask, xyz ** (1/3), 7.787 * xyz + 16/116)
-        L = 116 * xyz_f[:, 1] - 16
-        a = 500 * (xyz_f[:, 0] - xyz_f[:, 1])
-        b_val = 200 * (xyz_f[:, 1] - xyz_f[:, 2])
-        return np.column_stack([L, a, b_val])
-
-    pixel_lab = batch_rgb_to_lab(delit)
-
-    # ─── Step 2: Shadow-aware color mapping ───
-    # Shadow pixels take the color of their nearest NON-SHADOW physical neighbor.
-    # Non-shadow pixels get normal CIELAB mapping and are NOT modified.
-    print(f"\n🎯 Step 2: Shadow-aware color mapping ({n_colors} filament colors)")
-    
-    filament_lab_np = np.array(filament_lab)
-    
-    # 2a: Identify shadow pixels using AO map
-    ao_threshold = effective_floor + 0.1
-    try:
-        shadow_mask_flat = ao_pixels < ao_threshold
-    except Exception:
-        brightness = np.max(pixels, axis=1)
-        shadow_mask_flat = brightness < 0.3
-    
-    shadow_mask = shadow_mask_flat.reshape(h, w)
-    shadow_count = int(np.sum(shadow_mask))
-    nonshadow_count = len(shadow_mask_flat) - shadow_count
-    print(f"   Non-shadow: {nonshadow_count:,} px ({nonshadow_count*100//len(shadow_mask_flat)}%)")
-    print(f"   Shadow: {shadow_count:,} px ({shadow_count*100//len(shadow_mask_flat)}%)")
-    
-    # 2b: Map ALL pixels using chrominance-weighted CIELAB nearest-neighbor
-    # Weight L* (lightness) much less than a*b* (chrominance) so that
-    # "dark red" and "bright red" both map to the same red filament.
-    # This eliminates false colors from baked lighting gradients.
-    # Weights: L*=0.3, a*=1.0, b*=1.0 (inspired by CIE94 lightness tolerance)
-    lab_weights = np.array([0.1, 1.0, 1.0])
-    quantized = np.zeros(len(pixel_lab), dtype=np.int32)
-    chunk_size = 100000
-    for start in range(0, len(pixel_lab), chunk_size):
-        end = min(start + chunk_size, len(pixel_lab))
-        chunk = pixel_lab[start:end]
-        diff = (chunk[:, None, :] - filament_lab_np[None, :, :]) * lab_weights[None, None, :]
-        dists = np.sqrt(np.sum(diff ** 2, axis=2))
-        quantized[start:end] = np.argmin(dists, axis=1)
-    
-    # 2c: Shadow pixels → iterative edge erosion (vectorized, no scipy)
-    # Shadow regions shrink from edges: border shadow pixels adopt the dominant
-    # non-shadow neighbor color. Repeat until all shadows absorbed.
-    if 0 < shadow_count < len(shadow_mask_flat) * 0.7:
-        quant_2d = quantized.reshape(h, w)
-        remaining = shadow_mask.copy()  # True = still shadow
-        total_fixed = 0
-        
-        for iteration in range(100):
-            # Pad for neighbor access
-            pad_r = np.pad(remaining, 1, mode='constant', constant_values=True)
-            pad_q = np.pad(quant_2d, 1, mode='edge')
-            
-            # For each shadow pixel, count non-shadow neighbor colors
-            # Build 8 neighbor arrays (shifted views)
-            shifts = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
-            
-            # Find border shadow pixels: shadow pixels with at least 1 non-shadow neighbor
-            has_nonshadow_neighbor = np.zeros((h, w), dtype=bool)
-            for dy, dx in shifts:
-                has_nonshadow_neighbor |= ~pad_r[1+dy:h+1+dy, 1+dx:w+1+dx]
-            
-            border = remaining & has_nonshadow_neighbor
-            border_count = int(np.sum(border))
-            if border_count == 0:
-                break
-            
-            # For border pixels, find dominant non-shadow neighbor color
-            by, bx = np.where(border)
-            for idx in range(len(by)):
-                y, x = int(by[idx]), int(bx[idx])
-                votes = {}
-                for dy, dx in shifts:
-                    ny, nx = y + dy, x + dx
-                    if 0 <= ny < h and 0 <= nx < w and not remaining[ny, nx]:
-                        c = int(quant_2d[ny, nx])
-                        votes[c] = votes.get(c, 0) + 1
-                if votes:
-                    quant_2d[y, x] = max(votes, key=votes.get)
-            
-            remaining[border] = False
-            total_fixed += border_count
-            
-            if iteration < 3 or iteration % 10 == 0:
-                print(f"   Pass {iteration+1}: {border_count} border pixels absorbed")
-        
-        quantized = quant_2d.reshape(-1)
-        unfixed = int(np.sum(remaining))
-        print(f"   ✅ {total_fixed:,} shadow pixels fixed in {iteration+1} passes")
-        if unfixed > 0:
-            print(f"   ⚠️ {unfixed} isolated shadow pixels remain")
-    
-    # Print final distribution
-    for i in range(n_colors):
-        count = int(np.sum(quantized == i))
-        pct = count / len(quantized) * 100
-        if count > 0:
-            r, g, b = filament_colors[i]
-            print(f"Filament {i+1}: {count} pixels ({pct:.1f}%) — #{int(r*255):02X}{int(g*255):02X}{int(b*255):02X}")
-
-    # ─── Step 3: Texture-space smoothing — vectorized mode filter ───
-    print(f"\n🔄 Step 3: Texture smoothing (window={args.tex_smooth}, passes={args.tex_smooth_passes})")
-    q_2d = quantized.reshape(h, w)
-    half = args.tex_smooth // 2
-
-    for pass_i in range(args.tex_smooth_passes):
-        # Pad array for uniform window access
-        padded = np.pad(q_2d, half, mode='edge')
-        new_q = q_2d.copy()
-        changed = 0
-        # Process in chunks of rows for memory efficiency
-        for y in range(h):
-            # Extract all windows for this row at once
-            row_windows = np.array([padded[y:y+args.tex_smooth, x:x+args.tex_smooth].flatten()
-                                     for x in range(w)])
-            # Vectorized bincount per row
-            for x in range(w):
-                votes = np.bincount(row_windows[x], minlength=n_colors)
-                winner = np.argmax(votes)
-                if winner != q_2d[y, x]:
-                    new_q[y, x] = winner
-                    changed += 1
-        q_2d = new_q
-        print(f"   Pass {pass_i+1}: {changed} pixels changed")
-        if changed == 0:
-            break
-
-    quantized = q_2d.flatten()
-
-    # ─── Step 3b: Texture region majority cleanup (pure numpy, no scipy) ───
-    # Small color islands at shadow boundaries get absorbed by surrounding dominant color.
-    # Uses iterative erosion: each pass, border pixels of minority regions adopt neighbor majority.
-    print(f"\n🧹 Step 3b: Region majority cleanup")
-    q_2d = quantized.reshape(h, w)
-    
-    min_region_pixels = max(200, len(quantized) // 1000)  # ~0.1% of texture
-    
-    # Multi-pass approach: repeatedly replace isolated pixels with neighbor majority
-    # More aggressive than tex_smooth — uses larger effective radius via iteration
-    total_changed = 0
-    for cleanup_pass in range(10):
-        changed = 0
-        # For each color, find small connected regions via flood-fill-free approach:
-        # A pixel is "isolated" if most of its 8-neighbors are a different color
-        padded = np.pad(q_2d, 1, mode='edge')
-        
-        # Count how many of 8 neighbors share the same color as center
-        same_count = np.zeros((h, w), dtype=np.int32)
-        neighbor_votes = np.zeros((h, w, n_colors), dtype=np.int32)
-        
-        for dy in range(-1, 2):
-            for dx in range(-1, 2):
-                if dy == 0 and dx == 0:
-                    continue
-                neighbor = padded[1+dy:h+1+dy, 1+dx:w+1+dx]
-                same_count += (neighbor == q_2d).astype(np.int32)
-                # Accumulate votes per color using advanced indexing
-                rows = np.arange(h)[:, None]
-                cols = np.arange(w)[None, :]
-                np.add.at(neighbor_votes, (rows, cols, neighbor), 1)
-        
-        # Pixels where <3 of 8 neighbors share their color → replace with majority neighbor
-        isolated = same_count < 3
-        if not np.any(isolated):
-            break
-        
-        majority = np.argmax(neighbor_votes, axis=2)
-        new_q = q_2d.copy()
-        new_q[isolated] = majority[isolated]
-        changed = int(np.sum(new_q != q_2d))
-        q_2d = new_q
-        total_changed += changed
-        
-        if cleanup_pass < 2 or cleanup_pass % 3 == 0:
-            print(f"   Pass {cleanup_pass+1}: {changed:,} pixels replaced")
-        if changed < 100:
-            break
-    
-    quantized = q_2d.flatten()
-    print(f"   ✅ Total: {total_changed:,} pixels cleaned up")
-
-    # ─── Step 4: Face-level sampling ───
-    print(f"\n📐 Step 4: Face-level UV sampling")
-
-    uv_layer = obj.data.uv_layers.active
-    if not uv_layer:
-        print("WARNING: No UV layer — single color")
-        mat = bpy.data.materials.new("Color_01")
-        r, g, b = filament_colors[0]
-        mat.diffuse_color = (r, g, b, 1.0)
-        obj.data.materials.clear()
-        obj.data.materials.append(mat)
-    else:
-        # Create materials
-        obj.data.materials.clear()
-        for i in range(n_colors):
-            mat = bpy.data.materials.new(f"Color_{i+1:02d}")
-            r, g, b = filament_colors[i]
-            mat.diffuse_color = (r, g, b, 1.0)
-            obj.data.materials.append(mat)
-
-        face_colors = np.zeros(len(obj.data.polygons), dtype=np.int32)
-
-        for fi, poly in enumerate(obj.data.polygons):
-            votes = defaultdict(int)
-            uvs = [uv_layer.data[li].uv for li in poly.loop_indices]
-
-            # Sample at vertices
-            for uv in uvs:
-                px = int(uv.x * (w - 1)) % w
-                py = int(uv.y * (h - 1)) % h
-                idx = py * w + px
-                if 0 <= idx < len(quantized):
-                    votes[quantized[idx]] += 1
-
-            # Sample at centroid (2x weight)
-            cx = sum(uv.x for uv in uvs) / len(uvs)
-            cy = sum(uv.y for uv in uvs) / len(uvs)
-            px = int(cx * (w - 1)) % w
-            py = int(cy * (h - 1)) % h
-            idx = py * w + px
-            if 0 <= idx < len(quantized):
-                votes[quantized[idx]] += 2
-
-            # Sample at edge midpoints
-            for i_uv in range(len(uvs)):
-                j_uv = (i_uv + 1) % len(uvs)
-                mx = (uvs[i_uv].x + uvs[j_uv].x) / 2
-                my = (uvs[i_uv].y + uvs[j_uv].y) / 2
-                px = int(mx * (w - 1)) % w
-                py = int(my * (h - 1)) % h
-                idx = py * w + px
-                if 0 <= idx < len(quantized):
-                    votes[quantized[idx]] += 1
-
-            face_colors[fi] = max(votes, key=votes.get) if votes else 0
-            poly.material_index = face_colors[fi]
-
-        # ─── Step 5: Neighbor cleanup ───
-        print(f"\n🧹 Step 5: Neighbor cleanup ({args.cleanup} rounds)")
-        edge_faces = defaultdict(list)
-        for fi, poly in enumerate(obj.data.polygons):
-            for ek in poly.edge_keys:
-                edge_faces[ek].append(fi)
-
-        for round_i in range(args.cleanup):
-            changed = 0
-            for fi, poly in enumerate(obj.data.polygons):
-                neighbors = []
-                for ek in poly.edge_keys:
-                    for nf in edge_faces[ek]:
-                        if nf != fi:
-                            neighbors.append(face_colors[nf])
-                if neighbors:
-                    votes = defaultdict(int)
-                    for nc in neighbors:
-                        votes[nc] += 1
-                    dominant = max(votes, key=votes.get)
-                    if votes[dominant] / len(neighbors) > 0.6 and dominant != face_colors[fi]:
-                        face_colors[fi] = dominant
-                        poly.material_index = dominant
-                        changed += 1
-            print(f"   Round {round_i+1}: {changed} faces changed")
-            if changed == 0:
-                break
-
-        # ─── Island elimination ───
-        if args.min_island > 0:
-            print(f"\n🏝️ Island cleanup (min={args.min_island} faces)")
-            visited = set()
-            islands = []
-            for fi in range(len(face_colors)):
-                if fi in visited:
-                    continue
-                color = face_colors[fi]
-                queue = deque([fi])
-                island = []
-                while queue:
-                    f = queue.popleft()
-                    if f in visited:
-                        continue
-                    visited.add(f)
-                    if face_colors[f] == color:
-                        island.append(f)
-                        poly = obj.data.polygons[f]
-                        for ek in poly.edge_keys:
-                            for nf in edge_faces[ek]:
-                                if nf not in visited and face_colors[nf] == color:
-                                    queue.append(nf)
-                if len(island) < args.min_island:
-                    islands.append((island, color))
-
-            merged = 0
-            for island, color in islands:
-                neighbor_colors = defaultdict(int)
-                for fi in island:
-                    poly = obj.data.polygons[fi]
-                    for ek in poly.edge_keys:
-                        for nf in edge_faces[ek]:
-                            if face_colors[nf] != color:
-                                neighbor_colors[face_colors[nf]] += 1
-                if neighbor_colors:
-                    new_color = max(neighbor_colors, key=neighbor_colors.get)
-                    for fi in island:
-                        face_colors[fi] = new_color
-                        obj.data.polygons[fi].material_index = new_color
-                        merged += 1
-            print(f"   {merged} faces merged from small islands")
-
-# Note: Multi-material OBJ files inherently have non-manifold edges at color boundaries.
-# This is normal OBJ format behavior and does NOT affect printing.
-# Bambu Studio will show a warning but slices correctly.
-
-# ─── Convert to mm (glTF/GLB uses meters) ───
-bbox_pre = [obj.matrix_world @ v.co for v in obj.data.vertices]
-max_dim_pre = max(max(abs(v.x) for v in bbox_pre), max(abs(v.y) for v in bbox_pre), max(abs(v.z) for v in bbox_pre))
-if max_dim_pre < 10:  # Still in meters
+# Convert to mm if still in meters
+bbox_post = [obj.matrix_world @ v.co for v in obj.data.vertices]
+max_dim = max(max(abs(v.x) for v in bbox_post), max(abs(v.y) for v in bbox_post), max(abs(v.z) for v in bbox_post))
+if max_dim < 10:
     obj.scale *= 1000
     bpy.ops.object.transform_apply(scale=True)
-    print(f"📐 Converted to mm for Bambu Studio")
+    print("Converted to mm")
 
-# ─── Export ───
-# Ensure .obj extension
-if not args.output.lower().endswith('.obj'):
-    args.output = args.output + '.obj'
-
+# Export OBJ with vertex colors
 bpy.ops.wm.obj_export(
-    filepath=args.output,
-    export_selected_objects=False,
-    export_materials=True,
-    export_normals=True,
-    export_uv=True
+    filepath={out_esc},
+    export_selected_objects=True,
+    export_colors=True,
+    export_materials=False,
+    export_uv=False
 )
-
-# Fix MTL: Blender doesn't write correct Kd colors from diffuse_color
-mtl_path = args.output.rsplit(".", 1)[0] + ".mtl"
-if os.path.exists(mtl_path):
-    mtl_lines = []
-    mtl_lines.append("# Multi-color MTL for Bambu Lab AMS\n")
-    for i in range(n_colors):
-        mat_name = f"Color_{i+1:02d}"
-        r, g, b = filament_colors[i]
-        mtl_lines.append(f"newmtl {mat_name}\n")
-        mtl_lines.append(f"Kd {r:.6f} {g:.6f} {b:.6f}\n")
-        mtl_lines.append(f"Ka 0.000000 0.000000 0.000000\n")
-        mtl_lines.append(f"Ks 0.000000 0.000000 0.000000\n")
-        mtl_lines.append(f"Ns 0.000000\n")
-        mtl_lines.append(f"d 1.000000\n")
-        mtl_lines.append(f"illum 1\n")
-        mtl_lines.append(f"\n")
-    with open(mtl_path, "w") as f:
-        f.writelines(mtl_lines)
-    print(f"\n📝 MTL rewritten with correct filament colors")
-
-# Ensure OBJ mtllib references the correct MTL filename (basename only)
-mtl_basename = os.path.basename(mtl_path)
-with open(args.output, "r") as f:
-    obj_head = f.read(4096)
-if "mtllib " in obj_head:
-    import re
-    old_ref = re.search(r"mtllib (.+)", obj_head).group(1).strip()
-    if old_ref != mtl_basename:
-        with open(args.output, "r") as f:
-            obj_content = f.read()
-        obj_content = obj_content.replace(f"mtllib {old_ref}", f"mtllib {mtl_basename}", 1)
-        with open(args.output, "w") as f:
-            f.write(obj_content)
-        print(f"📝 Fixed mtllib reference: {old_ref} → {mtl_basename}")
-
-mat_counts = defaultdict(int)
-for poly in obj.data.polygons:
-    mat_counts[poly.material_index] += 1
-print(f"\n✅ Export complete: {args.output}")
-print(f"   Total faces: {len(obj.data.polygons)}")
-print(f"   Materials: {len(obj.data.materials)}")
-for i, mat in enumerate(obj.data.materials):
-    pct = mat_counts.get(i, 0) / len(obj.data.polygons) * 100
-    print(f"   {mat.name}: {mat_counts.get(i, 0)} faces ({pct:.1f}%)")
-print(f"\n📋 Next: Import OBJ into Bambu Studio → map each Color_XX to AMS slot")
+size_mb = os.path.getsize({out_esc}) / 1024 / 1024
+print(f"Done: {{size_mb:.1f}}MB")
 '''
 
+    script_file = os.path.join(tempfile.gettempdir(), "bambu_vertex_color.py")
+    with open(script_file, "w") as f:
+        f.write(script)
+
+    print(f"   Blender: subdivide={subdivide}, vertex colors...")
+    result = subprocess.run([blender_path, "--background", "--python", script_file],
+                           capture_output=True, text=True, timeout=1800)
+
+    for line in result.stdout.split('\n'):
+        line = line.strip()
+        if line and any(k in line for k in ['Mesh:', 'Writing', 'Converted', 'Done:', '/', 'ERROR']):
+            print(f"   {line}")
+
+    if result.returncode != 0:
+        print(f"\n⚠️ Blender error:")
+        for line in result.stderr.split('\n')[-5:]:
+            if line.strip():
+                print(f"   {line.strip()}")
+        return None
+
+    if os.path.exists(output_path):
+        return output_path
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════
+# Main pipeline
+# ═══════════════════════════════════════════════════════════════
 
 def find_blender():
     for path in BLENDER_PATHS:
@@ -744,160 +428,205 @@ def find_blender():
     return None
 
 
-# ─── Bambu Lab Official Filament Colors ───
-import json as _json
+def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
+             colors=None):
+    """
+    Convert GLB to multi-color vertex-color OBJ.
 
-def _load_bambu_palette():
-    """Load Bambu Lab official filament colors as fallback palette."""
-    ref_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "references", "bambu_filament_colors.json")
-    if not os.path.exists(ref_path):
-        return None
-    with open(ref_path) as f:
-        data = _json.load(f)
-    # Flatten all colors into a unique set
-    colors = {}
-    for series, palette in data.get("filaments", {}).items():
-        for name, hex_code in palette.items():
-            if hex_code not in colors.values():
-                colors[f"{name} ({series})"] = hex_code
-    return colors
-
-
-def _validate_colors(colors_str):
-    """Validate hex color string."""
-    import re
-    colors = [c.strip() for c in colors_str.split(",")]
-    for c in colors:
-        if not re.match(r'^#?[0-9A-Fa-f]{6}$', c):
-            print(f"❌ Invalid color: '{c}'. Use hex format: #FF0000,#00FF00,#0000FF")
-            return None
-    return colors_str
-
-
-def colorize(input_path, output_path, colors, height=0, subdivide=2,
-             min_island=50, cleanup=3, tex_smooth=9,
-             tex_smooth_passes=5, delight_floor=0.7, delight_bright=2.0,
-             delight_sat=1.5, no_delight=False):
-    """Convert GLB to multi-color OBJ+MTL using full pipeline."""
+    v4 pipeline:
+      1. Extract texture (pygltflib, no Blender)
+      2. Classify pixels into color families (HSV)
+      3. Greedy select representative colors (median, ≤8)
+      4. Assign every pixel to nearest color (CIELAB)
+      5. Build quantized texture
+      6. Apply to mesh as vertex colors (Blender)
+      7. Export OBJ
+    """
     blender = find_blender()
-    # Validate colors first
-    if not _validate_colors(colors):
-        return None
-
     if not blender:
-        print("❌ Blender not found.")
-        print("   Install: brew install --cask blender")
+        print("❌ Blender not found. Install: brew install --cask blender")
         return None
 
     if not os.path.exists(input_path):
         print(f"❌ Input file not found: {input_path}")
         return None
 
-    script_file = os.path.join(tempfile.gettempdir(), "bambu_colorize.py")
-    with open(script_file, "w") as f:
-        f.write(BLENDER_SCRIPT)
+    max_colors = min(max_colors, 8)
 
-    n = len(colors.split(','))
-    print(f"🎨 Multi-color pipeline ({n} colors)")
-    print(f"   Input:    {input_path}")
-    print(f"   Output:   {output_path}")
-    print(f"   Colors:   {colors}")
-    delight_label = "No delight" if no_delight else "AO Delight"
-    print(f"   Pipeline: {delight_label} → CIELAB NN → Shadow vote → Tex smooth({tex_smooth}×{tex_smooth_passes}) → Subdivide({subdivide}) → Sample → Clean")
+    print(f"🎨 Colorize v4 Pipeline (≤{max_colors} colors)")
+    print(f"   Input:     {input_path}")
+    print(f"   Output:    {output_path}")
+    if height > 0:
+        print(f"   Height:    {height}mm")
     print()
 
-    cmd = [
-        blender, "--background", "--python", script_file, "--",
-        "--input", os.path.abspath(input_path),
-        "--output", os.path.abspath(output_path),
-        "--colors", colors,
-        "--height", str(height),
-        "--subdivide", str(subdivide),
-        "--min_island", str(min_island),
-        "--cleanup", str(cleanup),
-        "--tex_smooth", str(tex_smooth),
-        "--tex_smooth_passes", str(tex_smooth_passes),
-        "--delight_floor", str(delight_floor),
-        "--delight_bright", str(delight_bright),
-        "--delight_sat", str(delight_sat),
-    ]
-    if no_delight:
-        cmd.append("--no_delight")
+    # ── Manual colors mode ──
+    if colors:
+        import re
+        hex_list = [c.strip().lstrip('#') for c in colors.split(',')]
+        for h in hex_list:
+            if not re.match(r'^[0-9A-Fa-f]{6}$', h):
+                print(f"❌ Invalid color: '#{h}'. Use hex format: #FF0000,#00FF00")
+                return None
+        manual_rgb = np.array([[int(h[i:i+2], 16)/255 for i in (0,2,4)] for h in hex_list])
+        manual_lab = srgb_to_lab(manual_rgb)
+        manual_selected = []
+        for i, h in enumerate(hex_list):
+            manual_selected.append({
+                "rgb": manual_rgb[i],
+                "lab": manual_lab[i],
+                "family": f"manual_{i+1}",
+                "group_names": [f"#{h.upper()}"],
+                "pixel_count": 0,
+                "percentage": 0,
+            })
+        print(f"🎨 Manual colors mode ({len(manual_selected)} colors)")
+        for sc in manual_selected:
+            rgb_int = (sc["rgb"] * 255).astype(int)
+            print(f"   #{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}")
 
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
-        for line in result.stdout.split('\n'):
-            line = line.strip()
-            if line and (line.startswith(('Mesh:', 'Texture:', 'Filament', 'Faces:', 'Non-manifold', 'Repaired', '✅', '📋', '📐', '🔆', '🎯', '🔄', '🧹', '🏝', '🔧', '⚡', '🧩', '  ')) or 'ERROR' in line or 'WARNING' in line or 'Step' in line):
-                print(line)
-
-        if result.returncode != 0:
-            print(f"\n⚠️ Blender error:")
-            for line in result.stderr.split('\n')[-10:]:
-                if line.strip():
-                    print(f"   {line.strip()}")
+        # Still need texture for vertex color mapping
+        print(f"\n📷 Extracting texture for vertex color mapping...")
+        texture = extract_texture(input_path)
+        if texture is None:
+            texture = extract_texture_blender(input_path, blender)
+        if texture is None:
+            print("   ❌ No texture found")
             return None
 
-        if os.path.exists(output_path):
-            size = os.path.getsize(output_path)
-            print(f"\n📁 Output: {output_path} ({size // 1024} KB)")
-            mtl_path = os.path.splitext(output_path)[0] + ".mtl"
-            if os.path.exists(mtl_path):
-                print(f"📁 MTL:    {mtl_path}")
+        w, h_img = texture.size
+        pixels = np.array(texture).reshape(-1, 3).astype(np.float32) / 255.0
+        pixel_lab = srgb_to_lab(pixels)
+        labels = assign_pixels(pixel_lab, manual_selected)
+        quantized = build_quantized_texture(pixels, labels, manual_selected, w, h_img)
+
+        npy_path = os.path.join(tempfile.gettempdir(), "bambu_quantized_texture.npy")
+        np.save(npy_path, quantized[::-1])
+
+        from PIL import Image
+        preview_path = os.path.splitext(output_path)[0] + "_preview.png"
+        Image.fromarray(quantized).save(preview_path)
+
+        result = apply_vertex_colors(
+            os.path.abspath(input_path), npy_path,
+            os.path.abspath(output_path), blender,
+            height_mm=height, subdivide=subdivide
+        )
+        if result:
+            size_kb = os.path.getsize(output_path) // 1024
+            print(f"\n✅ Output: {output_path} ({size_kb} KB)")
             return output_path
-        else:
-            print("❌ Output file not created")
-            return None
-
-    except subprocess.TimeoutExpired:
-        print("⚠️ Timeout (10 min). Try --subdivide 1 or simplify the model.")
         return None
-    except Exception as e:
-        print(f"❌ Error: {e}")
+
+    # ── Step 1: Extract texture ──
+    print(f"📷 Step 1: Extract texture")
+    texture = extract_texture(input_path)
+    if texture is None:
+        texture = extract_texture_blender(input_path, blender)
+    if texture is None:
+        print("   ❌ No texture found in model")
+        return None
+
+    w, h = texture.size
+    pixels = np.array(texture).reshape(-1, 3).astype(np.float32) / 255.0
+    N = len(pixels)
+    print(f"   ✅ {w}×{h} = {N:,} pixels")
+
+    # ── Step 2: Pixel family classification ──
+    print(f"\n🏷️  Step 2: Pixel family classification")
+    pixel_families = classify_pixels(pixels)
+
+    for fid in range(12):
+        count = int(np.sum(pixel_families == fid))
+        if count > 0:
+            pct = count / N * 100
+            avg = (pixels[pixel_families == fid].mean(axis=0) * 255).astype(int)
+            print(f"   {FAMILY_NAMES[fid]:12s}: {count:>10,} px ({pct:5.1f}%)  avg RGB({avg[0]:3d},{avg[1]:3d},{avg[2]:3d})")
+
+    # ── Step 3: Greedy color selection ──
+    print(f"\n🎯 Step 3: Greedy color selection (≤{max_colors})")
+    pixel_lab = srgb_to_lab(pixels)
+    selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors)
+
+    for i, sc in enumerate(selected):
+        rgb_int = (sc["rgb"] * 255).astype(int)
+        hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
+        print(f"   #{i+1}: {sc['family']:12s} ({sc['percentage']:5.1f}%) → {hex_c}")
+
+    # ── Step 4: Per-pixel assignment ──
+    print(f"\n🔄 Step 4: Per-pixel CIELAB assignment ({N:,} px × {len(selected)} colors)")
+    labels = assign_pixels(pixel_lab, selected)
+
+    for i, sc in enumerate(selected):
+        pct = np.sum(labels == i) / N * 100
+        rgb_int = (sc["rgb"] * 255).astype(int)
+        hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
+        print(f"   {hex_c}: {pct:.1f}%")
+
+    # ── Step 5: Build quantized texture ──
+    print(f"\n🖼️  Step 5: Quantized texture")
+    quantized = build_quantized_texture(pixels, labels, selected, w, h)
+
+    # Save Y-flipped for Blender UV
+    npy_path = os.path.join(tempfile.gettempdir(), "bambu_quantized_texture.npy")
+    np.save(npy_path, quantized[::-1])
+
+    # Save preview PNG
+    from PIL import Image
+    preview_path = os.path.splitext(output_path)[0] + "_preview.png"
+    Image.fromarray(quantized).save(preview_path)
+    print(f"   ✅ {w}×{h}, {len(selected)} colors")
+    print(f"   📷 Preview: {preview_path}")
+
+    # ── Step 6: Apply vertex colors ──
+    print(f"\n🔧 Step 6: Vertex colors via Blender")
+    result = apply_vertex_colors(
+        os.path.abspath(input_path), npy_path,
+        os.path.abspath(output_path), blender,
+        height_mm=height, subdivide=subdivide
+    )
+
+    if result:
+        size_kb = os.path.getsize(output_path) // 1024
+        print(f"\n✅ Output: {output_path} ({size_kb} KB)")
+        print(f"   Colors: {len(selected)}")
+        for i, sc in enumerate(selected):
+            rgb_int = (sc["rgb"] * 255).astype(int)
+            hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
+            print(f"   {i+1}. {hex_c} ({sc['family']}, {sc['percentage']:.1f}%)")
+        print(f"\n📋 Next: Import OBJ into Bambu Studio → map vertex colors to AMS filaments")
+        return output_path
+    else:
+        print("❌ Failed to create output")
         return None
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🎨 Multi-color converter for Bambu Lab AMS (GLB → OBJ+MTL)",
-        epilog="Pipeline: [AO Delight] → CIELAB NN → Shadow vote → Texture smooth → Face sample → Cleanup → OBJ+MTL"
+        description="🎨 Multi-color converter v4 for Bambu Lab AMS (GLB → vertex-color OBJ)",
+        epilog="Pipeline: Extract texture → Pixel classify → Greedy select → CIELAB assign → Vertex color → OBJ"
     )
     parser.add_argument("input", help="Input model (GLB/GLTF/OBJ/FBX/STL)")
     parser.add_argument("--output", "-o", help="Output OBJ path")
-    parser.add_argument("--colors", "-c", required=False, help="AMS filament hex colors, comma-separated. Omit to use --palette bambu.")
-    parser.add_argument("--palette", choices=["bambu", "custom"], default="bambu", help="Use Bambu Lab official palette")
+    parser.add_argument("--max_colors", "-n", type=int, default=8, choices=range(1, 9),
+                        help="Maximum colors (1-8, default 8)")
     parser.add_argument("--height", type=float, default=0, help="Target height mm (0=keep)")
-    parser.add_argument("--subdivide", type=int, default=2, choices=[0, 1, 2, 3], help="Subdivision (0=raw, 2=recommended, 3=max)")
-    parser.add_argument("--min_island", type=int, default=50, help="Min faces per color island")
-    parser.add_argument("--cleanup", type=int, default=3, help="Neighbor cleanup rounds")
-    parser.add_argument("--tex_smooth", type=int, default=9, help="Texture smoothing window size")
-    parser.add_argument("--tex_smooth_passes", type=int, default=5, help="Texture smoothing passes")
-    parser.add_argument("--delight_floor", type=float, default=0.7, help="Min brightness after delight (0-1)")
-    parser.add_argument("--delight_bright", type=float, default=2.0, help="Brightness multiplier")
-    parser.add_argument("--no_delight", action="store_true", help="Skip delight entirely")
-    parser.add_argument("--delight_sat", type=float, default=1.5, help="Saturation multiplier")
+    parser.add_argument("--subdivide", type=int, default=1, choices=[0, 1, 2, 3],
+                        help="Subdivision (0=raw, 1=default, 2-3=high)")
+    parser.add_argument("--colors", "-c", help="Manual hex colors (legacy, comma-separated)")
 
     args = parser.parse_args()
+
     if not args.output:
         args.output = os.path.splitext(args.input)[0] + "_multicolor.obj"
 
-    # Auto-use Bambu Lab palette if no colors specified
-    colors = args.colors
-    if colors:
-        pass  # User provided colors explicitly, use them
-    elif args.palette == "bambu" or not colors:
-        bambu = _load_bambu_palette()
-        if bambu:
-            colors = ",".join(bambu.values())
-            print(f"🎨 Using Bambu Lab official palette ({len(bambu)} colors)")
-        elif not colors:
-            print("❌ No --colors provided and Bambu Lab palette not found.")
-            print("   Provide colors: --colors '#FF0000,#00FF00,#0000FF'")
-            sys.exit(1)
-    result = colorize(args.input, args.output, colors, args.height, args.subdivide,
-             args.min_island, args.cleanup, args.tex_smooth,
-             args.tex_smooth_passes, args.delight_floor, args.delight_bright,
-             args.delight_sat, no_delight=getattr(args, "no_delight", False))
+    result = colorize(
+        args.input, args.output,
+        max_colors=args.max_colors,
+        height=args.height,
+        subdivide=args.subdivide,
+        colors=args.colors
+    )
     if result is None:
         sys.exit(1)
 

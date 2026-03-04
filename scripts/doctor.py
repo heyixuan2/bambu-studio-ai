@@ -107,6 +107,13 @@ def main():
         status = f"✅ {ver}" if ok else f"⚠️ not installed ({info['purpose']})"
         print(f"  {name:20s} {status}")
     
+
+    # Check pygltflib (fast texture extraction)
+    try:
+        import pygltflib
+        print("  pygltflib: ✅")
+    except ImportError:
+        print("  pygltflib: ❌ (pip3 install pygltflib — fast texture extraction)")
     print("\nBlender:")
     ok, ver, path = check_blender()
     if ok:

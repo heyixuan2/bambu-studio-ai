@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.0"
+version: "0.22.1"
 author: TieGaier
 metadata:
   openclaw:
@@ -11,7 +11,7 @@ metadata:
     install:
       - id: pip-deps
         kind: pip
-        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "matplotlib", "numpy", "Pillow", "ddgs"]
+        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "matplotlib", "numpy", "Pillow", "ddgs", "pygltflib"]
         required: true
       - id: ffmpeg
         kind: brew
@@ -131,7 +131,7 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Generate 3D (image) | `python3 scripts/generate.py image photo.jpg --wait` |
 | Download model | `python3 scripts/generate.py download <task_id>` |
 | Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
-| Multi-color | `python3 scripts/colorize.py model.glb --colors "#FF0,#000,#F00" --height 80 --output out` |
+| Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 --output out.obj` |
 | Slice | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
 | Slice (specific setup) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
 | List slicer profiles | `python3 scripts/slice.py --list-profiles` |
@@ -231,8 +231,9 @@ If no good results → offer AI generate.
 1. Same disclaimer as B
 2. Confirm dimensions + desired colors
 3. `generate.py text "prompt" --wait` → textured GLB
-4. `colorize.py model.glb --colors "#FF0,#000,#F00" --height <size>` → OBJ+MTL
-   - Shadow removal (AO delight) → CIELAB NN to Bambu 43-color palette → texture smooth
+4. `colorize.py model.glb --height <size> --max_colors 8` → vertex-color OBJ
+   - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
+   - No shadow removal needed — HSV classification bypasses baked lighting
 5. → Model Processing
 
 ### Workflow D — User-Provided File
@@ -375,7 +376,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh matplotlib numpy
 | Feature | Status |
 |---|---|
 | Single-color pipeline | ✅ Stable |
-| Multi-color (colorize) | ⚠️ Works, user maps 43 colors → AMS slots in Bambu Studio |
+| Multi-color (colorize) | ✅ Auto-detect ≤8 colors, vertex-color OBJ → BS color merge dialog |
 | CLI slicing | ✅ OrcaSlicer backend (BS CLI SEGFAULT in v2.5.0) |
 | End-to-end auto-print | 🔜 Requires Bambu Studio preview step |
 
@@ -384,7 +385,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh matplotlib numpy
 ## Reference Documents
 
 - `references/model-specs.md` — All 9 printer specifications
-- `references/bambu_filament_colors.json` — Bambu Lab 43-color palette (used by colorize.py)
+- `references/bambu_filament_colors.json` — Bambu Lab 43-color palette (reference only, colorize v4 uses texture-native colors)
 - `references/bambu-mqtt-protocol.md` — MQTT protocol
 - `references/bambu-cloud-api.md` — Cloud API
 - `references/3d-generation-apis.md` — Provider API endpoints
