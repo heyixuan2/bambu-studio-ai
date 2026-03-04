@@ -295,7 +295,7 @@ class CloudBackend:
                     cache_time = _tc.get("timestamp", 0)
                     import time
                     # Token valid for 24 hours
-                    if time.time() - cache_time > 86400:
+                    if time.time() - cache_time > 7776000:  # 90 days
                         cached_token = None
                         print("🔄 Cached token expired, re-authenticating...")
             except Exception:
@@ -405,7 +405,8 @@ class CloudBackend:
         self.client._request("POST", f"/v1/devices/{self.device_id}/commands",
                            json={"print": {"command": "print_speed", "param": str(level)}})
 
-    def start_print(self, filename, plate_number=1):
+    def start_print(self, filename, plate_number=1, ams_mapping=None):
+        # Cloud mode: ams_mapping not supported (handled by BS/cloud)
         # Try multiple calling conventions for different library versions
         try:
             self.client.start_cloud_print(self.device_id, filename, plate_number=plate_number)
@@ -603,7 +604,7 @@ def notify(title, message, channel="auto", image=None):
         import subprocess
         subprocess.run([
             "osascript", "-e",
-            f'display notification "{message}" with title "Bambu Studio AI" subtitle "{title}"'
+            f'display notification "{msg_escaped}" with title "Bambu Studio AI" subtitle "{title_escaped}"'
         ], timeout=5, capture_output=True)
     except Exception:
         pass
@@ -819,6 +820,9 @@ def cmd_speed(mode):
     finally: b.disconnect()
 
 def cmd_print(filename, confirmed=False, ams_mapping=None):
+    # Parse ams_mapping from comma-separated string to int list
+    if isinstance(ams_mapping, str):
+        ams_mapping = [int(x.strip()) for x in ams_mapping.split(',')]
     if not confirmed:
         print("⛔ Safety: Preview in Bambu Studio first, then re-run with --confirmed")
         print(f"   python3 scripts/bambu.py print {filename} --confirmed")
@@ -929,7 +933,7 @@ def cmd_gcode(code):
     except AttributeError:
         # Fallback: direct MQTT publish
         import json as _json
-        topic = f"device/{os.environ.get('BAMBU_SERIAL', '')}/request"
+        topic = f"device/{os.environ.get('BAMBU_SERIAL', _config.get('serial', ''))}/request"
         payload = {"print": {"command": "gcode_line", "param": code}}
         try:
             b.printer._client.publish(topic, _json.dumps(payload))
