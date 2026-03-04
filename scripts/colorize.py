@@ -446,6 +446,28 @@ if max_dim < 10:
     bpy.ops.object.transform_apply(scale=True)
     print("Converted to mm")
 
+# Mesh repair before export
+import bmesh
+bpy.ops.object.mode_set(mode='OBJECT')
+bm = bmesh.new()
+bm.from_mesh(obj.data)
+
+# Merge by distance
+bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
+# Remove loose
+for v in [v for v in bm.verts if not v.link_faces]:
+    bm.verts.remove(v)
+# Fix normals
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+
+# Count non-manifold edges
+nm_edges = sum(1 for e in bm.edges if not e.is_manifold)
+print(f"Mesh repair: {{nm_edges}} non-manifold edges remaining (from original)")
+
+bm.to_mesh(obj.data)
+bm.free()
+obj.data.update()
+
 # Export OBJ with vertex colors
 bpy.ops.wm.obj_export(
     filepath={out_esc},
@@ -468,7 +490,7 @@ print(f"Done: {{size_mb:.1f}}MB")
 
     for line in result.stdout.split('\n'):
         line = line.strip()
-        if line and any(k in line for k in ['Mesh:', 'Writing', 'Converted', 'Done:', '/', 'ERROR']):
+        if line and any(k in line for k in ['Mesh:', 'Writing', 'Converted', 'Done:', '/', 'ERROR', 'repair', 'manifold']):
             print(f"   {line}")
 
     if result.returncode != 0:
@@ -495,6 +517,37 @@ def find_blender():
         if result.returncode == 0:
             return result.stdout.strip()
     return None
+
+
+
+
+def _snap_vertex_colors(obj_path, selected_colors):
+    """Post-process OBJ to snap vertex colors to exact selected RGB values.
+    Blender UV sampling causes interpolation → 40+ unique colors instead of 5.
+    """
+    import numpy as np
+    sel_rgb = np.array([sc["rgb"] for sc in selected_colors])  # float 0-1
+    
+    lines_out = []
+    snapped = 0
+    with open(obj_path) as f:
+        for line in f:
+            if line.startswith('v ') and len(line.split()) >= 7:
+                parts = line.strip().split()
+                xyz = parts[1:4]
+                rgb = np.array([float(parts[4]), float(parts[5]), float(parts[6])])
+                # Find nearest selected color
+                dist = np.sum((sel_rgb - rgb) ** 2, axis=1)
+                nearest = sel_rgb[np.argmin(dist)]
+                nearest = sel_rgb[np.argmin(dist)]
+                vline = "v %s %s %s %.4f %.4f %.4f\n" % (xyz[0], xyz[1], xyz[2], nearest[0], nearest[1], nearest[2])
+                lines_out.append(vline)
+            else:
+                lines_out.append(line)
+    
+    with open(obj_path, 'w') as f:
+        f.writelines(lines_out)
+    print(f"   Snapped {snapped:,} vertex colors to {len(sel_rgb)} exact colors")
 
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
@@ -682,6 +735,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
 
     if result:
         size_kb = os.path.getsize(output_path) // 1024
+        _snap_vertex_colors(output_path, selected)
         print(f"\n✅ Output: {output_path} ({size_kb} KB)")
         print(f"   Colors: {len(selected)}")
         for i, sc in enumerate(selected):
