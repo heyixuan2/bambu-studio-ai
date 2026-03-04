@@ -180,95 +180,160 @@ else:
     w, h = image.size
     print(f"Texture: {w}x{h} ({len(pixels)} pixels)")
 
-    # ─── Step 1: Mesh-aware AO delighting ───
-    # Bake AO map from mesh geometry, then divide texture by AO to remove geometric shadows
-    # This knows "dark because of geometry concavity" vs "dark because it's a dark color"
+    # ─── Step 1: Intrinsic albedo extraction ───
+    # Instead of trying to remove shadows from the baked texture,
+    # we re-bake a PURE DIFFUSE (albedo-only) texture using Blender Cycles.
+    # This gives us the material color without ANY lighting, shadows, or specular.
+    
     if getattr(args, 'no_delight', False):
         print(f"\n🔆 Step 1: Delight SKIPPED (--no_delight)")
         delit = pixels.copy()
         effective_floor = 0.01
-        ao_pixels = np.ones(len(pixels))  # Dummy AO — no shadow detection
+        ao_pixels = np.ones(len(pixels))
     else:
-        dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
-        effective_floor = min(args.delight_floor, 0.3) if dark_filaments else args.delight_floor
-        dark_note = " (dark filament detected)" if dark_filaments else ""
-        print(f"\n🔆 Step 1: Mesh-aware AO delight{dark_note}")
-
-        # Step 1a: Bake AO map using Blender's Cycles renderer
-        ao_image = None
+        print(f"\n🔆 Step 1: Intrinsic albedo extraction (Cycles diffuse-only bake)")
+        
+        ao_pixels = np.ones(len(pixels))  # Not used in new approach, kept for shadow detection
+        effective_floor = 0.3
+        
         try:
             bpy.context.scene.render.engine = 'CYCLES'
             bpy.context.scene.cycles.device = 'CPU'
-            bpy.context.scene.cycles.samples = 32  # Fast but good enough
-
-            # Create AO bake target image (same size as texture)
-            ao_image = bpy.data.images.new("AO_Bake", width=w, height=h, alpha=False)
-
-            # Set up material for AO baking
+            bpy.context.scene.cycles.samples = 1  # Diffuse color doesn't need many samples
+            
+            # Create bake target image (same size as original texture)
+            bake_img = bpy.data.images.new("Albedo_Bake", width=w, height=h, alpha=False)
+            
+            # Set up the material for baking
             mat = obj.data.materials[0]
             nodes = mat.node_tree.nodes
-            links = mat.node_tree.links
-
-            # Add image texture node for AO target
+            
+            # Add image texture node as bake target
+            bake_node = nodes.new('ShaderNodeTexImage')
+            bake_node.image = bake_img
+            bake_node.name = "Albedo_Target"
+            nodes.active = bake_node
+            
+            # Bake DIFFUSE with only COLOR contribution (no direct/indirect light)
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            print(f"   Baking pure albedo ({w}x{h}, diffuse color only)...")
+            bpy.ops.object.bake(
+                type='DIFFUSE',
+                pass_filter={'COLOR'},  # ONLY color, no DIRECT or INDIRECT light
+                margin=2
+            )
+            
+            # Read the baked albedo
+            albedo_raw = np.array(bake_img.pixels[:]).reshape(h, w, 4)[:, :, :3]
+            albedo_flat = albedo_raw.reshape(-1, 3)
+            
+            # Verify we got meaningful data
+            mean_val = np.mean(albedo_flat)
+            print(f"   Albedo mean brightness: {mean_val:.3f}")
+            
+            if mean_val < 0.01:
+                print(f"   ⚠️ Albedo too dark, falling back to AO delight")
+                raise ValueError("Albedo bake produced near-black image")
+            
+            # Use albedo directly as our delit texture
+            delit = np.clip(albedo_flat, 0, 1)
+            
+            # Clean up
+            nodes.remove(bake_node)
+            bpy.data.images.remove(bake_img)
+            
+            # Also bake AO for shadow detection (used in shadow border vote)
+            ao_image = bpy.data.images.new("AO_Bake", width=w, height=h, alpha=False)
             ao_node = nodes.new('ShaderNodeTexImage')
             ao_node.image = ao_image
             ao_node.name = "AO_Target"
-            # Make it the active node (Blender bakes to active image node)
             nodes.active = ao_node
-
-            # Bake AO
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-            print(f"   Baking AO map ({w}x{h}, 32 samples)...")
+            bpy.context.scene.cycles.samples = 16
+            print(f"   Baking AO for shadow detection...")
             bpy.ops.object.bake(type='AO', margin=2)
-
-            # Read AO pixels
-            ao_pixels = np.array(ao_image.pixels[:]).reshape(-1, 4)[:, 0]  # AO is grayscale, take R channel
-            print(f"   AO range: {ao_pixels.min():.3f} - {ao_pixels.max():.3f}")
-
-            # Clean up bake nodes
+            ao_pixels = np.array(ao_image.pixels[:]).reshape(-1, 4)[:, 0]
             nodes.remove(ao_node)
-
-            # Step 1b: Divide texture by AO to recover albedo
-            # albedo = texture / max(ao, floor)
-            # Where AO is dark (concavity), we brighten; where AO is bright (exposed), minimal change
-            ao_clamped = np.clip(ao_pixels, effective_floor, 1.0)
-            delit = pixels / ao_clamped[:, np.newaxis]
-
-            # Step 1c: Mild additional brightness/saturation boost for remaining shadows
-            r_ch, g_ch, b_ch = delit[:, 0], delit[:, 1], delit[:, 2]
-            maxc = np.maximum(np.maximum(r_ch, g_ch), b_ch)
-            minc = np.minimum(np.minimum(r_ch, g_ch), b_ch)
-            v = maxc
-            s = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
-            # Gentler boost now that AO is removed (1.3x instead of 2.0x)
-            mild_bright = min(args.delight_bright, 1.3)
-            v = np.clip(v * mild_bright, 0, 1.0)
-            old_v = maxc + 1e-10
-            ratio = v / old_v
-            delit = delit * ratio[:, np.newaxis]
-            delit = np.clip(delit, 0, 1)
-
-            print(f"   ✅ AO-based delight applied ({len(delit)} pixels)")
-
+            bpy.data.images.remove(ao_image)
+            
+            dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
+            effective_floor = min(0.3, 0.3) if dark_filaments else 0.3
+            
+            print(f"   ✅ Pure albedo extracted ({len(delit)} pixels, no lighting artifacts)")
+            
+            # Step 1b: Per-channel brightness recovery using original texture as reference
+            # Albedo bake is ~30% darker due to Cycles energy conservation.
+            # Strategy: for each pixel, compute ratio = original / albedo per channel,
+            # then scale albedo by the per-channel ratio (preserving hue from albedo).
+            # This recovers original brightness while keeping albedo's shadow-free colors.
+            
+            # Per-channel ratio: use original brightness to scale albedo back up
+            safe_delit = np.maximum(delit, 0.01)  # avoid div-by-zero
+            channel_ratios = pixels / safe_delit  # shape: (N, 3)
+            
+            # For each pixel, use the MAXIMUM channel ratio (brightest channel determines scale)
+            # This prevents color shift while maximizing brightness recovery
+            max_ratio = np.max(channel_ratios, axis=1, keepdims=True)
+            # Clamp ratio to [1.0, 2.5] — don't darken, don't over-brighten
+            max_ratio = np.clip(max_ratio, 1.0, 2.5)
+            
+            delit = np.clip(delit * max_ratio, 0, 1)
+            
+            mean_ratio = float(np.mean(max_ratio))
+            print(f"   Brightness recovery: mean ×{mean_ratio:.2f}")
+            
+            # Step 1c: White point recovery
+            # Near-neutral pixels (low saturation) that are bright should be pushed to pure white.
+            # Albedo bake makes white appear as ~0.70 gray, which maps to silver C0C0C0.
+            r, g, b = delit[:, 0], delit[:, 1], delit[:, 2]
+            maxc = np.maximum(np.maximum(r, g), b)
+            minc = np.minimum(np.minimum(r, g), b)
+            saturation = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
+            
+            # Neutral (sat < 0.15) and bright (max > 0.5) → push toward white
+            near_white = (saturation < 0.15) & (maxc > 0.5)
+            white_count = int(np.sum(near_white))
+            if white_count > 0:
+                # Scale these pixels to reach 0.98 brightness
+                scale = np.where(near_white, 0.98 / (maxc + 1e-10), 1.0)
+                scale = np.clip(scale, 1.0, 3.0)
+                delit = delit * scale[:, np.newaxis]
+                delit = np.clip(delit, 0, 1)
+                print(f"   White recovery: {white_count:,} near-neutral pixels boosted to white")
+            
         except Exception as e:
-            print(f"   ⚠️ AO bake failed ({e}), falling back to HSV delight")
-            # Fallback: original HSV-based delight
+            print(f"   ⚠️ Albedo bake failed ({e}), falling back to AO delight")
+            # Fallback: original AO-based delight
             delit = pixels.copy()
-            r_ch, g_ch, b_ch = delit[:, 0], delit[:, 1], delit[:, 2]
-            maxc = np.maximum(np.maximum(r_ch, g_ch), b_ch)
-            minc = np.minimum(np.minimum(r_ch, g_ch), b_ch)
-            v = maxc
-            s = np.where(maxc > 0, (maxc - minc) / (maxc + 1e-10), 0)
-            v = np.clip(v * args.delight_bright, effective_floor, 1.0)
-            s = np.clip(s * args.delight_sat, 0, 1.0)
-            old_v = maxc + 1e-10
-            ratio = v / old_v
-            delit = delit * ratio[:, np.newaxis]
-            delit = np.clip(delit, 0, 1)
-            print(f"   Fallback delight applied to {len(delit)} pixels")
+            try:
+                bpy.context.scene.render.engine = 'CYCLES'
+                bpy.context.scene.cycles.device = 'CPU'
+                bpy.context.scene.cycles.samples = 32
+                ao_image = bpy.data.images.new("AO_Bake", width=w, height=h, alpha=False)
+                mat = obj.data.materials[0]
+                nodes = mat.node_tree.nodes
+                ao_node = nodes.new('ShaderNodeTexImage')
+                ao_node.image = ao_image
+                ao_node.name = "AO_Target"
+                nodes.active = ao_node
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+                bpy.ops.object.bake(type='AO', margin=2)
+                ao_pixels = np.array(ao_image.pixels[:]).reshape(-1, 4)[:, 0]
+                nodes.remove(ao_node)
+                
+                dark_filaments = [i for i, c in enumerate(filament_colors) if max(c) < 0.3]
+                effective_floor = min(args.delight_floor, 0.3) if dark_filaments else args.delight_floor
+                ao_clamped = np.clip(ao_pixels, effective_floor, 1.0)
+                delit = pixels / ao_clamped[:, np.newaxis]
+                delit = np.clip(delit, 0, 1)
+                print(f"   AO fallback applied")
+            except Exception as e2:
+                print(f"   ⚠️ AO fallback also failed ({e2}), using raw texture")
+                delit = pixels.copy()
+                ao_pixels = np.ones(len(pixels))
 
-    # Batch RGB→Lab conversion (vectorized)
+        # Batch RGB→Lab conversion (vectorized)
     def batch_rgb_to_lab(rgb):
         """Vectorized sRGB→CIELAB for numpy array (N,3)."""
         # Linearize sRGB
@@ -312,13 +377,18 @@ else:
     print(f"   Non-shadow: {nonshadow_count:,} px ({nonshadow_count*100//len(shadow_mask_flat)}%)")
     print(f"   Shadow: {shadow_count:,} px ({shadow_count*100//len(shadow_mask_flat)}%)")
     
-    # 2b: Map ALL pixels using CIELAB nearest-neighbor (standard, no chromaticity hack)
+    # 2b: Map ALL pixels using chrominance-weighted CIELAB nearest-neighbor
+    # Weight L* (lightness) much less than a*b* (chrominance) so that
+    # "dark red" and "bright red" both map to the same red filament.
+    # This eliminates false colors from baked lighting gradients.
+    # Weights: L*=0.3, a*=1.0, b*=1.0 (inspired by CIE94 lightness tolerance)
+    lab_weights = np.array([0.1, 1.0, 1.0])
     quantized = np.zeros(len(pixel_lab), dtype=np.int32)
     chunk_size = 100000
     for start in range(0, len(pixel_lab), chunk_size):
         end = min(start + chunk_size, len(pixel_lab))
         chunk = pixel_lab[start:end]
-        diff = chunk[:, None, :] - filament_lab_np[None, :, :]
+        diff = (chunk[:, None, :] - filament_lab_np[None, :, :]) * lab_weights[None, None, :]
         dists = np.sqrt(np.sum(diff ** 2, axis=2))
         quantized[start:end] = np.argmin(dists, axis=1)
     
@@ -410,6 +480,58 @@ else:
             break
 
     quantized = q_2d.flatten()
+
+    # ─── Step 3b: Texture region majority cleanup (pure numpy, no scipy) ───
+    # Small color islands at shadow boundaries get absorbed by surrounding dominant color.
+    # Uses iterative erosion: each pass, border pixels of minority regions adopt neighbor majority.
+    print(f"\n🧹 Step 3b: Region majority cleanup")
+    q_2d = quantized.reshape(h, w)
+    
+    min_region_pixels = max(200, len(quantized) // 1000)  # ~0.1% of texture
+    
+    # Multi-pass approach: repeatedly replace isolated pixels with neighbor majority
+    # More aggressive than tex_smooth — uses larger effective radius via iteration
+    total_changed = 0
+    for cleanup_pass in range(10):
+        changed = 0
+        # For each color, find small connected regions via flood-fill-free approach:
+        # A pixel is "isolated" if most of its 8-neighbors are a different color
+        padded = np.pad(q_2d, 1, mode='edge')
+        
+        # Count how many of 8 neighbors share the same color as center
+        same_count = np.zeros((h, w), dtype=np.int32)
+        neighbor_votes = np.zeros((h, w, n_colors), dtype=np.int32)
+        
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                if dy == 0 and dx == 0:
+                    continue
+                neighbor = padded[1+dy:h+1+dy, 1+dx:w+1+dx]
+                same_count += (neighbor == q_2d).astype(np.int32)
+                # Accumulate votes per color using advanced indexing
+                rows = np.arange(h)[:, None]
+                cols = np.arange(w)[None, :]
+                np.add.at(neighbor_votes, (rows, cols, neighbor), 1)
+        
+        # Pixels where <3 of 8 neighbors share their color → replace with majority neighbor
+        isolated = same_count < 3
+        if not np.any(isolated):
+            break
+        
+        majority = np.argmax(neighbor_votes, axis=2)
+        new_q = q_2d.copy()
+        new_q[isolated] = majority[isolated]
+        changed = int(np.sum(new_q != q_2d))
+        q_2d = new_q
+        total_changed += changed
+        
+        if cleanup_pass < 2 or cleanup_pass % 3 == 0:
+            print(f"   Pass {cleanup_pass+1}: {changed:,} pixels replaced")
+        if changed < 100:
+            break
+    
+    quantized = q_2d.flatten()
+    print(f"   ✅ Total: {total_changed:,} pixels cleaned up")
 
     # ─── Step 4: Face-level sampling ───
     print(f"\n📐 Step 4: Face-level UV sampling")
