@@ -170,6 +170,20 @@ On your printer's touchscreen:
 1. **Settings → Network → LAN Mode → ON**
 2. Note down: **IP Address**, **Serial Number**, **Access Code** (Settings → Device)
 
+### Print Mode
+
+**Option A: Manual Print (Recommended, Safe)**
+- Agent generates/slices model → opens in Bambu Studio → you review and print
+- No special printer settings needed
+- Bambu Studio and Bambu Handy continue working normally
+
+**Option B: Full Auto-Print (Advanced)**
+- Agent controls printer directly: start, stop, pause, monitor via LAN
+- ⚠️ **Requires Developer Mode** — printer touchscreen → Settings → LAN Only → Developer Mode → ON
+- ⚠️ Bambu Studio and Bambu Handy will **completely disconnect** (no cloud, no remote access)
+- ⚠️ LAN-only: must be on the same network
+- Agent still always shows preview and asks for confirmation before printing
+
 ### Cloud Setup (Remote Only)
 
 Only use if you can't be on the same network. Limited features (no camera, no G-code, no AI monitoring).

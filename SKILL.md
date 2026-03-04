@@ -357,11 +357,19 @@ Triggered when `config.json` doesn't exist. Conversational:
 
 1. **Printer model** — A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D
 2. **Connection** — LAN (recommended: IP + serial + access code) or Cloud (email + password, limited)
-3. **3D generation** (optional) — Meshy, Tripo, Printpal, 3D AI Studio + API key
-4. **Notifications** — auto / Discord / iMessage / Telegram / etc.
-5. **Save** — `config.json` + `.secrets.json` (chmod 600, git-ignored)
-6. **Verify** (ask permission) — test connection, camera, AMS
-7. **Summary**
+3. **Print mode** — MUST explain clearly to user:
+   - **Option A: Recommended (safe)** — Agent generates/slices model → opens in Bambu Studio → user reviews and prints manually. No special printer settings needed.
+   - **Option B: Full auto-print** — Agent controls printer directly (start/stop/monitor via MQTT). Requires:
+     - ⚠️ **Developer Mode ON** (printer touchscreen → Settings → LAN Only Mode → ON → Developer Mode → ON)
+     - ⚠️ Bambu Studio and Bambu Handy will **completely disconnect** (no cloud, no remote monitoring)
+     - ⚠️ Only LAN access (same network only)
+     - Agent still ALWAYS shows preview before printing (never auto-prints without user confirmation)
+   - Save choice as `print_mode: "manual"` or `print_mode: "auto"` in config.json
+4. **3D generation** (optional) — Meshy, Tripo, Printpal, 3D AI Studio + API key
+5. **Notifications** — auto / Discord / iMessage / Telegram / etc.
+6. **Save** — `config.json` + `.secrets.json` (chmod 600, git-ignored)
+7. **Verify** (ask permission) — test connection, camera, AMS
+8. **Summary**
 
 ---
 
@@ -399,7 +407,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Single-color pipeline | ✅ Stable |
 | Multi-color (colorize) | ✅ Auto-detect ≤8 colors, vertex-color OBJ → BS color merge dialog |
 | CLI slicing | ✅ OrcaSlicer backend (BS CLI SEGFAULT in v2.5.0) |
-| End-to-end auto-print | 🔜 Requires Bambu Studio preview step |
+| End-to-end auto-print | ✅ Works with Developer Mode ON (X.509 signed MQTT + FTP upload) |
 
 ---
 
