@@ -100,7 +100,19 @@ size = max(dims)
 center = mathutils.Vector(obj.bound_box[0]) + (mathutils.Vector(obj.bound_box[6]) - mathutils.Vector(obj.bound_box[0])) / 2
 center = obj.matrix_world @ center
 
-print(f"MODEL_INFO: {{dims.x:.3f}} x {{dims.y:.3f}} x {{dims.z:.3f}} | {{len(obj.data.polygons):,}} faces | size={{size:.4f}}")
+# Auto-scale meters to mm (GLB typically uses meters)
+if size < 10:
+    obj.scale *= 1000
+    bpy.ops.object.transform_apply(scale=True)
+    dims = obj.dimensions
+    size = max(dims)
+    center = mathutils.Vector(obj.bound_box[0]) + (mathutils.Vector(obj.bound_box[6]) - mathutils.Vector(obj.bound_box[0])) / 2
+    center = obj.matrix_world @ center
+    unit = "mm (scaled from meters)"
+else:
+    unit = "mm"
+
+print(f"MODEL_INFO: {{dims.x:.1f}} x {{dims.y:.1f}} x {{dims.z:.1f}} {{unit}} | {{len(obj.data.polygons):,}} faces")
 
 # Check if model has textures (GLB PBR auto-loaded)
 has_texture = False

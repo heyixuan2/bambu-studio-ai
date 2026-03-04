@@ -736,6 +736,7 @@ We tried three shadow removal approaches before abandoning them all:
 
 | Version | Changes |
 |---------|--------|
+| **0.22.3** | Colorize: achromatic constraint (shadow pixels blocked from black, V<0.2 exempt), 2% min threshold for small color families, 5-pass majority vote boundary smoothing, island cleanup (1000px) + median filter, doctor.py syntax fix |
 | **0.22.2** | preview.py rewrite: Blender-only rendering (removed matplotlib), TRACK_TO auto-aim, PBR texture auto-load, dynamic lighting, EEVEE 4.x/5.x compat, --views all (2×2 grid). Audit fixes P1-P4. |
 | **0.22.1** | Colorize v4 rewrite: pixel HSV family classification + greedy area-based color selection + per-pixel CIELAB assign + vertex-color OBJ export. No shadow removal needed — HSV classification bypasses baked lighting. pygltflib texture extraction (no Blender for Step 1). sRGB→linear fix for accurate vertex colors. Audit fixes: --colors validation, low-V achromatic, UV None check, path injection, dead code cleanup. 1118→573 lines. |
 | **0.22.0** | Intrinsic Albedo Extraction replaces AO delight — eliminates false colors (orange/copper/silver) at shadow boundaries. 3-step pipeline: Cycles DIFFUSE COLOR bake + per-channel brightness recovery + white point recovery. Chrominance-weighted CIELAB (L\*=0.1). Region majority cleanup (numpy). 22 bare except→Exception fixes. |

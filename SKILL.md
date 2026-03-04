@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.2"
+version: "0.22.3"
 author: TieGaier
 metadata:
   openclaw:
@@ -11,7 +11,7 @@ metadata:
     install:
       - id: pip-deps
         kind: pip
-        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "matplotlib", "numpy", "Pillow", "ddgs", "pygltflib"]
+        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib"]
         required: true
       - id: ffmpeg
         kind: brew
@@ -348,7 +348,7 @@ Triggered when `config.json` doesn't exist. Conversational:
 
 **Required:** `python3`, `pip3`
 ```bash
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh matplotlib numpy Pillow ddgs
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs
 ```
 **Optional:** `ffmpeg` (camera), Bambu Studio (preview/slicing), Blender 4.0+ (multi-color + HQ preview), OrcaSlicer (CLI slicing)
 

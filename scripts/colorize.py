@@ -187,7 +187,7 @@ def classify_pixels(pixels):
 # Step 3: Greedy color-mode selection
 # ═══════════════════════════════════════════════════════════════
 
-def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8):
+def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pct=0.02):
     """
     Greedy select representative colors:
     1. Find largest pixel family
@@ -214,6 +214,18 @@ def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8):
 
         if best_fid < 0 or best_count == 0:
             break
+
+        # Skip small chromatic families (<2%) — likely shadow/transition artifacts
+        # Black and white families are exempt (eyes, highlights are small but real)
+        pct_check = best_count / N
+        exempt_fids = {0, 1, 3}  # black, dark_gray, white
+        if best_fid not in exempt_fids and pct_check < min_pct:
+            excluded_fids.add(best_fid)
+            for gf in FAMILY_GROUPS.get(best_fid, [best_fid]):
+                excluded_fids.add(gf)
+            continue
+
+
 
         group = FAMILY_GROUPS.get(best_fid, [best_fid])
         group_mask = np.zeros(N, dtype=bool)
@@ -249,16 +261,39 @@ def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8):
 # Step 4: Per-pixel assignment (CIELAB nearest neighbor)
 # ═══════════════════════════════════════════════════════════════
 
-def assign_pixels(pixel_lab, selected_colors):
-    """Assign each pixel to nearest selected color by CIELAB distance."""
+def assign_pixels(pixel_lab, selected_colors, pixel_families=None, pixels=None):
+    """Assign each pixel to nearest selected color by CIELAB distance.
+    
+    Achromatic constraint: pixels classified as chromatic (HSV family >= 4)
+    cannot be assigned to achromatic selected colors (black/dark_gray/light_gray/white).
+    This prevents dark-but-colored shadow pixels from being pulled into black.
+    """
     N = len(pixel_lab)
     sel_lab = np.array([sc["lab"] for sc in selected_colors])
     labels = np.zeros(N, dtype=np.int32)
     CHUNK = 500000
 
+    # Identify which selected colors are achromatic
+    ACHROMATIC_FAMILIES = {"black", "dark_gray", "light_gray", "white"}
+    achro_mask_sel = np.array([sc["family"] in ACHROMATIC_FAMILIES for sc in selected_colors])
+    has_achro_constraint = pixel_families is not None and np.any(achro_mask_sel)
+
     for i in range(0, N, CHUNK):
         chunk = pixel_lab[i:i+CHUNK]
         dist = np.sum((chunk[:, None, :] - sel_lab[None, :, :]) ** 2, axis=2)
+
+        if has_achro_constraint:
+            # Chromatic pixels cannot go to achromatic colors
+            # EXCEPT very dark pixels (V < 0.2) — they should be allowed to go black
+            chunk_families = pixel_families[i:i+CHUNK]
+            chunk_pixels = pixels[i:i+CHUNK] if pixels is not None else None
+            chromatic_px = chunk_families >= 4
+            if chunk_pixels is not None:
+                v_values = chunk_pixels.max(axis=1)
+                very_dark = v_values < 0.2
+                chromatic_px = chromatic_px & ~very_dark  # dark pixels exempt
+            dist[np.ix_(chromatic_px, achro_mask_sel)] = 1e12  # block assignment
+
         labels[i:i+CHUNK] = np.argmin(dist, axis=1)
 
     return labels
@@ -267,6 +302,40 @@ def assign_pixels(pixel_lab, selected_colors):
 # ═══════════════════════════════════════════════════════════════
 # Step 5: Build quantized texture
 # ═══════════════════════════════════════════════════════════════
+
+
+def cleanup_labels(labels_2d, min_island=1000):
+    """Remove tiny isolated color regions by majority vote of neighbors.
+    
+    For each pixel, if its connected component (same-color island) has fewer
+    than min_island pixels, replace it with the most common neighbor color.
+    """
+    from scipy import ndimage
+    h, w = labels_2d.shape
+    cleaned = labels_2d.copy()
+    
+    unique_labels = np.unique(labels_2d)
+    for lbl in unique_labels:
+        mask = labels_2d == lbl
+        # Find connected components for this color
+        components, n_comp = ndimage.label(mask)
+        for comp_id in range(1, n_comp + 1):
+            comp_mask = components == comp_id
+            if np.sum(comp_mask) >= min_island:
+                continue
+            # Dilate to find neighbors
+            dilated = ndimage.binary_dilation(comp_mask, iterations=1)
+            neighbor_mask = dilated & ~comp_mask
+            if np.sum(neighbor_mask) == 0:
+                continue
+            # Most common neighbor label
+            neighbor_labels = labels_2d[neighbor_mask]
+            counts = np.bincount(neighbor_labels)
+            majority = np.argmax(counts)
+            cleaned[comp_mask] = majority
+    
+    return cleaned
+
 
 def build_quantized_texture(pixels, labels, selected_colors, width, height):
     """Build quantized RGB texture from labels. Returns uint8 (H,W,3)."""
@@ -429,7 +498,7 @@ def find_blender():
 
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
-             colors=None):
+             colors=None, min_pct=0.02):
     """
     Convert GLB to multi-color vertex-color OBJ.
 
@@ -546,7 +615,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
     # ── Step 3: Greedy color selection ──
     print(f"\n🎯 Step 3: Greedy color selection (≤{max_colors})")
     pixel_lab = srgb_to_lab(pixels)
-    selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors)
+    selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors, min_pct=min_pct)
 
     for i, sc in enumerate(selected):
         rgb_int = (sc["rgb"] * 255).astype(int)
@@ -555,7 +624,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
 
     # ── Step 4: Per-pixel assignment ──
     print(f"\n🔄 Step 4: Per-pixel CIELAB assignment ({N:,} px × {len(selected)} colors)")
-    labels = assign_pixels(pixel_lab, selected)
+    labels = assign_pixels(pixel_lab, selected, pixel_families=pixel_families, pixels=pixels)
 
     for i, sc in enumerate(selected):
         pct = np.sum(labels == i) / N * 100
@@ -563,7 +632,32 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
         hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
         print(f"   {hex_c}: {pct:.1f}%")
 
-    # ── Step 5: Build quantized texture ──
+    # ── Step 4b: Boundary erosion + island cleanup ──
+    labels_2d = labels.reshape(h, w)
+    
+    # Majority vote smoothing — each pixel adopts the most common color in its neighborhood
+    from scipy.ndimage import uniform_filter
+    n_colors = len(selected)
+    for vote_pass in range(5):
+        # Build per-color density maps, pick highest density at each pixel
+        best = np.zeros_like(labels_2d, dtype=np.int32)
+        best_score = np.zeros(labels_2d.shape, dtype=np.float32)
+        for lbl in range(n_colors):
+            density = uniform_filter((labels_2d == lbl).astype(np.float32), size=7)
+            better = density > best_score
+            best[better] = lbl
+            best_score[better] = density[better]
+        labels_2d = best
+    print(f"   Boundary smoothing (5-pass majority vote, 7×7 window)")
+    
+    labels_2d = cleanup_labels(labels_2d, min_island=1000)
+    # Median filter to smooth thin strips and jagged edges
+    from scipy.ndimage import median_filter
+    labels_2d = median_filter(labels_2d, size=7)
+    labels = labels_2d.ravel()
+    print(f"   Cleaned isolated patches + median smoothed")
+
+        # ── Step 5: Build quantized texture ──
     print(f"\n🖼️  Step 5: Quantized texture")
     quantized = build_quantized_texture(pixels, labels, selected, w, h)
 
@@ -608,6 +702,8 @@ def main():
     )
     parser.add_argument("input", help="Input model (GLB/GLTF/OBJ/FBX/STL)")
     parser.add_argument("--output", "-o", help="Output OBJ path")
+    parser.add_argument("--min-pct", type=float, default=2.0,
+                        help="Min %% for small color families (default 2.0, set 0 to keep all)")
     parser.add_argument("--max_colors", "-n", type=int, default=8, choices=range(1, 9),
                         help="Maximum colors (1-8, default 8)")
     parser.add_argument("--height", type=float, default=0, help="Target height mm (0=keep)")
@@ -625,7 +721,8 @@ def main():
         max_colors=args.max_colors,
         height=args.height,
         subdivide=args.subdivide,
-        colors=args.colors
+        colors=args.colors,
+        min_pct=getattr(args, "min_pct", 1.0) / 100
     )
     if result is None:
         sys.exit(1)

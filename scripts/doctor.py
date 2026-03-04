@@ -155,12 +155,12 @@ def main():
         print("  ✅ bambu-lab-cloud-api symbols verified")
 
     print("\nPreview rendering:")
-    try:
-        import matplotlib
-        print(f"  ✅ matplotlib {matplotlib.__version__}")
-    except ImportError:
-        print("  ❌ matplotlib not installed (pip3 install matplotlib) — needed for analysis charts")
-        all_ok = False
+    blender_ok2, blender_ver2, _ = check_blender()
+    if blender_ok2:
+        print(f"  ✅ Blender (required for preview + colorize)")
+    else:
+        print("  ❌ Blender not found (brew install --cask blender) — needed for preview + colorize")
+
 
     print("\nSearch backend:")
     search_ok, search_pkg = check_search_backend()
