@@ -122,7 +122,15 @@ z5Av6MmEFDojtwTqvEZuhBM=
 -----END PRIVATE KEY-----"""
 
 # Certificate ID (从证书 CN 字段提取)
-BAMBU_APP_CERT_ID = "GLOF3813734089-524a37c80000c6a6a274a47b3281"
+# Auto-extract cert_id (CN) from certificate
+BAMBU_APP_CERT_ID = None
+try:
+    from cryptography import x509 as _x509
+    _cert_obj = _x509.load_pem_x509_certificate(BAMBU_APP_CERT.encode())
+    BAMBU_APP_CERT_ID = _cert_obj.subject.get_attributes_for_oid(
+        _x509.oid.NameOID.COMMON_NAME)[0].value
+except Exception:
+    BAMBU_APP_CERT_ID = "GLOF3813734089-524a37c80000"  # fallback
 
 
 def sign_message_x509(message_dict):
