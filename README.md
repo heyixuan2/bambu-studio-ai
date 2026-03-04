@@ -45,6 +45,7 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 📏 **Auto Orient & Scale** | Optimal print orientation (stable poses), auto unit detection (m→mm) |
 | 🔄 **Format Conversion** | Auto GLB→STL (single-color) or GLB→vertex-color OBJ (multi-color) |
 | 📸 **Camera** | RTSP snapshots from printer camera (LAN mode, all models incl. H2D) |
+| 📷 **Model Preview** | HQ rendered preview via Blender (turntable, front/side/top views) |
 | 🤖 **AI Print Monitoring** | Periodic snapshots → anomaly detection → auto-pause on failure |
 | 📦 **AMS Management** | Auto-detect filament colors/types via `bambu.py info` |
 | ⚙️ **CLI Slicing** | OrcaSlicer backend, auto profile merging, quality presets, 3MF output |
@@ -105,7 +106,7 @@ All 9 current Bambu Lab models:
 
 ## Model Requirements
 
-This skill has 700+ lines of instructions with multi-step branching flows. The AI model running it needs to reliably follow complex instructions.
+This skill has ~400 lines of instructions with multi-step branching flows. The AI model running it needs to reliably follow complex instructions.
 
 | Tier | Models | Notes |
 |------|--------|-------|
@@ -137,7 +138,17 @@ brew install --cask bambu-studio  # Required for model preview before printing
 
 ---
 
+## Quick Start
+
+```bash
+python3 scripts/doctor.py          # Verify all dependencies
+python3 scripts/search.py "vase"   # Search for models
+python3 scripts/bambu.py status    # Check printer status
+```
+
 ## Setup
+
+> 💡 Run `python3 scripts/doctor.py` to verify all dependencies before first use.
 
 No CLI wizard — your OpenClaw agent handles setup through conversation:
 
@@ -169,7 +180,7 @@ First login requires email verification code. Token is cached for 24 hours.
 
 ## The Full Pipeline
 
-Here's what happens when you say "make me an iPhone 15 Pro Max case and print it":
+Here's what happens when you say "make me an iPhone 16 Pro Max case and print it":
 
 ```
 You: "Print me an iPhone 16 Pro Max case"
@@ -491,14 +502,14 @@ python3 scripts/bambu.py info                      # Printer hardware info
 python3 scripts/bambu.py notify --message "Done!"  # Send notification
 python3 scripts/bambu.py speed silent              # Quiet mode (night)
 python3 scripts/bambu.py speed standard            # Normal
+python3 scripts/bambu.py speed sport               # Fast
+python3 scripts/bambu.py speed ludicrous           # Maximum
 
 # Slicing
 python3 scripts/slice.py model.stl                 # Slice with auto-detect
 python3 scripts/slice.py model.stl --orient        # Auto-orient + slice
 python3 scripts/slice.py model.stl --quality fine  # 0.12mm layer height
 python3 scripts/slice.py --list-profiles           # Show available profiles
-python3 scripts/bambu.py speed sport               # Fast
-python3 scripts/bambu.py speed ludicrous           # Maximum
 python3 scripts/bambu.py light on|off              # Chamber light
 python3 scripts/bambu.py ams                       # AMS filament status
 python3 scripts/bambu.py snapshot                  # Camera photo
@@ -627,7 +638,8 @@ bambu-studio-ai/
 │   ├── bambu-cloud-api.md      — Cloud API reference
 │   ├── 3d-generation-apis.md   — 3D provider API endpoints
 │   ├── 3d-prompt-guide.md      — Prompt engineering for 3D models
-│   └── model-specs.md          — All 9 printer specifications
+│   ├── model-specs.md          — All 9 printer specifications
+│   └── bambu_filament_colors.json — Bambu Lab 43-color filament palette
 ├── requirements.txt            — Python dependencies
 └── scripts/
     ├── bambu.py                — Printer control (Cloud + LAN, token caching)
@@ -656,6 +668,12 @@ PRs welcome! Areas that need help:
 ---
 
 ## How We Handle AI-Generated Model Shadows
+
+AI 3D models have baked lighting in textures. Instead of removing shadows (fragile), we **bypass them**: HSV classification groups pixels by hue, which is unaffected by shadows (shadows change brightness, not hue).
+
+<details>
+<summary>📖 Technical Deep Dive</summary>
+
 
 AI 3D generation services (Tripo, Meshy, etc.) bake lighting directly into model textures. A "black" character body might actually be RGB(58,59,63) — dark gray with baked ambient occlusion. Traditional approaches try to *remove* these shadows (delight/albedo extraction), but this is fragile and introduces artifacts.
 
@@ -711,9 +729,13 @@ We tried three shadow removal approaches before abandoning them all:
 
 **Conclusion:** The problem was never "how to remove shadows" — it was "how to classify colors *despite* shadows." HSV family classification solves this because shadows affect V (value/brightness) but not H (hue). No delight, no albedo extraction, no shadow-aware mapping. Just classify and assign.
 
+</details>
+
 
 ## Version History
 
+| Version | Changes |
+|---------|--------|
 | **0.22.1** | Colorize v4 rewrite: pixel HSV family classification + greedy area-based color selection + per-pixel CIELAB assign + vertex-color OBJ export. No shadow removal needed — HSV classification bypasses baked lighting. pygltflib texture extraction (no Blender for Step 1). sRGB→linear fix for accurate vertex colors. Audit fixes: --colors validation, low-V achromatic, UV None check, path injection, dead code cleanup. 1118→573 lines. |
 | **0.22.0** | Intrinsic Albedo Extraction replaces AO delight — eliminates false colors (orange/copper/silver) at shadow boundaries. 3-step pipeline: Cycles DIFFUSE COLOR bake + per-channel brightness recovery + white point recovery. Chrominance-weighted CIELAB (L\*=0.1). Region majority cleanup (numpy). 22 bare except→Exception fixes. |
 | **0.21.1** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). | Full manifest metadata restored (env, secrets, install, security, network access, persistence declarations) for ClawHub audit compliance.
