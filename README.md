@@ -504,16 +504,16 @@ python3 scripts/bambu.py speed silent              # Quiet mode (night)
 python3 scripts/bambu.py speed standard            # Normal
 python3 scripts/bambu.py speed sport               # Fast
 python3 scripts/bambu.py speed ludicrous           # Maximum
+python3 scripts/bambu.py light on|off              # Chamber light
+python3 scripts/bambu.py ams                       # AMS filament status
+python3 scripts/bambu.py snapshot                  # Camera photo
+python3 scripts/bambu.py gcode "G28"               # Send G-code
 
 # Slicing
 python3 scripts/slice.py model.stl                 # Slice with auto-detect
 python3 scripts/slice.py model.stl --orient        # Auto-orient + slice
 python3 scripts/slice.py model.stl --quality fine  # 0.12mm layer height
 python3 scripts/slice.py --list-profiles           # Show available profiles
-python3 scripts/bambu.py light on|off              # Chamber light
-python3 scripts/bambu.py ams                       # AMS filament status
-python3 scripts/bambu.py snapshot                  # Camera photo
-python3 scripts/bambu.py gcode "G28"               # Send G-code
 ```
 
 ### 3D Generation
