@@ -108,19 +108,18 @@ def enhance_prompt(user_prompt, max_size=None, multicolor=False):
 
     enhanced = (
         f"{user_prompt}. "
-        f"Optimized for FDM 3D printing. "
-        f"Maximum dimensions: {max_size[0]}x{max_size[1]}x{max_size[2]}mm. "
+        f"Style: solid sculpture figurine for 3D printing. "
         f"CRITICAL REQUIREMENTS: "
-        f"Single connected piece (no separate floating parts), "
+        f"Single solid connected piece (no separate floating parts, no disconnected geometry), "
+        f"smooth continuous surfaces, "
         f"flat stable base touching the ground plane, "
-        f"all parts must be physically connected to the base (no hovering elements), "
-        f"watertight manifold mesh with no holes or non-manifold edges, "
-        f"no overhangs beyond 45 degrees from vertical, "
+        f"all parts physically connected (no hovering elements), "
+        f"watertight manifold mesh, "
         f"minimum 1.5mm wall thickness, "
         f"no thin protruding features under 2mm. "
-        f"The model must be printable without supports if possible. "
-        f"TEXTURE: Use flat uniform lighting with NO baked shadows, NO ambient occlusion, NO specular highlights in the texture. "
-        f"The texture should be pure albedo/diffuse color only, as if lit by perfectly uniform white light from all directions."
+        f"AVOID: particles, smoke wisps, floating debris, hair strands, separate flame pieces. "
+        f"Instead make fire/smoke/effects as solid sculptural forms attached to the main body. "
+        f"TEXTURE: flat uniform lighting, NO baked shadows, pure albedo/diffuse color only."
     )
     return enhanced
 

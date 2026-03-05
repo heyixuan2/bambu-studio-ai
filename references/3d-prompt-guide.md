@@ -113,3 +113,40 @@ build volume with a 10% safety margin:
 
 If a generated model exceeds your build volume, it's automatically 
 scaled down proportionally. You can override with `--scale` or `--size`.
+
+## Reducing Floating/Disconnected Parts
+
+AI 3D generators frequently produce disconnected geometry. These prompt strategies reduce this significantly (tested: 255 → 0 parts):
+
+### Always Include
+- "single solid sculpture piece" or "figurine style"
+- "no floating parts"
+- "smooth continuous surfaces"
+- "thick connected base"
+
+### Avoid (causes floating parts)
+- "particles, smoke, sparks" → use "solid sculptural flame/smoke shapes" instead
+- "flowing hair, fur strands" → use "smooth stylized hair"
+- "scattered debris, fragments" → use "integrated details"
+- "thin wisps, tendrils" → use "thick connected tendrils"
+
+### Effect Substitutions
+| User Wants | Bad Prompt | Good Prompt |
+|---|---|---|
+| Fire/flames | "breathing fire" | "solid sculptural flames attached to mouth" |
+| Smoke | "trailing smoke" | "thick solid smoke shape merged with body" |
+| Hair | "flowing long hair" | "smooth stylized hair as single piece" |
+| Water | "water splash" | "solid wave form connected to base" |
+| Wings | "spread feathered wings" | "smooth spread wings as solid surfaces" |
+
+### Example
+**Before** (255 disconnected parts):
+```
+A dragon breathing fire, flames coming from mouth, detailed scales
+```
+
+**After** (0 disconnected parts):
+```
+A dragon breathing fire, single solid sculpture piece, no floating parts,
+thick connected base, smooth surfaces, figurine style for 3D printing
+```
