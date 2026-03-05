@@ -86,7 +86,7 @@ security:
   files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
   persistence: "Reads/writes config.json, .secrets.json, .token_cache.json, .verify_code locally. No remote data exfiltration."
   shipped_credentials:
-    what: "Bambu Connect X.509 certificate and private key (BAMBU_APP_CERT / BAMBU_APP_PRIVATE_KEY)"
+    what: "Bambu Connect X.509 certificate and private key in references/*.pem (NOT embedded in code)"
     why: "Required to sign MQTT commands for auto-print on firmware ≥01.08. Without it, only read-only status works."
     risk: "Low — this is NOT a user secret. It was publicly extracted by community researchers in Jan 2025 and is embedded in every copy of Bambu Connect. See: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/"
     scope: "Can only sign printer commands on LAN (requires LAN access code + same network). Cannot access cloud, other users, or firmware."

@@ -42,12 +42,15 @@ if os.path.exists(_cpath):
     with open(_cpath) as _f:
         _config = _j.load(_f)
 
-# Load secrets
-_secrets_path = os.path.join(_skill_dir, ".secrets.json")
-if os.path.exists(_secrets_path):
-    import json as _j
-    with open(_secrets_path) as _f:
-        _config.update(_j.load(_f))
+# Load secrets (only when a command is invoked, not on import)
+def _load_secrets():
+    _secrets_path = os.path.join(_skill_dir, ".secrets.json")
+    if os.path.exists(_secrets_path):
+        import json as _j
+        with open(_secrets_path) as _f:
+            _config.update(_j.load(_f))
+
+_load_secrets()  # Called at startup for CLI usage; agents should use env vars instead
 
 # Config.json values as fallbacks for env vars
 if not MODE:
@@ -63,74 +66,31 @@ for _k, _e in [("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL"),
 # ═══════════════════════════════════════════════════════════════════
 # X.509 Certificate Signing for Auto-Print
 # Background: Bambu Lab 2025 firmware requires X.509 signed commands.
-# The certificate/key below were extracted from Bambu Connect app
-# (publicly disclosed January 2025 by the community).
+# The certificate/key are loaded from references/*.pem files.
+# These were publicly extracted from Bambu Connect app (January 2025).
 # Reference: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/
 # ═══════════════════════════════════════════════════════════════════
 
-# Bambu Connect X.509 Certificate (公开密钥，2025年1月社区提取)
-BAMBU_APP_CERT = """-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIRAO48rAcSzurNqLf7xC50uiwwDQYJKoZIhvcNAQELBQAw
-JjEkMCIGA1UEAwwbR0xPRjM4MTM3MzQwODkuYmFtYnVsYWIuY29tMB4XDTI0MTIx
-MTA5MjkyMFoXDTI1MTIxMjA5MjkyMFowTDEkMCIGA1UEChMbR0xPRjM4MTM3MzQw
-ODktNTI0YTM3YzgwMDAwMSQwIgYDVQQDExtHTE9GMzgxMzczNDA4OS01MjRhMzdj
-ODAwMDAwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDQNp2NfkajwcWH
-PIqosa08P1ZwETPr1veZCMqieQxWtYw97wp+JCxX4yBrBcAwid7o7PHI9KQVzPRM
-f0uXspaDUdSljrfJ/YwGEz7+GJz4+ml1UbWXBePyzXW1+N2hIGGn7BcNuA0v8rMY
-uvVgiIIQNjLErgGcCWmMHLwsMMQ7LNprUZZKsSNB4HaQDH7cQZmYBN/O45np6l+K
-VuLdzXdDpZcOM7bNO6smev822WPGDuKBo1iVfQbUe10X4dCNwkBR3QGpScVvg8gg
-tRYZDYue/qc4Xaj806RZPttknWfxdvfZgoOmAiwnyQ5K3+mzNYHgQZAOC2ydkK4J
-s+ZizK3lAgMBAAGjYDBeMA4GA1UdDwEB/wQEAwIDuDAMBgNVHRMBAf8EAjAAMB0G
-A1UdDgQWBBTbM6dbfGu7o6o1IU59QyDzMcexjzAfBgNVHSMEGDAWgBTCydEtLumS
-2pknAxmjOizTHKwImzANBgkqhkiG9w0BAQsFAAOCAQEAmmD3Fu37vgw4qr/Dgr15
-FSdoCuVAZPD7I5FwcBlPH98TJ0hNUtnDVxkJ0pde8ZcQdYFkfYFNnX+7f06ps/TY
-CtchEAlx9cXBfBnImO4mB2Y89uRh7HRA2BiUmme4Xjy5P3qyvOnx2lIiH2hFyXJ0
-6N8UcBEviZTZd+D6FR5TJ8aNOhCwktutsrwKeSj4jrIWSD0vPlkQTbxUrm6x+7/i
-JBwOsMNA5UB+SZxAn8BtcvzpxHaj1l3WRddZcykTfz6k8fuQfJCdp1aN47guLXWt
-HTDvXeOlXpDStOlIwwMvh2i42ZaLas2C2B8rrX6pMmzazJLZcth8ZIyhfuB1WcMv
-AQ==
------END CERTIFICATE-----"""
+def _load_x509():
+    """Load X.509 cert and key from references/*.pem files."""
+    cert_path = os.path.join(_skill_dir, "references", "bambu_connect_cert.pem")
+    key_path = os.path.join(_skill_dir, "references", "bambu_connect_key.pem")
+    cert = key = cert_id = None
+    try:
+        with open(cert_path) as f:
+            cert = f.read().strip()
+        with open(key_path) as f:
+            key = f.read().strip()
+        # Extract cert_id (CN) from certificate
+        from cryptography import x509 as _x509
+        _cert_obj = _x509.load_pem_x509_certificate(cert.encode())
+        cert_id = _cert_obj.subject.get_attributes_for_oid(
+            _x509.oid.NameOID.COMMON_NAME)[0].value
+    except Exception as e:
+        pass  # Auto-print won't work without cert, but other features still do
+    return cert, key, cert_id
 
-# Bambu Connect Private Key (公开密钥，2025年1月社区提取)
-BAMBU_APP_PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDQNp2NfkajwcWH
-PIqosa08P1ZwETPr1veZCMqieQxWtYw97wp+JCxX4yBrBcAwid7o7PHI9KQVzPRM
-f0uXspaDUdSljrfJ/YwGEz7+GJz4+ml1UbWXBePyzXW1+N2hIGGn7BcNuA0v8rMY
-uvVgiIIQNjLErgGcCWmMHLwsMMQ7LNprUZZKsSNB4HaQDH7cQZmYBN/O45np6l+K
-VuLdzXdDpZcOM7bNO6smev822WPGDuKBo1iVfQbUe10X4dCNwkBR3QGpScVvg8gg
-tRYZDYue/qc4Xaj806RZPttknWfxdvfZgoOmAiwnyQ5K3+mzNYHgQZAOC2ydkK4J
-s+ZizK3lAgMBAAECggEAKwEcyXyrWmdLRQNcIDuSbD8ouzzSXIOp4BHQyH337nDQ
-5nnY0PTns79VksU9TMktIS7PQZJF0brjOmmQU2SvcbAVG5y+mRmlMhwHhrPOuB4A
-ahrWRrsQubV1+n/MRttJUEWS/WJmVuDp3NHAnI+VTYPkOHs4GeJXynik5PutjAr3
-tYmr3kaw0Wo/hYAXTKsI/R5aenC7jH8ZSyVcZ/j+bOSH5sT5/JY122AYmkQOFE7s
-JA0EfYJaJEwiuBWKOfRLQVEHhOFodUBZdGQcWeW3uFb88aYKN8QcKTO8/f6e4r8w
-QojgK3QMj1zmfS7xid6XCOVa17ary2hZHAEPnjcigQKBgQDQnm4TlbVTsM+CbFUS
-1rOIJRzPdnH3Y7x3IcmVKZt81eNktsdu56A4U6NEkFQqk4tVTT4TYja/hwgXmm6w
-J+w0WwZd445Bxj8PmaEr6Z/NSMYbCsi8pRelKWmlIMwD2YhtY/1xXD37zpOgN8oQ
-ryTKZR2gljbPxdfhKS7YerLp2wKBgQD/gJt3Ds69j1gMDLnnPctjmhsPRXh7PQ0e
-E9lqgFkx/vNuCuyRs6ymic2rBZmkdlpjsTJFmz1bwOzIvSRoH6kp0Mfyo6why5kr
-upDf7zz+hlvaFewme8aDeV3ex9Wvt73D66nwAy5ABOgn+66vZJeo0Iq/tnCwK3a/
-evTL9BOzPwKBgEUi7AnziEc3Bl4Lttnqa08INZcPgs9grzmv6dVUF6J0Y8qhxFAd
-1Pw1w5raVfpSMU/QrGzSFKC+iFECLgKVCHOFYwPEgQWNRKLP4BjkcMAgiP63QTU7
-ZS2oHsnJp7Ly6YKPK5Pg5O3JVSU4t+91i7TDc+EfRwTuZQ/KjSrS5u4XAoGBAP06
-v9reSDVELuWyb0Yqzrxm7k7ScbjjJ28aCTAvCTguEaKNHS7DP2jHx5mrMT35N1j7
-NHIcjFG2AnhqTf0M9CJHlQR9B4tvON5ISHJJsNAq5jpd4/G4V2XTEiBNOxKvL1tQ
-5NrGrD4zHs0R+25GarGcDwg3j7RrP4REHv9NZ4ENAoGAY7Nuz6xKu2XUwuZtJP7O
-kjsoDS7bjP95ddrtsRq5vcVjJ04avnjsr+Se9WDA//t7+eSeHjm5eXD7u0NtdqZo
-WtSm8pmWySOPXMn9QQmdzKHg1NOxer//f1KySVunX1vftTStjsZH7dRCtBEePcqg
-z5Av6MmEFDojtwTqvEZuhBM=
------END PRIVATE KEY-----"""
-
-# Certificate ID (从证书 CN 字段提取)
-# Auto-extract cert_id (CN) from certificate
-BAMBU_APP_CERT_ID = None
-try:
-    from cryptography import x509 as _x509
-    _cert_obj = _x509.load_pem_x509_certificate(BAMBU_APP_CERT.encode())
-    BAMBU_APP_CERT_ID = _cert_obj.subject.get_attributes_for_oid(
-        _x509.oid.NameOID.COMMON_NAME)[0].value
-except Exception:
-    BAMBU_APP_CERT_ID = "GLOF3813734089-524a37c80000"  # fallback
+BAMBU_APP_CERT, BAMBU_APP_PRIVATE_KEY, BAMBU_APP_CERT_ID = _load_x509()
 
 
 def sign_message_x509(message_dict):
@@ -256,11 +216,11 @@ def ftp_upload_via_curl(ip, access_code, local_path, remote_filename):
     import subprocess
     
     remote_path = f'/{remote_filename}'
-    ftps_url = f'ftps://bblp:{access_code}@{ip}:990{remote_path}'
+    ftps_url = f'ftps://{ip}:990{remote_path}'
     
     try:
         result = subprocess.run(
-            ['curl', '--ftp-ssl-reqd', '--insecure', '-T', local_path, ftps_url],
+            ['curl', '--ftp-ssl-reqd', '--insecure', '--user', f'bblp:{access_code}', '-T', local_path, ftps_url],
             capture_output=True,
             timeout=60,
             check=True
