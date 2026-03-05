@@ -90,58 +90,37 @@ def _get_config(env_key, default=""):
 # Reference: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/
 # ═══════════════════════════════════════════════════════════════════
 
-# X.509 cert/key are NOT shipped with the skill.
-# They are downloaded on first use of auto-print from the publicly known source.
-# See: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/
+# X.509 cert/key are NOT shipped with the skill and NOT auto-downloaded.
+# Agent provides them during setup if user enables auto-print mode.
+# Files stored locally: references/bambu_connect_cert.pem, references/bambu_connect_key.pem
+# Source: Bambu Connect app (community-extracted, Jan 2025, publicly available).
 BAMBU_APP_CERT = None
 BAMBU_APP_PRIVATE_KEY = None
 BAMBU_APP_CERT_ID = None
 
 def _ensure_x509():
-    """Load or download X.509 cert/key on demand. Only called for auto-print commands."""
+    """Load X.509 cert/key from local PEM files. No auto-download.
+    
+    Agent provides cert/key during setup if user enables auto-print.
+    Files: references/bambu_connect_cert.pem, references/bambu_connect_key.pem
+    """
     global BAMBU_APP_CERT, BAMBU_APP_PRIVATE_KEY, BAMBU_APP_CERT_ID
     if BAMBU_APP_CERT is not None:
         return True
     cert_path = os.path.join(_skill_dir, "references", "bambu_connect_cert.pem")
     key_path = os.path.join(_skill_dir, "references", "bambu_connect_key.pem")
-    # Try loading from local cache first
     try:
         with open(cert_path) as f:
             BAMBU_APP_CERT = f.read().strip()
         with open(key_path) as f:
             BAMBU_APP_PRIVATE_KEY = f.read().strip()
     except FileNotFoundError:
-        # Download from OpenBambuAPI (community-maintained, publicly available)
-        print("📥 Auto-print requires the Bambu Connect X.509 certificate (community-extracted, public).")
-        print("   Source: https://github.com/heyixuan2/bambu-studio-ai")
-        print("   This is NOT a personal secret — it's embedded in every Bambu Connect app.")
-        consent = input("   Download and cache locally? [y/N] ").strip().lower()
-        if consent != 'y':
-            print("   ❌ Skipped. Auto-print will not work without the certificate.")
-            return False
-        print("📥 Downloading...")
-        try:
-            import requests
-            base = "https://raw.githubusercontent.com/heyixuan2/bambu-studio-ai/main/references"
-            cert_resp = requests.get(f"{base}/bambu_connect_cert.pem", timeout=10)
-            key_resp = requests.get(f"{base}/bambu_connect_key.pem", timeout=10)
-            cert_resp.raise_for_status()
-            key_resp.raise_for_status()
-            BAMBU_APP_CERT = cert_resp.text.strip()
-            BAMBU_APP_PRIVATE_KEY = key_resp.text.strip()
-            # Cache locally
-            os.makedirs(os.path.dirname(cert_path), exist_ok=True)
-            with open(cert_path, "w") as f:
-                f.write(BAMBU_APP_CERT + "\n")
-            with open(key_path, "w") as f:
-                f.write(BAMBU_APP_PRIVATE_KEY + "\n")
-            os.chmod(key_path, 0o600)
-            print("✅ Certificate cached to references/*.pem")
-        except Exception as e:
-            print(f"❌ Failed to download certificate: {e}")
-            print("   Auto-print requires X.509 certificate. Other features still work.")
-            return False
-    # Extract cert_id
+        print("❌ X.509 certificate not found. Auto-print requires:")
+        print(f"   {cert_path}")
+        print(f"   {key_path}")
+        print("   Run setup again or ask your agent to configure auto-print.")
+        return False
+    # Extract cert_id (CN) from certificate
     try:
         from cryptography import x509 as _x509
         _cert_obj = _x509.load_pem_x509_certificate(BAMBU_APP_CERT.encode())

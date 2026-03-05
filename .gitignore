@@ -9,3 +9,5 @@ output/
 .agents/
 skills-lock.json
 *.bak
+references/bambu_connect_cert.pem
+references/bambu_connect_key.pem
