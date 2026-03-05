@@ -535,7 +535,8 @@ def _snap_vertex_colors(obj_path, selected_colors):
                 lab = srgb_to_lab(rgb_reshaped)[0]
                 dist = np.sum((sel_lab - lab) ** 2, axis=1)
                 nearest = sel_rgb[np.argmin(dist)]
-                nearest = sel_rgb[np.argmin(dist)]
+                if not np.allclose(rgb, nearest, atol=0.01):
+                    snapped += 1
                 vline = "v %s %s %s %.4f %.4f %.4f\n" % (xyz[0], xyz[1], xyz[2], nearest[0], nearest[1], nearest[2])
                 lines_out.append(vline)
             else:
