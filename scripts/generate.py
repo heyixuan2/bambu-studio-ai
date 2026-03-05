@@ -110,18 +110,9 @@ def enhance_prompt(user_prompt, max_size=None, multicolor=False):
 
     enhanced = (
         f"{user_prompt}. "
-        f"Style: solid sculpture figurine for 3D printing. "
-        f"CRITICAL REQUIREMENTS: "
-        f"Single solid connected piece (no separate floating parts, no disconnected geometry), "
-        f"smooth continuous surfaces, "
-        f"flat stable base touching the ground plane, "
-        f"all parts physically connected (no hovering elements), "
-        f"watertight manifold mesh, "
-        f"minimum 1.5mm wall thickness, "
-        f"no thin protruding features under 2mm. "
-        f"AVOID: particles, smoke wisps, floating debris, hair strands, separate flame pieces. "
-        f"Instead make fire/smoke/effects as solid sculptural forms attached to the main body. "
-        f"TEXTURE: flat uniform lighting, NO baked shadows, pure albedo/diffuse color only."
+        f"Solid sculpture figurine style, single connected piece, "
+        f"smooth surfaces, flat stable base, "
+        f"no floating parts or thin protruding details."
     )
     return enhanced
 
