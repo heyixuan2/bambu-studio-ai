@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 🎨 AI 3D Model Generator — Text/Image to 3D
-Supports: Meshy, Tripo3D, 3D AI Studio, Printpal
+Supports: Meshy, Tripo3D, 3D AI Studio, Printpal, Hyper3D Rodin
 
 Usage:
   python3 scripts/generate.py text "a phone stand with cable hole"
@@ -70,7 +70,9 @@ for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".s
             _cfg.update(_j.load(_f))
 
 PROVIDER = os.environ.get("BAMBU_3D_PROVIDER", _cfg.get("3d_provider", "meshy")).lower()
-API_KEY = os.environ.get("BAMBU_3D_API_KEY", _cfg.get("3d_api_key", ""))
+# Provider-specific key lookup: rodin_api_key, tripo_api_key, etc.
+API_KEY = os.environ.get("BAMBU_3D_API_KEY", 
+    _cfg.get(f"{PROVIDER}_api_key", _cfg.get("3d_api_key", "")))
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "models")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 PRINTER_MODEL = os.environ.get("BAMBU_MODEL", _cfg.get("model", ""))
@@ -381,6 +383,154 @@ class Studio3DBackend:
         return out
 
 
+class RodinBackend:
+    """Hyper3D Rodin — developer.hyper3d.ai (Business subscription)"""
+    BASE = "https://hyperhuman.deemos.com/api/v2"
+    
+    def _auth(self):
+        return {"Authorization": f"Bearer {API_KEY}"}
+    
+    def text_to_3d(self, prompt, **kwargs):
+        r = requests.post(f"{self.BASE}/rodin",
+            headers=self._auth(),
+            data={
+                "prompt": prompt,
+                "tier": "Regular",
+                "geometry_file_format": "glb",
+                "material": "PBR",
+                "quality": "high",
+                "mesh_mode": "Quad",
+            }
+        )
+        r.raise_for_status()
+        resp = r.json()
+        # Rodin returns uuid (for download) + subscription_key JWT (for status)
+        # We encode both as "uuid::subscription_key" so status/download can use the right one
+        uuid = resp.get("uuid", "")
+        sub_key = resp.get("jobs", {}).get("subscription_key", "")
+        task_id = f"{uuid}::{sub_key}" if sub_key else uuid
+        print(f"📤 Rodin task created: {uuid}")
+        return task_id
+    
+    def image_to_3d(self, image_path, prompt="", **kwargs):
+        if image_path.startswith("http"):
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            r = requests.get(image_path, timeout=30)
+            tmp.write(r.content)
+            tmp.close()
+            image_path = tmp.name
+        
+        with open(image_path, "rb") as f:
+            img_data = f.read()
+        
+        files = [("images", (os.path.basename(image_path), img_data, "image/jpeg"))]
+        data = {
+            "tier": "Regular",
+            "geometry_file_format": "glb",
+            "material": "PBR",
+            "quality": "high",
+            "mesh_mode": "Quad",
+        }
+        if prompt:
+            data["prompt"] = prompt
+        
+        r = requests.post(f"{self.BASE}/rodin",
+            headers=self._auth(),
+            data=data,
+            files=files
+        )
+        r.raise_for_status()
+        resp = r.json()
+        uuid = resp.get("uuid", "")
+        sub_key = resp.get("jobs", {}).get("subscription_key", "")
+        task_id = f"{uuid}::{sub_key}" if sub_key else uuid
+        print(f"📤 Rodin image task: {uuid}")
+        return task_id
+    
+    def _parse_task_id(self, task_id):
+        """Split composite task_id into (uuid, subscription_key)."""
+        if "::" in task_id:
+            uuid, sub_key = task_id.split("::", 1)
+            return uuid, sub_key
+        return task_id, task_id
+    
+    def get_status(self, task_id):
+        uuid, sub_key = self._parse_task_id(task_id)
+        r = requests.post(f"{self.BASE}/status",
+            headers={**self._auth(), "Content-Type": "application/json"},
+            json={"subscription_key": sub_key}
+        )
+        r.raise_for_status()
+        data = r.json()
+        jobs = data.get("jobs", [])
+        
+        # Determine overall status from all jobs
+        statuses = []
+        if isinstance(jobs, list):
+            statuses = [j.get("status", "unknown") for j in jobs]
+        elif isinstance(jobs, dict):
+            statuses = [v.get("status", "unknown") for v in jobs.values()]
+        
+        status_map = {
+            "Succeeded": "succeeded", "Done": "succeeded",
+            "Processing": "in_progress", "Generating": "in_progress",
+            "Running": "in_progress", "Waiting": "queued",
+            "Queued": "queued", "Failed": "failed",
+        }
+        
+        if all(s in ("Done", "Succeeded") for s in statuses):
+            overall = "succeeded"
+            progress = 100
+        elif any(s == "Failed" for s in statuses):
+            overall = "failed"
+            progress = 0
+        elif any(s in ("Processing", "Generating", "Running") for s in statuses):
+            done_count = sum(1 for s in statuses if s in ("Done", "Succeeded"))
+            overall = "in_progress"
+            progress = int(done_count / max(len(statuses), 1) * 100)
+        else:
+            overall = "queued"
+            progress = 0
+        
+        return {
+            "status": overall,
+            "progress": progress,
+            "model_urls": {},
+        }
+    
+    def download(self, task_id, fmt="glb"):
+        uuid, sub_key = self._parse_task_id(task_id)
+        r = requests.post(f"{self.BASE}/download",
+            headers={**self._auth(), "Content-Type": "application/json"},
+            json={"task_uuid": uuid}
+        )
+        r.raise_for_status()
+        items = r.json().get("list", [])
+        
+        target_url = None
+        for item in items:
+            name = item.get("name", "")
+            if name.endswith(f".{fmt}") or name.endswith(".glb"):
+                target_url = item.get("url")
+                break
+        if not target_url and items:
+            target_url = items[0].get("url")
+        
+        if not target_url:
+            print(f"❌ No download URL found")
+            return None
+        
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        out = os.path.join(OUTPUT_DIR, f"{uuid}.glb")
+        r = requests.get(target_url, stream=True, timeout=(10, 300))
+        with open(out, "wb") as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
+        print(f"📥 Downloaded: {os.path.basename(out)} ({os.path.getsize(out) / 1024:.0f} KB)")
+        return out
+
+
 # ─── Provider Registry ───────────────────────────────────────────────
 
 PROVIDERS = {
@@ -388,13 +538,14 @@ PROVIDERS = {
     "tripo": TripoBackend,
     "printpal": PrintpalBackend,
     "3daistudio": Studio3DBackend,
+    "rodin": RodinBackend,
 }
 
 def get_backend():
     if not API_KEY:
         print(f"❌ Missing API key for {PROVIDER}")
         print(f"   export BAMBU_3D_API_KEY='your_api_key'")
-        print(f"   export BAMBU_3D_PROVIDER='{PROVIDER}'  (meshy/tripo/printpal/3daistudio)")
+        print(f"   export BAMBU_3D_PROVIDER='{PROVIDER}'  (meshy/tripo/printpal/3daistudio/rodin)")
         sys.exit(1)
     
     cls = PROVIDERS.get(PROVIDER)
@@ -407,8 +558,39 @@ def get_backend():
 
 # ─── Commands ────────────────────────────────────────────────────────
 
+def _auto_scale(file_path, target_height_mm=80):
+    """Auto-scale models with normalized coordinates to printable mm size.
+    Many AI providers (Rodin, Meshy, etc.) output models in normalized units
+    (~1-2 units max). This detects tiny models and scales to target_height_mm.
+    """
+    try:
+        import trimesh
+        mesh = trimesh.load(file_path, force="mesh")
+        max_dim = max(mesh.extents)
+        
+        if max_dim < 10:  # Less than 10mm = likely normalized coordinates
+            scale = target_height_mm / max_dim
+            mesh.apply_scale(scale)
+            mesh.export(file_path)
+            new_dims = mesh.extents
+            print(f"📏 Auto-scaled: {max_dim:.2f} → {max(new_dims):.0f}mm "
+                  f"({new_dims[0]:.0f} × {new_dims[1]:.0f} × {new_dims[2]:.0f}mm)")
+        elif max_dim > 1000:
+            # Might be in micrometers or wrong unit — scale down
+            scale = target_height_mm / max_dim
+            mesh.apply_scale(scale)
+            mesh.export(file_path)
+            new_dims = mesh.extents
+            print(f"📏 Auto-scaled: {max_dim:.0f} → {max(new_dims):.0f}mm "
+                  f"({new_dims[0]:.0f} × {new_dims[1]:.0f} × {new_dims[2]:.0f}mm)")
+    except ImportError:
+        pass  # trimesh not available, skip
+    except Exception as e:
+        print(f"⚠️ Auto-scale failed: {e}")
+
+
 def _finalize(file_path, target_format="stl"):
-    """Unified post-download processing: validate format, convert, verify."""
+    """Unified post-download processing: validate format, convert, scale, verify."""
     if not file_path or not os.path.exists(file_path):
         print(f"❌ File not found: {file_path}")
         return None
@@ -450,7 +632,10 @@ def _finalize(file_path, target_format="stl"):
             print(f"🔄 Converted {current_ext.upper()} → {target.upper()}")
             file_path = converted
     
-    # 3. Verify file is readable
+    # 3. Auto-scale if model uses normalized coordinates
+    _auto_scale(file_path)
+    
+    # 4. Verify file is readable
     size = os.path.getsize(file_path)
     if size < 100:
         print(f"⚠️ File suspiciously small ({size} bytes)")
@@ -514,12 +699,12 @@ def cmd_status(task_id):
         bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
         print(f"📊 Progress: [{bar}] {progress}%")
     
-    if state in ("completed", "success"):
+    if state in ("completed", "success", "succeeded"):
         urls = status.get("model_urls", {})
         if urls:
             print(f"📦 Available formats: {', '.join(urls.keys())}")
-            print(f"\n💡 Download: python3 scripts/generate.py download {task_id} --format stl")
-            print(f"   Note: If provider returns GLB, it will be auto-converted to your preferred format.")
+        print(f"\n💡 Download: python3 scripts/generate.py download {task_id} --format stl")
+        print(f"   Note: If provider returns GLB, it will be auto-converted to your preferred format.")
     
     return status
 
@@ -527,11 +712,14 @@ def cmd_download(task_id, fmt="3mf"):
     backend = get_backend()
     path = backend.download(task_id, fmt)
     if path:
-        # Auto-convert to requested format if provider returned different format (e.g., GLB)
+        # Unified post-processing: format detection, conversion, auto-scale
+        path = _finalize(path, target_format=fmt)
+        
+        # Final conversion if _finalize didn't produce target format
         actual_ext = os.path.splitext(path)[1].lower().lstrip('.')
         if actual_ext != fmt.lower():
-            path = _finalize(path)  # Detect actual format from magic bytes
             path = _convert_model(path, fmt)
+        
         size = os.path.getsize(path)
         print(f"✅ Downloaded: {path} ({size / 1024:.1f} KB)")
         # Verify Bambu compatibility
@@ -576,7 +764,7 @@ def _wait_and_download(backend, task_id, fmt="stl"):
         bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
         print(f"\r  [{bar}] {progress}% - {state}", end="", flush=True)
         
-        if state in ("completed", "success"):
+        if state in ("completed", "success", "succeeded"):
             print(f"\n✅ Done!")
             path = backend.download(task_id, fmt)
             if path:
