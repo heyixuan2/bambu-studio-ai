@@ -250,6 +250,192 @@ def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
     return selected
 
 
+def _name_from_rgb(median_rgb):
+    """Name a color by closest HSV family from 0-1 float RGB."""
+    r, g, b = int(median_rgb[0] * 255), int(median_rgb[1] * 255), int(median_rgb[2] * 255)
+    maxc = max(r, g, b)
+    minc = min(r, g, b)
+    v = maxc / 255.0
+    s = (maxc - minc) / maxc if maxc > 0 else 0
+    if s < 0.15:
+        if v < 0.2: return "black"
+        elif v < 0.4: return "dark_gray"
+        elif v < 0.75: return "light_gray"
+        else: return "white"
+    diff = maxc - minc
+    if diff == 0: h = 0
+    elif maxc == r: h = 60 * ((g - b) / diff % 6)
+    elif maxc == g: h = 60 * ((b - r) / diff + 2)
+    else: h = 60 * ((r - g) / diff + 4)
+    if h < 0: h += 360
+    if h < 15 or h >= 345: return "red"
+    elif h < 40: return "orange"
+    elif h < 70: return "yellow"
+    elif h < 160: return "green"
+    elif h < 200: return "cyan"
+    elif h < 260: return "blue"
+    elif h < 310: return "purple"
+    else: return "pink"
+
+
+def kmeans_select_colors(pixels, pixel_lab, max_colors=8, min_pct=0.001):
+    """
+    Direct k-means in full CIELAB space — best for sub-color detail.
+    Splits similar hues into fine variations (e.g., 3 shades of brown).
+    May merge small distinct hues into large clusters (e.g., miss red cheeks).
+    """
+    from sklearn.cluster import KMeans
+    
+    N = len(pixels)
+    if N > 500000:
+        rng = np.random.RandomState(42)
+        idx = rng.choice(N, 500000, replace=False)
+        sub_lab = pixel_lab[idx]
+        sub_rgb = pixels[idx]
+    else:
+        sub_lab = pixel_lab
+        sub_rgb = pixels
+    
+    Ns = len(sub_lab)
+    km = KMeans(n_clusters=max_colors, init='k-means++', n_init=10, random_state=42, max_iter=100)
+    labels = km.fit_predict(sub_lab)
+    
+    selected = []
+    for cid in range(max_colors):
+        m = labels == cid
+        count = int(np.sum(m))
+        if count < Ns * min_pct:
+            continue
+        median_rgb = np.median(sub_rgb[m], axis=0)
+        median_lab = np.median(sub_lab[m], axis=0)
+        selected.append({
+            "rgb": median_rgb,
+            "lab": median_lab,
+            "family": _name_from_rgb(median_rgb),
+            "group_names": [_name_from_rgb(median_rgb)],
+            "pixel_count": count,
+            "percentage": count / Ns * 100,
+        })
+    
+    selected.sort(key=lambda x: -x["percentage"])
+    return selected
+
+
+def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pct=0.001):
+    """
+    Hybrid HSV + k-means color selection (shadow-immune):
+    
+    1. HSV families guarantee hue separation (red ≠ yellow ≠ blue)
+    2. If significant families > max_colors: keep largest
+    3. If significant families < max_colors: k-means splits largest families
+    
+    This avoids k-means merging small but distinct hues (e.g., red cheeks on Pikachu).
+    """
+    from sklearn.cluster import KMeans
+    
+    N = len(pixels)
+    
+    # ── Find all significant HSV families ──
+    family_data = []
+    for fid in range(12):
+        mask = pixel_families == fid
+        count = int(np.sum(mask))
+        if count < N * min_pct:
+            continue
+        pct = count / N * 100
+        median_rgb = np.median(pixels[mask], axis=0)
+        median_lab = np.median(pixel_lab[mask], axis=0)
+        family_data.append({
+            "fid": fid,
+            "rgb": median_rgb,
+            "lab": median_lab,
+            "family": FAMILY_NAMES[fid],
+            "group_names": [FAMILY_NAMES[fid]],
+            "pixel_count": count,
+            "percentage": pct,
+            "mask": mask,
+        })
+    
+    family_data.sort(key=lambda x: -x["pixel_count"])
+    n_families = len(family_data)
+    print(f"   Significant families: {n_families} (threshold {min_pct*100:.1f}%)")
+    
+    if n_families >= max_colors:
+        # Too many families — keep the largest max_colors
+        selected = family_data[:max_colors]
+    else:
+        # Fewer families than max_colors — split largest families with k-means
+        selected = list(family_data)
+        slots_left = max_colors - n_families
+        
+        # Sort by size descending, try splitting each
+        for fd in sorted(family_data, key=lambda x: -x["pixel_count"]):
+            if slots_left <= 0:
+                break
+            
+            fmask = fd["mask"]
+            fcount = fd["pixel_count"]
+            if fcount < 2000:  # too small to split
+                continue
+            
+            # k-means on this family's pixels in LAB space
+            f_lab = pixel_lab[fmask]
+            f_rgb = pixels[fmask]
+            
+            # Subsample if needed
+            if len(f_lab) > 100000:
+                rng = np.random.RandomState(42)
+                idx = rng.choice(len(f_lab), 100000, replace=False)
+                f_lab_sub = f_lab[idx]
+                f_rgb_sub = f_rgb[idx]
+            else:
+                f_lab_sub = f_lab
+                f_rgb_sub = f_rgb
+            
+            # Try splitting into 2
+            km = KMeans(n_clusters=2, init='k-means++', n_init=5, random_state=42, max_iter=50)
+            km.fit(f_lab_sub)
+            
+            # Check if the split is meaningful (centers far enough apart in LAB)
+            center_dist = np.sqrt(np.sum((km.cluster_centers_[0] - km.cluster_centers_[1]) ** 2))
+            if center_dist < 10:  # too similar, don't split
+                continue
+            
+            # Replace original family with two sub-clusters
+            sub0 = km.labels_ == 0
+            sub1 = km.labels_ == 1
+            
+            c0 = int(np.sum(sub0))
+            c1 = int(np.sum(sub1))
+            
+            # Remove original from selected
+            selected = [s for s in selected if s.get("fid") != fd["fid"]]
+            
+            for sub_mask, sub_count in [(sub0, c0), (sub1, c1)]:
+                if sub_count < N * min_pct:
+                    continue
+                med_rgb = np.median(f_rgb_sub[sub_mask], axis=0)
+                med_lab = np.median(f_lab_sub[sub_mask], axis=0)
+                selected.append({
+                    "rgb": med_rgb,
+                    "lab": med_lab,
+                    "family": fd["family"],
+                    "group_names": [fd["family"]],
+                    "pixel_count": int(sub_count / len(f_lab_sub) * fcount),
+                    "percentage": sub_count / len(f_lab_sub) * fd["percentage"],
+                })
+            
+            slots_left -= 1
+    
+    # Clean up internal fields
+    for s in selected:
+        s.pop("mask", None)
+        s.pop("fid", None)
+    
+    selected.sort(key=lambda x: -x["percentage"])
+    return selected
+
+
 # ═══════════════════════════════════════════════════════════════
 # Step 4: Per-pixel assignment (CIELAB nearest neighbor)
 # ═══════════════════════════════════════════════════════════════
@@ -431,13 +617,28 @@ for fi, poly in enumerate(mesh.polygons):
     if fi % 300000 == 0 and fi > 0:
         print(f"  {{fi:,}}/{{len(mesh.polygons):,}}")
 
-# Convert to mm if still in meters
+# Convert to mm and auto-scale
 bbox_post = [obj.matrix_world @ v.co for v in obj.data.vertices]
-max_dim = max(max(abs(v.x) for v in bbox_post), max(abs(v.y) for v in bbox_post), max(abs(v.z) for v in bbox_post))
+xs = [v.x for v in bbox_post]
+ys = [v.y for v in bbox_post]
+zs = [v.z for v in bbox_post]
+dims_post = (max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))
+max_dim = max(dims_post)
+
 if max_dim < 10:
+    # Model in meters, convert to mm
     obj.scale *= 1000
     bpy.ops.object.transform_apply(scale=True)
+    max_dim *= 1000
     print("Converted to mm")
+
+# Auto-scale to 80mm if no --height specified and model is too big or too small
+if height_mm == 0 and (max_dim > 200 or max_dim < 10):
+    target = 80.0
+    scale_factor = target / max_dim
+    obj.scale *= scale_factor
+    bpy.ops.object.transform_apply(scale=True)
+    print(f"Auto-scaled: {{max_dim:.1f}} → {{target:.0f}}mm")
 
 # Mesh repair before export
 import bmesh
@@ -548,7 +749,8 @@ def _snap_vertex_colors(obj_path, selected_colors):
 
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
-             colors=None, min_pct=0.001, no_merge=False, island_size=1000, smooth=5):
+             colors=None, min_pct=0.001, no_merge=False, island_size=1000, smooth=5,
+             method="hybrid"):
     """
     Convert GLB to multi-color vertex-color OBJ.
 
@@ -662,10 +864,21 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
             avg = (pixels[pixel_families == fid].mean(axis=0) * 255).astype(int)
             print(f"   {FAMILY_NAMES[fid]:12s}: {count:>10,} px ({pct:5.1f}%)  avg RGB({avg[0]:3d},{avg[1]:3d},{avg[2]:3d})")
 
-    # ── Step 3: Greedy color selection ──
-    print(f"\n🎯 Step 3: Greedy color selection (≤{max_colors})")
+    # ── Step 3: Color selection ──
     pixel_lab = srgb_to_lab(pixels)
-    selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors, min_pct=min_pct, no_merge=no_merge)
+    use_kmeans = False
+    try:
+        from sklearn.cluster import KMeans
+        if method == "kmeans":
+            print(f"\n🎯 Step 3: k-means color discovery (≤{max_colors})")
+            selected = kmeans_select_colors(pixels, pixel_lab, max_colors, min_pct=min_pct)
+        else:
+            print(f"\n🎯 Step 3: Hybrid HSV + k-means color selection (≤{max_colors})")
+            selected = hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors, min_pct=min_pct)
+        use_kmeans = True
+    except ImportError:
+        print(f"\n🎯 Step 3: Greedy color selection (≤{max_colors}) [install scikit-learn for better results]")
+        selected = greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors, min_pct=min_pct, no_merge=no_merge)
 
     for i, sc in enumerate(selected):
         rgb_int = (sc["rgb"] * 255).astype(int)
@@ -674,7 +887,12 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
 
     # ── Step 4: Per-pixel assignment ──
     print(f"\n🔄 Step 4: Per-pixel CIELAB assignment ({N:,} px × {len(selected)} colors)")
-    labels = assign_pixels(pixel_lab, selected, pixel_families=pixel_families, pixels=pixels)
+    # k-means: pure CIELAB distance, no achromatic constraint
+    # HSV legacy: use pixel_families for achromatic constraint
+    if use_kmeans:
+        labels = assign_pixels(pixel_lab, selected, pixel_families=None, pixels=pixels)
+    else:
+        labels = assign_pixels(pixel_lab, selected, pixel_families=pixel_families, pixels=pixels)
 
     for i, sc in enumerate(selected):
         pct = np.sum(labels == i) / N * 100
@@ -763,6 +981,8 @@ def main():
     parser.add_argument("--colors", "-c", help="Manual hex colors (legacy, comma-separated)")
     parser.add_argument("--no-merge", action="store_true",
                             help="Disable family mutual exclusion (all 12 families independent)")
+    parser.add_argument("--method", choices=["hybrid", "kmeans"], default="hybrid",
+                        help="Color selection: hybrid (HSV+k-means, better hue separation) or kmeans (pure k-means, finer sub-colors)")
     parser.add_argument("--island-size", type=int, default=1000,
                             help="Island cleanup threshold in pixels (0=disabled)")
     parser.add_argument("--smooth", type=int, default=5,
@@ -779,7 +999,8 @@ def main():
         height=args.height,
         subdivide=args.subdivide,
         colors=args.colors,
-        min_pct=getattr(args, "min_pct", 1.0) / 100
+        min_pct=getattr(args, "min_pct", 1.0) / 100,
+        method=getattr(args, "method", "hybrid"),
     )
     if result is None:
         sys.exit(1)
