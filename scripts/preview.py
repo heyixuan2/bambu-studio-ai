@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Model Preview Generator — Renders 3D model preview images via Blender.
+Model Preview Generator — Renders 3D model preview images via Blender Cycles.
 
-Auto-loads PBR materials/textures from GLB. Supports STL, OBJ, GLB/GLTF, FBX.
-Uses TRACK_TO constraint for auto-aiming and model dimensions for camera distance.
+Auto-loads PBR materials/textures from GLB. Supports STL, OBJ, GLB/GLTF.
+Uses Cycles for accurate PBR texture rendering in headless mode.
 
 Requires: Blender 4.0+ (brew install --cask blender)
 
@@ -23,24 +23,19 @@ BLENDER_PATHS = [
 
 def find_blender():
     for p in BLENDER_PATHS:
-        if os.path.exists(p):
+        if os.path.isfile(p):
             return p
-        result = subprocess.run(["which", p], capture_output=True, text=True)
-        if result.returncode == 0:
-            return result.stdout.strip()
+        try:
+            result = subprocess.run(["which", p], capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
     return None
 
 
 def preview(model_path, output_path, views="perspective"):
-    """Render model preview using Blender.
-    
-    Args:
-        model_path: Input model file
-        output_path: Output PNG path
-        views: 'perspective' (single), 'front', 'side', 'top', or 'all' (4 views)
-    
-    Returns: output path on success, None on failure
-    """
+    """Render model preview using Blender Cycles."""
     blender = find_blender()
     if not blender:
         print("❌ Blender not found. Install: brew install --cask blender")
@@ -61,198 +56,170 @@ MODEL_PATH = {model_repr}
 OUTPUT_PATH = {output_repr}
 VIEWS = {views_repr}
 
-# Clear scene completely
-bpy.ops.object.select_all(action='SELECT')
-bpy.ops.object.delete()
+bpy.ops.wm.read_factory_settings(use_empty=True)
 
-# Import model (GLB auto-loads PBR materials + textures)
 ext = os.path.splitext(MODEL_PATH)[1].lower()
 if ext == ".stl":
-    bpy.ops.wm.stl_import(filepath=MODEL_PATH)
-elif ext == ".obj":
-    bpy.ops.wm.obj_import(filepath=MODEL_PATH)
+    bpy.ops.import_mesh.stl(filepath=MODEL_PATH)
 elif ext in (".glb", ".gltf"):
     bpy.ops.import_scene.gltf(filepath=MODEL_PATH)
+elif ext == ".obj":
+    bpy.ops.wm.obj_import(filepath=MODEL_PATH)
 elif ext == ".fbx":
     bpy.ops.import_scene.fbx(filepath=MODEL_PATH)
 else:
-    print(f"ERROR: Unsupported format: {{ext}}")
+    print(f"Unsupported: {{ext}}")
     sys.exit(1)
 
-# Get all mesh objects
-objs = [o for o in bpy.context.scene.objects if o.type == 'MESH']
-if not objs:
-    print("ERROR: No mesh found")
+meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+if not meshes:
+    print("No meshes found!")
     sys.exit(1)
 
-# Join if multiple
-bpy.context.view_layer.objects.active = objs[0]
-for o in objs:
-    o.select_set(True)
-if len(objs) > 1:
-    bpy.ops.object.join()
-obj = bpy.context.active_object
+# Compute bounds from world-space vertices
+all_coords = []
+for obj in meshes:
+    for v in obj.data.vertices:
+        co = obj.matrix_world @ v.co
+        all_coords.append((co.x, co.y, co.z))
 
-# Compute model size from dimensions (accounts for transforms)
-bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-dims = obj.dimensions
+xs, ys, zs = zip(*all_coords)
+dims = (max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))
+center = mathutils.Vector(((min(xs)+max(xs))/2, (min(ys)+max(ys))/2, (min(zs)+max(zs))/2))
 size = max(dims)
-center = mathutils.Vector(obj.bound_box[0]) + (mathutils.Vector(obj.bound_box[6]) - mathutils.Vector(obj.bound_box[0])) / 2
-center = obj.matrix_world @ center
 
-# Auto-scale meters to mm (GLB typically uses meters)
-if size < 10:
-    obj.scale *= 1000
-    bpy.ops.object.transform_apply(scale=True)
-    dims = obj.dimensions
+if size < 1.0:
+    scale_factor = 1000.0
+    for obj in meshes:
+        obj.scale *= scale_factor
+    bpy.context.view_layer.update()
+    all_coords = []
+    for obj in meshes:
+        for v in obj.data.vertices:
+            co = obj.matrix_world @ v.co
+            all_coords.append((co.x, co.y, co.z))
+    xs, ys, zs = zip(*all_coords)
+    dims = (max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))
+    center = mathutils.Vector(((min(xs)+max(xs))/2, (min(ys)+max(ys))/2, (min(zs)+max(zs))/2))
     size = max(dims)
-    center = mathutils.Vector(obj.bound_box[0]) + (mathutils.Vector(obj.bound_box[6]) - mathutils.Vector(obj.bound_box[0])) / 2
-    center = obj.matrix_world @ center
-    unit = "mm (scaled from meters)"
+    print(f"MODEL_INFO: {{dims[0]:.1f}} x {{dims[1]:.1f}} x {{dims[2]:.1f}} mm (scaled from meters) | {{sum(len(o.data.polygons) for o in meshes):,}} faces")
 else:
-    unit = "mm"
+    print(f"MODEL_INFO: {{dims[0]:.1f}} x {{dims[1]:.1f}} x {{dims[2]:.1f}} mm | {{sum(len(o.data.polygons) for o in meshes):,}} faces")
 
-print(f"MODEL_INFO: {{dims.x:.1f}} x {{dims.y:.1f}} x {{dims.z:.1f}} {{unit}} | {{len(obj.data.polygons):,}} faces")
-
-# Check if model has textures (GLB PBR auto-loaded)
 has_texture = False
-for mat in obj.data.materials:
-    if mat and mat.use_nodes:
-        for node in mat.node_tree.nodes:
-            if node.type == 'TEX_IMAGE' and node.image:
-                has_texture = True
-                break
-    if has_texture:
-        break
+for obj in meshes:
+    for mat in (obj.data.materials or []):
+        if mat and mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image:
+                    has_texture = True
+                    break
+        if has_texture: break
+    if has_texture: break
 
 if not has_texture:
-    # No texture — apply clean preview material
     mat = bpy.data.materials.new("Preview")
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Base Color"].default_value = (0.357, 0.608, 0.835, 1)
     bsdf.inputs["Roughness"].default_value = 0.4
-    obj.data.materials.clear()
-    obj.data.materials.append(mat)
+    for obj in meshes:
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
     print("No texture found — using preview material")
 else:
     print("PBR texture loaded from model")
 
-# Create empty at model center (for camera tracking)
-empty = bpy.data.objects.new("Target", None)
-bpy.context.scene.collection.objects.link(empty)
-empty.location = center
-
-# Camera — distance based on model size
-cam_data = bpy.data.cameras.new("Cam")
-cam_obj = bpy.data.objects.new("Cam", cam_data)
+cam = bpy.data.cameras.new("Cam")
+cam.clip_end = size * 20
+cam_obj = bpy.data.objects.new("Cam", cam)
 bpy.context.scene.collection.objects.link(cam_obj)
 bpy.context.scene.camera = cam_obj
-cam_data.lens = 50
 
-# TRACK_TO constraint — camera always aims at model center
-track = cam_obj.constraints.new(type='TRACK_TO')
-track.target = empty
-track.track_axis = 'TRACK_NEGATIVE_Z'
-track.up_axis = 'UP_Y'
+dist = size * 2.2
+view_configs = {{
+    "perspective": (center.x + dist*0.7, center.y - dist*0.9, center.z + dist*0.5),
+    "front": (center.x, center.y - dist*1.5, center.z + size*0.1),
+    "side": (center.x + dist*1.5, center.y, center.z + size*0.1),
+    "top": (center.x, center.y, center.z + dist*1.5),
+}}
 
-# Lighting — key (SUN) + fill (AREA)
-key_data = bpy.data.lights.new("Key", 'SUN')
-key_data.energy = 3.0
-key_data.angle = math.radians(5)
-key_obj = bpy.data.objects.new("Key", key_data)
+key = bpy.data.lights.new("Key", 'SUN')
+key.energy = 5.0
+key_obj = bpy.data.objects.new("Key", key)
+key_obj.rotation_euler = (math.radians(45), 0, math.radians(-30))
 bpy.context.scene.collection.objects.link(key_obj)
-key_obj.rotation_euler = (math.radians(50), 0, math.radians(40))
 
-fill_data = bpy.data.lights.new("Fill", 'AREA')
-fill_data.energy = max(20.0, min(200.0, 50.0 * size))  # Scale with model size
-fill_data.size = size * 2
-fill_obj = bpy.data.objects.new("Fill", fill_data)
+fill = bpy.data.lights.new("Fill", 'SUN')
+fill.energy = 2.0
+fill_obj = bpy.data.objects.new("Fill", fill)
+fill_obj.rotation_euler = (math.radians(60), 0, math.radians(150))
 bpy.context.scene.collection.objects.link(fill_obj)
-fill_obj.location = (center.x - size*2, center.y + size*2, center.z + size)
-fill_track = fill_obj.constraints.new(type='TRACK_TO')
-fill_track.target = empty
-fill_track.track_axis = 'TRACK_NEGATIVE_Z'
-fill_track.up_axis = 'UP_Y'
 
-rim_data = bpy.data.lights.new("Rim", 'SUN')
-rim_data.energy = 1.0
-rim_obj = bpy.data.objects.new("Rim", rim_data)
+rim = bpy.data.lights.new("Rim", 'SUN')
+rim.energy = 1.5
+rim_obj = bpy.data.objects.new("Rim", rim)
+rim_obj.rotation_euler = (math.radians(20), 0, math.radians(90))
 bpy.context.scene.collection.objects.link(rim_obj)
-rim_obj.rotation_euler = (math.radians(10), 0, math.radians(180))
 
-# World background
 world = bpy.data.worlds.new("World")
 bpy.context.scene.world = world
 world.use_nodes = True
-bg = world.node_tree.nodes["Background"]
-bg.inputs["Color"].default_value = (0.118, 0.118, 0.176, 1)
+world.node_tree.nodes["Background"].inputs[0].default_value = (0.12, 0.12, 0.15, 1)
 
-# Render engine — try EEVEE variants (name changed across Blender versions)
-for engine in ['BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE']:
-    try:
-        bpy.context.scene.render.engine = engine
-        print(f"Render engine: {{engine}}")
-        break
-    except TypeError:
-        continue
+bpy.context.scene.render.engine = 'CYCLES'
+bpy.context.scene.cycles.samples = 48
+bpy.context.scene.cycles.device = 'CPU'
+try:
+    prefs = bpy.context.preferences.addons.get('cycles')
+    if prefs:
+        prefs.preferences.compute_device_type = 'METAL'
+        bpy.context.scene.cycles.device = 'GPU'
+except Exception:
+    pass
 
 bpy.context.scene.render.image_settings.file_format = 'PNG'
 bpy.context.scene.render.film_transparent = False
+bpy.context.scene.view_settings.view_transform = 'Standard'
 
-# Camera distance based on model size
-dist = size * 3
-
-# View positions (relative to center)
-view_configs = {{
-    "perspective": (center.x + dist*0.6, center.y - dist*0.8, center.z + dist*0.4),
-    "front": (center.x, center.y - dist, center.z + size*0.3),
-    "side": (center.x + dist, center.y, center.z + size*0.3),
-    "top": (center.x + 0.001, center.y + 0.001, center.z + dist),
-}}
+def aim_camera(location):
+    cam_obj.location = location
+    direction = center - cam_obj.location
+    cam_obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
 
 if VIEWS == "all":
+    import tempfile as _tf
     bpy.context.scene.render.resolution_x = 600
     bpy.context.scene.render.resolution_y = 600
-    
-    import tempfile as _tf
     view_imgs = []
     for vname in ["perspective", "front", "side", "top"]:
-        cam_obj.location = mathutils.Vector(view_configs[vname])
-        bpy.context.view_layer.update()
+        aim_camera(view_configs[vname])
         tmp = os.path.join(_tf.gettempdir(), f"preview_{{vname}}.png")
         bpy.context.scene.render.filepath = tmp
         bpy.ops.render.render(write_still=True)
         view_imgs.append(tmp)
-        print(f"  Rendered {{vname}}")
-    
-    # Composite 2x2 grid
     try:
+        import numpy as np
         from PIL import Image
-        imgs = [Image.open(p) for p in view_imgs]
-        grid = Image.new('RGB', (1200, 1200))
-        grid.paste(imgs[0], (0, 0))
-        grid.paste(imgs[1], (600, 0))
-        grid.paste(imgs[2], (0, 600))
-        grid.paste(imgs[3], (600, 600))
-        grid.save(OUTPUT_PATH)
-        print("RENDER_OK_ALL")
+        imgs = [np.array(Image.open(p)) for p in view_imgs]
+        top_row = np.concatenate([imgs[0], imgs[1]], axis=1)
+        bot_row = np.concatenate([imgs[2], imgs[3]], axis=1)
+        grid = np.concatenate([top_row, bot_row], axis=0)
+        Image.fromarray(grid).save(OUTPUT_PATH)
     except ImportError:
-        # No PIL in Blender Python — save perspective only
         import shutil
         shutil.copy(view_imgs[0], OUTPUT_PATH)
-        print("WARNING: PIL not available in Blender — saved perspective view only (install Pillow for 2x2 grid)")
-        print("RENDER_OK_SINGLE")
+    for p in view_imgs:
+        try: os.unlink(p)
+        except: pass
 else:
-    bpy.context.scene.render.resolution_x = 1200
-    bpy.context.scene.render.resolution_y = 900
-    
-    loc = view_configs.get(VIEWS, view_configs["perspective"])
-    cam_obj.location = mathutils.Vector(loc)
-    bpy.context.view_layer.update()
+    bpy.context.scene.render.resolution_x = 800
+    bpy.context.scene.render.resolution_y = 800
+    aim_camera(view_configs.get(VIEWS, view_configs["perspective"]))
     bpy.context.scene.render.filepath = OUTPUT_PATH
     bpy.ops.render.render(write_still=True)
-    print("RENDER_OK")
+
+print("RENDER_OK")
 '''
 
     script_file = os.path.join(tempfile.gettempdir(), "bambu_preview.py")
@@ -263,7 +230,7 @@ else:
     try:
         result = subprocess.run(
             [blender, "--background", "--python", script_file],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=180
         )
 
         rendered = False
@@ -282,13 +249,13 @@ else:
         else:
             print("   ❌ Render failed")
             if result.stderr:
-                for line in result.stderr.split('\n')[-3:]:
+                for line in result.stderr.split('\n')[-5:]:
                     if line.strip():
                         print(f"   {line.strip()}")
             return None
 
     except subprocess.TimeoutExpired:
-        print("   ❌ Render timeout (120s)")
+        print("   ❌ Render timeout (180s)")
         return None
     finally:
         if os.path.exists(script_file):
@@ -297,7 +264,7 @@ else:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="📸 3D Model Preview Generator (Blender)",
+        description="📸 3D Model Preview Generator (Blender Cycles)",
         epilog="Requires: Blender 4.0+ (brew install --cask blender)"
     )
     parser.add_argument("model", help="Model file (STL/OBJ/GLB/GLTF/FBX)")
