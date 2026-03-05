@@ -86,7 +86,7 @@ security:
   files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
   persistence: "Reads config.json at startup, .secrets.json on demand (lazy, not at import). Writes .token_cache.json, .verify_code locally. No remote data exfiltration."
   shipped_credentials: "NONE — no credentials, certificates, or keys are shipped or auto-downloaded."
-  x509_setup: "Agent provides Bambu Connect X.509 cert/key during setup IF user enables auto-print. Stored locally in references/*.pem (git-ignored, key chmod 600). No network download in code."
+  x509_setup: "User provides authentication certificate during setup if they enable Developer Mode auto-print. Stored locally in references/*.pem (git-ignored, key chmod 600). Not shipped, not downloaded by code."
   x509_scope: "Signs MQTT commands for LAN auto-print only. Requires user's own access code + same network."
   network_access:
     - "Bambu Lab Cloud API (bambulab.com) — printer control, cloud mode only"

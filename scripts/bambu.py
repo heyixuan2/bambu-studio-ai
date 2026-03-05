@@ -86,14 +86,13 @@ def _get_config(env_key, default=""):
 # X.509 Certificate Signing for Auto-Print
 # Background: Bambu Lab 2025 firmware requires X.509 signed commands.
 # The certificate/key are loaded from references/*.pem files.
-# These were publicly extracted from Bambu Connect app (January 2025).
-# Reference: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/
+# Required for authenticated MQTT commands on Bambu Lab printers with Developer Mode.
 # ═══════════════════════════════════════════════════════════════════
 
 # X.509 cert/key are NOT shipped with the skill and NOT auto-downloaded.
 # Agent provides them during setup if user enables auto-print mode.
 # Files stored locally: references/bambu_connect_cert.pem, references/bambu_connect_key.pem
-# Source: Bambu Connect app (community-extracted, Jan 2025, publicly available).
+# Certificate files provided by user during setup (references/*.pem).
 BAMBU_APP_CERT = None
 BAMBU_APP_PRIVATE_KEY = None
 BAMBU_APP_CERT_ID = None
@@ -135,8 +134,8 @@ def sign_message_x509(message_dict):
     """
     Sign a message with X.509 certificate for Bambu Lab auto-print.
     
-    Uses RSA-SHA256 signature extracted from Bambu Connect app.
-    This bypasses the 2025 firmware auth restrictions.
+    Uses RSA-SHA256 signature for authenticated MQTT commands.
+    Required for Developer Mode printer control (print/pause/resume).
     
     Args:
         message_dict: Message payload dict (will be JSON-serialized)
