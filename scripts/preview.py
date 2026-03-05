@@ -106,7 +106,10 @@ if size < 1.0:
 else:
     print(f"MODEL_INFO: {{dims[0]:.1f}} x {{dims[1]:.1f}} x {{dims[2]:.1f}} mm | {{sum(len(o.data.polygons) for o in meshes):,}} faces")
 
+# Detect material type: PBR texture > vertex colors > default
 has_texture = False
+has_vertex_colors = False
+
 for obj in meshes:
     for mat in (obj.data.materials or []):
         if mat and mat.use_nodes:
@@ -118,6 +121,33 @@ for obj in meshes:
     if has_texture: break
 
 if not has_texture:
+    _vc_name = None
+    for obj in meshes:
+        if obj.data.color_attributes:
+            has_vertex_colors = True
+            _vc_name = obj.data.color_attributes[0].name
+            break
+
+if has_texture:
+    print("PBR texture loaded from model")
+elif has_vertex_colors:
+    # Vertex color material: Attribute node → Base Color
+    mat = bpy.data.materials.new("VertexColor")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    bsdf = nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.4
+    attr_node = nodes.new("ShaderNodeAttribute")
+    attr_node.attribute_name = _vc_name
+    attr_node.attribute_type = 'GEOMETRY'
+    links.new(attr_node.outputs["Color"], bsdf.inputs["Base Color"])
+    for obj in meshes:
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+    print("Vertex colors detected — using vertex color material")
+else:
+    # Default single-color preview
     mat = bpy.data.materials.new("Preview")
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
@@ -127,8 +157,6 @@ if not has_texture:
         obj.data.materials.clear()
         obj.data.materials.append(mat)
     print("No texture found — using preview material")
-else:
-    print("PBR texture loaded from model")
 
 cam = bpy.data.cameras.new("Cam")
 cam.clip_end = size * 20
@@ -289,7 +317,7 @@ _shutil.rmtree(_turntable_dir, ignore_errors=True)
                 print("   ⚠️ PIL not available — saved single frame PNG instead of GIF")
             if "MODEL_INFO:" in line:
                 print(f"   {line.split('MODEL_INFO: ')[1]}")
-            if "PBR texture" in line or "No texture" in line or "preview material" in line:
+            if "PBR texture" in line or "No texture" in line or "preview material" in line or "Vertex colors" in line:
                 print(f"   {line.strip()}")
 
         if rendered and os.path.exists(output_path):
