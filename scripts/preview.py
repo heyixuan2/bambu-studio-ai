@@ -180,7 +180,7 @@ except Exception:
 
 bpy.context.scene.render.image_settings.file_format = 'PNG'
 bpy.context.scene.render.film_transparent = False
-bpy.context.scene.view_settings.view_transform = 'Standard'
+bpy.context.scene.view_settings.view_transform = 'Filmic'
 
 def aim_camera(location):
     cam_obj.location = location
@@ -230,7 +230,7 @@ print("RENDER_OK")
     try:
         result = subprocess.run(
             [blender, "--background", "--python", script_file],
-            capture_output=True, text=True, timeout=180
+            capture_output=True, text=True, timeout=300
         )
 
         rendered = False
@@ -255,7 +255,7 @@ print("RENDER_OK")
             return None
 
     except subprocess.TimeoutExpired:
-        print("   ❌ Render timeout (180s)")
+        print("   ❌ Render timeout (300s)")
         return None
     finally:
         if os.path.exists(script_file):
