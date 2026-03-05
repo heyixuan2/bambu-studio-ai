@@ -376,7 +376,7 @@ class Studio3DBackend:
 
 class RodinBackend:
     """Hyper3D Rodin — developer.hyper3d.ai (Business subscription)"""
-    BASE = "https://hyperhuman.deemos.com/api/v2"
+    BASE = "https://api.hyper3d.com/api/v2"
 
     def __init__(self):
         # Force Gen-2 with BAMBU_RODIN_TIER=Gen-2
@@ -386,16 +386,18 @@ class RodinBackend:
         return {"Authorization": f"Bearer {API_KEY}"}
     
     def text_to_3d(self, prompt, **kwargs):
+        # Rodin docs require multipart/form-data (even for text-only generation)
+        files = [
+            ("prompt", (None, prompt)),
+            ("tier", (None, self.tier)),
+            ("geometry_file_format", (None, "glb")),
+            ("material", (None, "PBR")),
+            ("quality", (None, "high")),
+            ("mesh_mode", (None, "Quad")),
+        ]
         r = requests.post(f"{self.BASE}/rodin",
             headers=self._auth(),
-            data={
-                "prompt": prompt,
-                "tier": self.tier,
-                "geometry_file_format": "glb",
-                "material": "PBR",
-                "quality": "high",
-                "mesh_mode": "Quad",
-            }
+            files=files,
         )
         r.raise_for_status()
         resp = r.json()
