@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.7"
+version: "0.22.8"
 author: TieGaier
 metadata:
   openclaw:
