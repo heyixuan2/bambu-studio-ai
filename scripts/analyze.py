@@ -242,19 +242,36 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         checks_passed += 1
     report["checks"].append(check3)
 
-    # === CHECK 4: Overhang Detection ===
+    # === CHECK 4: Overhang Detection (area-weighted, material-aware) ===
     check4 = {"name": "Overhang analysis", "status": "pass"}
     face_normals = mesh.face_normals
-    # Faces pointing downward (Z component < -cos(45°) = -0.707)
-    overhangs = (face_normals[:, 2] < -0.707).sum()
-    overhang_pct = round(overhangs / len(face_normals) * 100, 1)
-    check4["overhang_faces_pct"] = overhang_pct
+    face_areas = mesh.area_faces
+    total_area = mesh.area if mesh.area > 0 else 1.0
+    
+    # Material-aware thresholds
+    overhang_thresholds = {
+        "PLA": 50, "PETG": 45, "ABS": 45, "ASA": 45,
+        "TPU": 60, "PA": 45, "PC": 45,
+    }
+    threshold_deg = overhang_thresholds.get(material, 45)
+    threshold_cos = -__import__('math').cos(__import__('math').radians(threshold_deg))
+    
+    # Area-weighted overhang calculation (excludes near-horizontal bridging faces)
+    overhang_mask = face_normals[:, 2] < threshold_cos
+    # Exclude likely bridges: near-horizontal faces (|normal.z| < 0.1)
+    bridge_mask = abs(face_normals[:, 2]) < 0.1
+    overhang_mask = overhang_mask & ~bridge_mask
+    
+    overhang_area = face_areas[overhang_mask].sum()
+    overhang_pct = round(overhang_area / total_area * 100, 1)
+    check4["overhang_area_pct"] = overhang_pct
+    check4["threshold_deg"] = threshold_deg
     if overhang_pct > 20:
         check4["status"] = "fail"
-        report["issues"].append(f"{overhang_pct}% faces exceed 45° overhang. Needs support material or reorientation.")
+        report["issues"].append(f"{overhang_pct}% surface area exceeds {threshold_deg}° overhang. Needs supports or reorientation.")
     elif overhang_pct > 5:
         check4["status"] = "warn"
-        report["warnings"].append(f"{overhang_pct}% faces have >45° overhang. Consider tree supports or rotating the model.")
+        report["warnings"].append(f"{overhang_pct}% surface area has >{threshold_deg}° overhang. Consider tree supports or rotating the model.")
         checks_passed += 1
     else:
         checks_passed += 1
@@ -415,8 +432,63 @@ def render_views(mesh, output_dir):
         return []
 
 
+def auto_simplify(mesh, max_dim=None):
+    """Auto-simplify mesh if face count is very high. Returns (mesh, simplified_bool)."""
+    import trimesh
+    face_count = len(mesh.faces)
+    
+    if face_count <= 500_000:
+        return mesh, False
+    
+    # Determine target
+    if face_count > 2_000_000:
+        target = 200_000
+        print(f"⚠️ Very high face count ({face_count:,}) — auto-simplifying to {target:,}")
+    else:
+        target = 100_000
+        print(f"💡 High face count ({face_count:,}) — simplifying to {target:,}")
+    
+    try:
+        simplified = mesh.simplify_quadric_decimation(target)
+        reduction = (1 - len(simplified.faces) / face_count) * 100
+        print(f"✅ Simplified: {face_count:,} → {len(simplified.faces):,} faces ({reduction:.0f}% reduction)")
+        return simplified, True
+    except Exception as e:
+        print(f"⚠️ Simplification failed: {e}")
+        return mesh, False
+
+
+def clean_floating_parts(mesh, min_volume_pct=1.0):
+    """Remove disconnected parts smaller than min_volume_pct of total volume.
+    Returns (cleaned_mesh, removed_count)."""
+    import trimesh
+    
+    bodies, timed_out = _safe_split(mesh)
+    if timed_out or len(bodies) <= 1:
+        return mesh, 0
+    
+    volumes = [b.volume for b in bodies]
+    total = sum(volumes)
+    if total <= 0:
+        return mesh, 0
+    
+    threshold = total * (min_volume_pct / 100.0)
+    kept = [(b, v) for b, v in zip(bodies, volumes) if v >= threshold]
+    removed = len(bodies) - len(kept)
+    
+    if removed == 0:
+        return mesh, 0
+    
+    removed_vol = total - sum(v for _, v in kept)
+    print(f"🗑️ Removed {removed} floating part(s) ({removed_vol:.1f}mm³, {removed_vol/total*100:.1f}% of volume)")
+    
+    if len(kept) == 1:
+        return kept[0][0], removed
+    return trimesh.util.concatenate([b for b, _ in kept]), removed
+
+
 def repair_mesh(mesh, output_path=None):
-    """Attempt to repair mesh. Returns structured result dict."""
+    """Attempt to repair mesh with tiered strategy: trimesh → PyMeshLab fallback."""
     import trimesh
     
     issues = []
@@ -427,29 +499,67 @@ def repair_mesh(mesh, output_path=None):
     
     if not issues:
         print("✅ Mesh is clean — no repair needed.")
-        return mesh, False  # Clean mesh, no repair needed
+        return mesh, False
     
-    print(f"🔧 Repairing mesh ({', '.join(issues)})...")
+    severity = "major" if "non-manifold" in " ".join(issues) else "minor"
+    print(f"🔧 Repairing mesh ({', '.join(issues)}, severity: {severity})...")
     
-    # trimesh auto-repair
+    # --- Stage 1: trimesh basic repair ---
     trimesh.repair.fix_normals(mesh)
     trimesh.repair.fix_winding(mesh)
     trimesh.repair.fix_inversion(mesh)
     trimesh.repair.fill_holes(mesh)
-    
-    # Remove degenerate faces
     mesh.update_faces(mesh.nondegenerate_faces())
     mesh.merge_vertices()
-    # mesh cleanup done via merge_vertices
     
-    repaired = mesh.is_watertight and mesh.is_volume
+    if mesh.is_watertight and mesh.is_volume:
+        print(f"✅ Repaired (trimesh). Watertight: ✅ Manifold: ✅")
+        if output_path:
+            mesh.export(output_path)
+            print(f"💾 Saved: {output_path}")
+        return mesh, True
     
-    if repaired:
-        print(f"✅ Mesh repaired! Watertight: {mesh.is_watertight}, Manifold: {mesh.is_volume}")
-    else:
+    # --- Stage 2: PyMeshLab advanced repair (if available) ---
+    if severity == "major" or not mesh.is_watertight:
+        try:
+            import pymeshlab
+            import tempfile
+            
+            print(f"   trimesh insufficient — trying PyMeshLab...")
+            
+            # Save to temp, process in PyMeshLab, reload
+            with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
+                tmp_path = tmp.name
+                mesh.export(tmp_path)
+            
+            ms = pymeshlab.MeshSet()
+            ms.load_new_mesh(tmp_path)
+            
+            # PyMeshLab repair pipeline
+            ms.meshing_remove_duplicate_vertices()
+            ms.meshing_remove_duplicate_faces()
+            ms.meshing_repair_non_manifold_edges()
+            ms.meshing_repair_non_manifold_vertices()
+            ms.meshing_close_holes(maxholesize=30)
+            
+            ms.save_current_mesh(tmp_path)
+            mesh = trimesh.load(tmp_path, force="mesh")
+            
+            import os
+            os.unlink(tmp_path)
+            
+            if mesh.is_watertight and mesh.is_volume:
+                print(f"✅ Repaired (PyMeshLab). Watertight: ✅ Manifold: ✅")
+            else:
+                print(f"⚠️ Partial repair (PyMeshLab). Watertight: {mesh.is_watertight}, Manifold: {mesh.is_volume}")
+        except ImportError:
+            print(f"   💡 Install pymeshlab for better repair: pip3 install pymeshlab")
+        except Exception as e:
+            print(f"   ⚠️ PyMeshLab repair failed: {e}")
+    
+    if not (mesh.is_watertight and mesh.is_volume):
         print(f"⚠️ Partial repair. Watertight: {mesh.is_watertight}, Manifold: {mesh.is_volume}")
-        print(f"   For stubborn meshes, try: https://www.formware.co/onlinestlrepair")
-        print(f"   Or: Bambu Studio → right-click model → Fix Model")
+        print(f"   Try: Bambu Studio → right-click model → Fix Model")
     
     if output_path:
         mesh.export(output_path)
@@ -526,6 +636,8 @@ def main():
     parser.add_argument("--height", type=float, default=0, help="Target height in mm (auto-scale model)")
     parser.add_argument("--orient", action="store_true", help="Auto-orient for optimal print position")
     parser.add_argument("--repair", action="store_true", help="Auto-repair non-manifold mesh before analysis")
+    parser.add_argument("--no-simplify", action="store_true", help="Skip auto-simplification of high-poly meshes")
+    parser.add_argument("--no-clean", action="store_true", help="Skip auto-removal of floating parts")
     parser.add_argument("--output-dir", default=".", help="Directory for rendered images")
     args = parser.parse_args()
 
@@ -611,6 +723,22 @@ def main():
         orient_path = os.path.splitext(args.file)[0] + "_oriented.stl"  # Always STL after unit conversion
         mesh.export(orient_path)
         print(f"📁 Oriented model: {orient_path}")
+
+    # ─── Auto-simplify if too many faces ───
+    if not args.no_simplify:
+        mesh, was_simplified = auto_simplify(mesh)
+        if was_simplified:
+            simp_path = os.path.splitext(args.file)[0] + "_simplified" + os.path.splitext(args.file)[1]
+            mesh.export(simp_path)
+            print(f"💾 Simplified model: {simp_path}")
+
+    # ─── Auto-clean floating parts ───
+    if not args.no_clean:
+        mesh, removed_parts = clean_floating_parts(mesh, min_volume_pct=1.0)
+        if removed_parts > 0:
+            clean_path = os.path.splitext(args.file)[0] + "_cleaned" + os.path.splitext(args.file)[1]
+            mesh.export(clean_path)
+            print(f"💾 Cleaned model: {clean_path}")
 
     # ─── Run analysis on ORIGINAL mesh first ───
     original_mesh = mesh.copy()
