@@ -212,8 +212,8 @@ def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
         if best_fid < 0 or best_count == 0:
             break
 
-        # Floor threshold: skip noise families (<0.1%)
-        if best_count / N < 0.001:
+        # Floor threshold: skip noise families below min_pct
+        if best_count / N < min_pct:
             break
 
 
@@ -707,7 +707,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
     labels = labels_2d.ravel()
     print(f"   Cleaned isolated patches + median smoothed")
 
-        # ── Step 5: Build quantized texture ──
+    # ── Step 5: Build quantized texture ──
     print(f"\n🖼️  Step 5: Quantized texture")
     quantized = build_quantized_texture(pixels, labels, selected, w, h)
 
