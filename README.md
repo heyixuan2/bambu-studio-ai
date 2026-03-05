@@ -35,22 +35,18 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 
 | Feature | Description |
 |---------|-------------|
-| 🖨️ **Printer Control** | Status, print, pause, resume, cancel, speed, light, G-code |
 | 🔎 **Model Search** | Search Printables, MakerWorld, Thingiverse, Thangs for existing models |
 | 🎨 **AI 3D Generation** | Text-to-3D and Image-to-3D via Meshy, Tripo3D, Printpal, or 3D AI Studio |
-| 🎨 **Multi-Color AMS** | Auto-detect colors from texture, vertex-color OBJ pipeline for ≤8-color AMS printing |
-| 🔆 **AI Shadow Handling** | No shadow removal needed — pixel-level HSV family classification bypasses baked lighting entirely |
+| 🎨 **Multi-Color AMS** | Auto-detect ≤8 colors from texture, vertex-color OBJ pipeline, tunable parameters |
+| 🔆 **AI Shadow Handling** | Pixel-level HSV family classification bypasses baked lighting — no shadow removal needed |
 | 🔍 **11-Point Analysis** | Printability check: walls, overhangs, tolerance, infill, layer height, floating parts |
 | 🔧 **Auto Mesh Repair** | Fix non-manifold edges, holes, bad normals, tiered by severity |
-| 📏 **Auto Orient & Scale** | Optimal print orientation (stable poses), auto unit detection (m→mm) |
+| 📏 **Auto Orient & Scale** | Optimal print orientation, auto unit detection (m→mm) |
 | 🔄 **Format Conversion** | Auto GLB→STL (single-color) or GLB→vertex-color OBJ (multi-color) |
 | 📸 **Camera** | RTSP snapshots from printer camera (LAN mode, all models incl. H2D) |
 | 📷 **Model Preview** | HQ rendered preview via Blender (turntable, front/side/top views) |
-| 🤖 **AI Print Monitoring** | Periodic snapshots → anomaly detection → auto-pause on failure |
-| 📦 **AMS Management** | Auto-detect filament colors/types via `bambu.py info` |
-| ⚙️ **CLI Slicing** | OrcaSlicer backend, auto profile merging, quality presets, 3MF output |
-| 🔔 **Notifications** | Print complete/fail alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
-| 🌐 **Dual Mode** | LAN (recommended, full features) + Cloud (remote, limited) |
+| 📡 **Print Monitor** | MQTT status + camera snapshots, milestone notifications (0/25/50/75/100%) |
+| 🔔 **Notifications** | Print alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
 
 ---
 
@@ -128,7 +124,7 @@ clawhub install bambu-studio-ai
 **Manual:**
 ```bash
 git clone https://github.com/heyixuan2/bambu-studio-ai.git ~/.agents/skills/bambu-studio-ai
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh cryptography paho-mqtt
 ```
 
 **Optional but recommended:**

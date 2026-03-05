@@ -78,13 +78,18 @@ secrets:
     storage: ".secrets.json"
     description: "API key from chosen 3D generation provider"
 security:
-  no_credentials_shipped: true
+  no_credentials_shipped: false  # Ships publicly-extracted Bambu Connect X.509 cert (see below)
   secrets_storage: ".secrets.json (chmod 600, git-ignored)"
   config_storage: "config.json (non-sensitive printer settings, git-ignored)"
-  token_cache: ".token_cache.json (cloud auth token, 24h TTL, git-ignored)"
+  token_cache: ".token_cache.json (cloud auth token, 90d TTL, git-ignored)"
   verify_code_file: ".verify_code (one-time cloud login code, git-ignored)"
   files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
   persistence: "Reads/writes config.json, .secrets.json, .token_cache.json, .verify_code locally. No remote data exfiltration."
+  shipped_credentials:
+    what: "Bambu Connect X.509 certificate and private key (BAMBU_APP_CERT / BAMBU_APP_PRIVATE_KEY)"
+    why: "Required to sign MQTT commands for auto-print on firmware ≥01.08. Without it, only read-only status works."
+    risk: "Low — this is NOT a user secret. It was publicly extracted by community researchers in Jan 2025 and is embedded in every copy of Bambu Connect. See: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/"
+    scope: "Can only sign printer commands on LAN (requires LAN access code + same network). Cannot access cloud, other users, or firmware."
   network_access:
     - "Bambu Lab Cloud API (bambulab.com) — printer control, cloud mode only"
     - "Bambu Lab MQTT (LAN) — printer control, local mode only"
@@ -414,7 +419,7 @@ Triggered when `config.json` doesn't exist. Conversational:
 
 **Required:** `python3`, `pip3`
 ```bash
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs cryptography paho-mqtt
 ```
 **Optional:** `ffmpeg` (camera), Bambu Studio (preview/slicing), Blender 4.0+ (multi-color + HQ preview), OrcaSlicer (CLI slicing)
 
