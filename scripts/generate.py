@@ -377,6 +377,10 @@ class Studio3DBackend:
 class RodinBackend:
     """Hyper3D Rodin — developer.hyper3d.ai (Business subscription)"""
     BASE = "https://hyperhuman.deemos.com/api/v2"
+
+    def __init__(self):
+        # Force Gen-2 with BAMBU_RODIN_TIER=Gen-2
+        self.tier = os.environ.get("BAMBU_RODIN_TIER", _cfg.get("rodin_tier", "Regular"))
     
     def _auth(self):
         return {"Authorization": f"Bearer {API_KEY}"}
@@ -386,7 +390,7 @@ class RodinBackend:
             headers=self._auth(),
             data={
                 "prompt": prompt,
-                "tier": "Regular",
+                "tier": self.tier,
                 "geometry_file_format": "glb",
                 "material": "PBR",
                 "quality": "high",
@@ -417,7 +421,7 @@ class RodinBackend:
         
         files = [("images", (os.path.basename(image_path), img_data, "image/jpeg"))]
         data = {
-            "tier": "Regular",
+            "tier": self.tier,
             "geometry_file_format": "glb",
             "material": "PBR",
             "quality": "high",
