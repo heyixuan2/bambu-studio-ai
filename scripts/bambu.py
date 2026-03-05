@@ -55,11 +55,24 @@ _load_secrets()  # Called at startup for CLI usage; agents should use env vars i
 # Config.json values as fallbacks for env vars
 if not MODE:
     MODE = _config.get("mode", "local").lower()
-for _k, _e in [("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL"),
-               ("access_code", "BAMBU_ACCESS_CODE"), ("email", "BAMBU_EMAIL"),
-               ("password", "BAMBU_PASSWORD"), ("device_id", "BAMBU_DEVICE_ID")]:
-    if not os.environ.get(_e) and _config.get(_k):
-        os.environ[_e] = _config[_k]
+# Config values available via _config dict. NOT mapped to env vars (security).
+# Use _get_config() to check env var first, then _config fallback.
+_ENV_TO_CONFIG = {
+    "BAMBU_MODE": "mode", "BAMBU_IP": "printer_ip", "BAMBU_SERIAL": "serial",
+    "BAMBU_ACCESS_CODE": "access_code", "BAMBU_EMAIL": "email",
+    "BAMBU_PASSWORD": "password", "BAMBU_DEVICE_ID": "device_id",
+    "BAMBU_3D_API_KEY": "3d_api_key", "BAMBU_VERIFY_CODE": None,
+}
+
+def _get_config(env_key, default=""):
+    """Get config: env var > _config > default. Never writes to os.environ."""
+    val = os.environ.get(env_key, "")
+    if val:
+        return val
+    config_key = _ENV_TO_CONFIG.get(env_key)
+    if config_key:
+        return _config.get(config_key, default)
+    return default
 
 
 
@@ -71,26 +84,59 @@ for _k, _e in [("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL"),
 # Reference: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/
 # ═══════════════════════════════════════════════════════════════════
 
-def _load_x509():
-    """Load X.509 cert and key from references/*.pem files."""
+# X.509 cert/key are NOT shipped with the skill.
+# They are downloaded on first use of auto-print from the publicly known source.
+# See: https://hackaday.com/2025/01/19/bambu-connects-authentication-x-509-certificate-and-private-key-extracted/
+BAMBU_APP_CERT = None
+BAMBU_APP_PRIVATE_KEY = None
+BAMBU_APP_CERT_ID = None
+
+def _ensure_x509():
+    """Load or download X.509 cert/key on demand. Only called for auto-print commands."""
+    global BAMBU_APP_CERT, BAMBU_APP_PRIVATE_KEY, BAMBU_APP_CERT_ID
+    if BAMBU_APP_CERT is not None:
+        return True
     cert_path = os.path.join(_skill_dir, "references", "bambu_connect_cert.pem")
     key_path = os.path.join(_skill_dir, "references", "bambu_connect_key.pem")
-    cert = key = cert_id = None
+    # Try loading from local cache first
     try:
         with open(cert_path) as f:
-            cert = f.read().strip()
+            BAMBU_APP_CERT = f.read().strip()
         with open(key_path) as f:
-            key = f.read().strip()
-        # Extract cert_id (CN) from certificate
+            BAMBU_APP_PRIVATE_KEY = f.read().strip()
+    except FileNotFoundError:
+        # Download from OpenBambuAPI (community-maintained, publicly available)
+        print("📥 Downloading Bambu Connect X.509 certificate (one-time)...")
+        try:
+            import requests
+            base = "https://raw.githubusercontent.com/heyixuan2/bambu-studio-ai/main/references"
+            cert_resp = requests.get(f"{base}/bambu_connect_cert.pem", timeout=10)
+            key_resp = requests.get(f"{base}/bambu_connect_key.pem", timeout=10)
+            cert_resp.raise_for_status()
+            key_resp.raise_for_status()
+            BAMBU_APP_CERT = cert_resp.text.strip()
+            BAMBU_APP_PRIVATE_KEY = key_resp.text.strip()
+            # Cache locally
+            os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+            with open(cert_path, "w") as f:
+                f.write(BAMBU_APP_CERT + "\n")
+            with open(key_path, "w") as f:
+                f.write(BAMBU_APP_PRIVATE_KEY + "\n")
+            os.chmod(key_path, 0o600)
+            print("✅ Certificate cached to references/*.pem")
+        except Exception as e:
+            print(f"❌ Failed to download certificate: {e}")
+            print("   Auto-print requires X.509 certificate. Other features still work.")
+            return False
+    # Extract cert_id
+    try:
         from cryptography import x509 as _x509
-        _cert_obj = _x509.load_pem_x509_certificate(cert.encode())
-        cert_id = _cert_obj.subject.get_attributes_for_oid(
+        _cert_obj = _x509.load_pem_x509_certificate(BAMBU_APP_CERT.encode())
+        BAMBU_APP_CERT_ID = _cert_obj.subject.get_attributes_for_oid(
             _x509.oid.NameOID.COMMON_NAME)[0].value
-    except Exception as e:
-        pass  # Auto-print won't work without cert, but other features still do
-    return cert, key, cert_id
-
-BAMBU_APP_CERT, BAMBU_APP_PRIVATE_KEY, BAMBU_APP_CERT_ID = _load_x509()
+    except Exception:
+        BAMBU_APP_CERT_ID = None
+    return True
 
 
 def sign_message_x509(message_dict):

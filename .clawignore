@@ -1,0 +1,13 @@
+references/bambu_connect_cert.pem
+references/bambu_connect_key.pem
+.secrets.json
+config.json
+.token_cache.json
+.verify_code
+output/
+__pycache__/
+*.pyc
+.DS_Store
+*.bak
+scripts/test_boundary.py
+scripts/bambu.py.backup
