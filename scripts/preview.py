@@ -60,7 +60,7 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 
 ext = os.path.splitext(MODEL_PATH)[1].lower()
 if ext == ".stl":
-    bpy.ops.import_mesh.stl(filepath=MODEL_PATH)
+    bpy.ops.wm.stl_import(filepath=MODEL_PATH)
 elif ext in (".glb", ".gltf"):
     bpy.ops.import_scene.gltf(filepath=MODEL_PATH)
 elif ext == ".obj":
