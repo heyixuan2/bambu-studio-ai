@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.14"
+version: "0.22.15"
 author: TieGaier
 metadata:
   openclaw:
@@ -60,7 +60,7 @@ env:
     description: "Cloud device ID (auto-detected)"
   - name: BAMBU_3D_PROVIDER
     required: false
-    description: "AI 3D gen provider: meshy, tripo, printpal, 3daistudio"
+    description: "AI 3D gen provider: meshy, tripo, printpal, 3daistudio, rodin"
   - name: BAMBU_3D_API_KEY
     required: false
     description: "API key for chosen 3D generation provider"
@@ -93,6 +93,7 @@ security:
     - "Bambu Lab MQTT (LAN) — printer control, local mode only"
     - "Meshy API (api.meshy.ai) — 3D generation, optional"
     - "Tripo3D API (api.tripo3d.ai) — 3D generation, optional"
+    - "Hyper3D Rodin API (hyperhuman.deemos.com) — 3D generation, optional (Business subscription)"
     - "Printpal API — 3D generation, optional"
     - "3D AI Studio API — 3D generation, optional"
     - "DuckDuckGo (via ddgs) — model search, optional"
