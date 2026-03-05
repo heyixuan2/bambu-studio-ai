@@ -81,10 +81,10 @@ security:
   no_credentials_shipped: true  # X.509 cert/key downloaded on demand, not shipped
   secrets_storage: ".secrets.json (chmod 600, git-ignored)"
   config_storage: "config.json (non-sensitive printer settings, git-ignored)"
-  token_cache: ".token_cache.json (cloud auth token, 90d TTL, git-ignored)"
+  token_cache: ".token_cache.json (cloud auth token, 90d TTL, git-ignored). User can delete to force re-auth."
   verify_code_file: ".verify_code (one-time cloud login code, git-ignored)"
   files_gitignored: [".secrets.json", "config.json", ".token_cache.json", ".verify_code"]
-  persistence: "Reads/writes config.json, .secrets.json, .token_cache.json, .verify_code locally. No remote data exfiltration."
+  persistence: "Reads config.json at startup, .secrets.json on demand (lazy, not at import). Writes .token_cache.json, .verify_code locally. No remote data exfiltration."
   shipped_credentials: "NONE — X.509 cert/key are NOT shipped. Downloaded on first auto-print use from public source (OpenBambuAPI GitHub). Cached locally in references/*.pem (git-ignored, key chmod 600)."
   x509_source: "https://github.com/Doridian/OpenBambuAPI (community-maintained, publicly extracted Jan 2025)"
   x509_scope: "Signs MQTT commands for LAN auto-print only. Requires user's own access code + same network. Cannot access cloud or other devices."

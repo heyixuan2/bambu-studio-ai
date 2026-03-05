@@ -43,14 +43,19 @@ if os.path.exists(_cpath):
         _config = _j.load(_f)
 
 # Load secrets (only when a command is invoked, not on import)
+_secrets_loaded = False
+
 def _load_secrets():
+    """Load secrets from .secrets.json on demand (not at import time)."""
+    global _secrets_loaded
+    if _secrets_loaded:
+        return
+    _secrets_loaded = True
     _secrets_path = os.path.join(_skill_dir, ".secrets.json")
     if os.path.exists(_secrets_path):
         import json as _j
         with open(_secrets_path) as _f:
             _config.update(_j.load(_f))
-
-_load_secrets()  # Called at startup for CLI usage; agents should use env vars instead
 
 # Config.json values as fallbacks for env vars
 if not MODE:
@@ -66,6 +71,7 @@ _ENV_TO_CONFIG = {
 
 def _get_config(env_key, default=""):
     """Get config: env var > _config > default. Never writes to os.environ."""
+    _load_secrets()  # Lazy load on first config access
     val = os.environ.get(env_key, "")
     if val:
         return val
@@ -106,7 +112,14 @@ def _ensure_x509():
             BAMBU_APP_PRIVATE_KEY = f.read().strip()
     except FileNotFoundError:
         # Download from OpenBambuAPI (community-maintained, publicly available)
-        print("📥 Downloading Bambu Connect X.509 certificate (one-time)...")
+        print("📥 Auto-print requires the Bambu Connect X.509 certificate (community-extracted, public).")
+        print("   Source: https://github.com/heyixuan2/bambu-studio-ai")
+        print("   This is NOT a personal secret — it's embedded in every Bambu Connect app.")
+        consent = input("   Download and cache locally? [y/N] ").strip().lower()
+        if consent != 'y':
+            print("   ❌ Skipped. Auto-print will not work without the certificate.")
+            return False
+        print("📥 Downloading...")
         try:
             import requests
             base = "https://raw.githubusercontent.com/heyixuan2/bambu-studio-ai/main/references"
@@ -264,9 +277,17 @@ def ftp_upload_via_curl(ip, access_code, local_path, remote_filename):
     remote_path = f'/{remote_filename}'
     ftps_url = f'ftps://{ip}:990{remote_path}'
     
+    # Use netrc file to avoid exposing credentials in process listing
+    import tempfile as _tmp
+    netrc_path = os.path.join(_tmp.gettempdir(), ".bambu_netrc")
     try:
+        with open(netrc_path, "w") as nf:
+            nf.write(f"machine {ip}\nlogin bblp\npassword {access_code}\n")
+        os.chmod(netrc_path, 0o600)
         result = subprocess.run(
-            ['curl', '--ftp-ssl-reqd', '--insecure', '--user', f'bblp:{access_code}', '-T', local_path, ftps_url],
+            ['curl', '--ftp-ssl-reqd', '--ssl-no-revoke',
+             '--netrc-file', netrc_path,
+             '-T', local_path, ftps_url],
             capture_output=True,
             timeout=60,
             check=True
@@ -276,6 +297,9 @@ def ftp_upload_via_curl(ip, access_code, local_path, remote_filename):
         raise RuntimeError("curl not found. Install curl or install ftplib dependencies.")
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"FTP upload failed: {e.stderr.decode()}")
+    finally:
+        if os.path.exists(netrc_path):
+            os.unlink(netrc_path)
 
 
 # ─── Cloud API Backend ───────────────────────────────────────────────
