@@ -177,11 +177,11 @@ User Confirms ("looks good" / "print it")
     │
     ▼
 Decision 2: Print Method
-    ├─ E: Auto Print (bambu.py print --confirmed)
+    ├─ E: Auto Print (Developer Mode only, not recommended)
     └─ F: Manual Print (user handles in Bambu Studio)
     │
     ▼
-Print Monitoring (auto print only, or on user request)
+Print Monitoring (both workflows, or on user request)
 ```
 
 ---
@@ -315,14 +315,15 @@ Auto-detects printer + nozzle. Quality: draft(0.24) / standard(0.20) / fine(0.12
 ⛔ NEVER auto-print. AI models frequently have errors analysis can't fully catch.
 
 4. Ask print method:
-   - Direct automatic printing → Workflow E
+   - Direct automatic printing → Workflow E (Developer Mode only, not recommended)
    - Manual in Bambu Studio → Workflow F
 
 ---
 
 ## Step 5: Print Execution (Decision Point 2)
 
-### Workflow E — Auto Print
+### Workflow E — Auto Print (Developer Mode only, not recommended)
+⚠️ Requires Developer Mode ON. Bambu Studio and Bambu Handy will disconnect.
 1. `bambu.py print model.3mf --confirmed`
 2. Confirm: "Print started!"
 3. → Monitoring
