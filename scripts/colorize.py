@@ -132,13 +132,10 @@ FAMILY_NAMES = ["black", "dark_gray", "light_gray", "white",
                 "red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink"]
 
 # Families that exclude each other during greedy selection
+# Default: all 12 families are independent (no auto-merge)
+# User can request merging manually after seeing results
 FAMILY_GROUPS = {
-    0: [0, 1], 1: [0, 1],       # black ↔ dark_gray
-    2: [2, 3], 3: [2, 3],       # light_gray ↔ white
-    4: [4, 11], 11: [4, 11],    # red ↔ pink
-    # orange and yellow are independent (e.g. SpongeBob yellow body + brown pants)
-    7: [7, 8], 8: [7, 8],       # green ↔ cyan
-    9: [9, 10], 10: [9, 10],    # blue ↔ purple
+    # All families map to themselves only — no auto-exclusion
 }
 
 
