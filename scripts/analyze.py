@@ -11,7 +11,11 @@ Output: JSON report with issues, warnings, suggestions, and optional rendered vi
 """
 
 import argparse
+import json
+import math
+import os
 import signal
+import sys
 
 
 def _safe_split(mesh, timeout_sec=30):
@@ -121,10 +125,6 @@ def auto_orient(mesh):
         bounds = mesh.bounds
         mesh.apply_translation([0, 0, -bounds[0][2]])
         return mesh
-import json
-import math
-import os
-import sys
 
 # Config loading (same pattern as other scripts)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -254,7 +254,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         "TPU": 60, "PA": 45, "PC": 45,
     }
     threshold_deg = overhang_thresholds.get(material, 45)
-    threshold_cos = -__import__('math').cos(__import__('math').radians(threshold_deg))
+    threshold_cos = -math.cos(math.radians(threshold_deg))
     
     # Area-weighted overhang calculation (excludes near-horizontal bridging faces)
     overhang_mask = face_normals[:, 2] < threshold_cos
@@ -545,7 +545,6 @@ def repair_mesh(mesh, output_path=None):
             ms.save_current_mesh(tmp_path)
             mesh = trimesh.load(tmp_path, force="mesh")
             
-            import os
             os.unlink(tmp_path)
             
             if mesh.is_watertight and mesh.is_volume:
