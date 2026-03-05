@@ -17,6 +17,8 @@ import json
 import time
 import argparse
 import shutil
+import requests
+from pathlib import Path
 
 
 def _convert_model(input_path, target_format):
@@ -55,8 +57,6 @@ def _convert_model(input_path, target_format):
     except Exception as e:
         print(f"⚠️ Conversion failed: {e}")
         return input_path
-import requests
-from pathlib import Path
 
 # ─── Config ──────────────────────────────────────────────────────────
 
@@ -711,29 +711,29 @@ def cmd_status(task_id):
 def cmd_download(task_id, fmt="3mf"):
     backend = get_backend()
     path = backend.download(task_id, fmt)
-    if path:
-        # Unified post-processing: format detection, conversion, auto-scale
-        path = _finalize(path, target_format=fmt)
-        
-        # Final conversion if _finalize didn't produce target format
-        actual_ext = os.path.splitext(path)[1].lower().lstrip('.')
-        if actual_ext != fmt.lower():
-            path = _convert_model(path, fmt)
-        
-        size = os.path.getsize(path)
-        print(f"✅ Downloaded: {path} ({size / 1024:.1f} KB)")
-        # Verify Bambu compatibility
-        final_ext = os.path.splitext(path)[1].lower().lstrip('.')
-        if final_ext in ("3mf", "stl", "step", "stp", "obj"):
-            print(f"   ✅ {final_ext.upper()} is Bambu Studio compatible")
-        else:
-            print(f"   ❌ WARNING: {final_ext.upper()} is NOT compatible with Bambu Studio!")
-            print(f"   Run: python3 scripts/generate.py download {task_id} --format stl")
-        print(f"\n💡 Next: python3 scripts/analyze.py {path}")
-        print(f"         python3 scripts/bambu.py print {os.path.basename(path)}")
+    if not path:
+        return None
+    
+    # Unified post-processing: format detection, conversion, auto-scale
+    path = _finalize(path, target_format=fmt)
+    if not path:
+        print(f"❌ Post-processing failed")
+        return None
+    
+    size = os.path.getsize(path)
+    print(f"✅ Downloaded: {path} ({size / 1024:.1f} KB)")
+    # Verify Bambu compatibility
+    final_ext = os.path.splitext(path)[1].lower().lstrip('.')
+    if final_ext in ("3mf", "stl", "step", "stp", "obj"):
+        print(f"   ✅ {final_ext.upper()} is Bambu Studio compatible")
+    else:
+        print(f"   ❌ WARNING: {final_ext.upper()} is NOT compatible with Bambu Studio!")
+        print(f"   Run: python3 scripts/generate.py download {task_id} --format stl")
+    print(f"\n💡 Next: python3 scripts/analyze.py {path}")
+    print(f"         python3 scripts/bambu.py print {os.path.basename(path)}")
     return path
 
-def _wait_and_download(backend, task_id, fmt="stl"):
+def _wait_and_download(backend, task_id, fmt="3mf"):
     """Poll until complete, then download."""
     print(f"\n⏳ Waiting for generation...")
     
