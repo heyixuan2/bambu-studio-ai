@@ -222,6 +222,53 @@ else:
 print("RENDER_OK")
 '''
 
+    TURNTABLE_SCRIPT = """
+# --- Turntable GIF rendering ---
+import tempfile as _tf
+_turntable_dir = _tf.mkdtemp(prefix="turntable_")
+_num_frames = 36
+bpy.context.scene.render.resolution_x = 600
+bpy.context.scene.render.resolution_y = 600
+
+aim_camera(view_configs["perspective"])
+_base_angle = math.atan2(cam_obj.location.y - center.y, cam_obj.location.x - center.x)
+
+for _i in range(_num_frames):
+    _angle = _base_angle + (2 * math.pi * _i / _num_frames)
+    # Elevation oscillates: high(70deg) → below(-20deg), covers top/front/bottom
+    _elev = math.radians(25 + 45 * math.sin(2 * math.pi * _i / _num_frames))
+    _r = dist * 0.9
+    _cx = center.x + _r * math.cos(_elev) * math.cos(_angle)
+    _cy = center.y + _r * math.cos(_elev) * math.sin(_angle)
+    _cz = center.z + _r * math.sin(_elev)
+    aim_camera((_cx, _cy, _cz))
+    _frame_path = os.path.join(_turntable_dir, "frame_%03d.png" % _i)
+    bpy.context.scene.render.filepath = _frame_path
+    bpy.ops.render.render(write_still=True)
+
+# Assemble GIF
+try:
+    from PIL import Image
+    _frames = []
+    for _i in range(_num_frames):
+        _fp = os.path.join(_turntable_dir, "frame_%03d.png" % _i)
+        _frames.append(Image.open(_fp).copy())
+    _frames[0].save(OUTPUT_PATH, save_all=True, append_images=_frames[1:],
+                     duration=120, loop=0, optimize=True)
+    print("TURNTABLE_OK")
+except ImportError:
+    import shutil
+    shutil.copy(os.path.join(_turntable_dir, "frame_000.png"), OUTPUT_PATH)
+    print("TURNTABLE_FALLBACK_PNG")
+
+import shutil as _shutil
+_shutil.rmtree(_turntable_dir, ignore_errors=True)
+"""
+
+    # Inject turntable rendering if requested
+    if views == "turntable":
+        script = script.replace('print("RENDER_OK")', TURNTABLE_SCRIPT)
+
     script_file = os.path.join(tempfile.gettempdir(), "bambu_preview.py")
     with open(script_file, "w") as f:
         f.write(script)
@@ -235,8 +282,11 @@ print("RENDER_OK")
 
         rendered = False
         for line in result.stdout.split('\n'):
-            if "RENDER_OK" in line:
+            if "RENDER_OK" in line or "TURNTABLE_OK" in line:
                 rendered = True
+            if "TURNTABLE_FALLBACK_PNG" in line:
+                rendered = True
+                print("   ⚠️ PIL not available — saved single frame PNG instead of GIF")
             if "MODEL_INFO:" in line:
                 print(f"   {line.split('MODEL_INFO: ')[1]}")
             if "PBR texture" in line or "No texture" in line or "preview material" in line:
@@ -270,8 +320,8 @@ def main():
     parser.add_argument("model", help="Model file (STL/OBJ/GLB/GLTF/FBX)")
     parser.add_argument("--output", "-o", help="Output PNG path")
     parser.add_argument("--views", "-v", default="perspective",
-                        choices=["perspective", "front", "side", "top", "all"],
-                        help="View angle (default: perspective, 'all' = 2x2 grid)")
+                        choices=["perspective", "front", "side", "top", "all", "turntable"],
+                        help="View angle (default: perspective, 'all' = 2x2 grid, 'turntable' = 360° GIF)")
     args = parser.parse_args()
 
     if not os.path.exists(args.model):
@@ -279,7 +329,8 @@ def main():
         sys.exit(1)
 
     if not args.output:
-        args.output = os.path.splitext(args.model)[0] + "_preview.png"
+        ext = ".gif" if args.views == "turntable" else ".png"
+        args.output = os.path.splitext(args.model)[0] + "_preview" + ext
 
     result = preview(args.model, os.path.abspath(args.output), views=args.views)
     if result is None:
