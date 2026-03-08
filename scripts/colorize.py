@@ -253,10 +253,11 @@ def _name_from_rgb(median_rgb):
     minc = min(r, g, b)
     v = maxc / 255.0
     s = (maxc - minc) / maxc if maxc > 0 else 0
-    if s < 0.15:
+    # Match classify_pixels thresholds exactly
+    if s < 0.15 or v < 0.1:
         if v < 0.2: return "black"
-        elif v < 0.4: return "dark_gray"
-        elif v < 0.75: return "light_gray"
+        elif v < 0.5: return "dark_gray"
+        elif v < 0.8: return "light_gray"
         else: return "white"
     diff = maxc - minc
     if diff == 0: h = 0
@@ -283,9 +284,9 @@ def kmeans_select_colors(pixels, pixel_lab, max_colors=8, min_pct=0.001):
     from sklearn.cluster import KMeans
     
     N = len(pixels)
-    if N > 500000:
+    if N > 200000:
         rng = np.random.RandomState(42)
-        idx = rng.choice(N, 500000, replace=False)
+        idx = rng.choice(N, 200000, replace=False)
         sub_lab = pixel_lab[idx]
         sub_rgb = pixels[idx]
     else:
@@ -293,7 +294,7 @@ def kmeans_select_colors(pixels, pixel_lab, max_colors=8, min_pct=0.001):
         sub_rgb = pixels
     
     Ns = len(sub_lab)
-    km = KMeans(n_clusters=max_colors, init='k-means++', n_init=10, random_state=42, max_iter=100)
+    km = KMeans(n_clusters=max_colors, init='k-means++', n_init=5, random_state=42, max_iter=100)
     labels = km.fit_predict(sub_lab)
     
     selected = []
@@ -427,6 +428,11 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
         s.pop("fid", None)
     
     selected.sort(key=lambda x: -x["percentage"])
+    
+    # Hard cap at max_colors (AMS has 8 slots max)
+    if len(selected) > max_colors:
+        selected = selected[:max_colors]
+    
     return selected
 
 
@@ -994,6 +1000,9 @@ def main():
         subdivide=args.subdivide,
         colors=args.colors,
         min_pct=getattr(args, "min_pct", 1.0) / 100,
+        no_merge=getattr(args, "no_merge", False),
+        island_size=getattr(args, "island_size", 1000),
+        smooth=getattr(args, "smooth", 5),
         method=getattr(args, "method", "hybrid"),
     )
     if result is None:
