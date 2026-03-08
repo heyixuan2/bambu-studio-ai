@@ -18,12 +18,8 @@ Usage:
 import os, sys, json, subprocess, argparse, shutil, tempfile, glob, re
 
 # ─── Paths ───
-_skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_cfg = {}
-for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".secrets.json")]:
-    if os.path.exists(_p):
-        with open(_p) as _f:
-            _cfg.update(json.load(_f))
+from common import SKILL_DIR as _skill_dir, load_config
+_cfg = load_config(include_secrets=True)
 
 # Slicer discovery
 ORCA_PATHS = [

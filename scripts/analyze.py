@@ -14,31 +14,17 @@ import argparse
 import json
 import math
 import os
-import signal
 import sys
+
+from common import (
+    SKILL_DIR, BUILD_VOLUMES, MATERIALS, ENCLOSED_PRINTERS, HIGH_TEMP_PRINTERS,
+    load_config, safe_split_mesh,
+)
 
 
 def _safe_split(mesh, timeout_sec=30):
-    """Split mesh into connected components with timeout protection.
-    Some complex topologies cause trimesh.split() to hang indefinitely."""
-    def _alarm(signum, frame):
-        raise TimeoutError("mesh.split() timed out")
-    
-    old_handler = signal.signal(signal.SIGALRM, _alarm)
-    signal.alarm(timeout_sec)
-    try:
-        bodies = mesh.split(only_watertight=False)
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
-        return bodies, False
-    except TimeoutError:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
-        return [mesh], True
-    except Exception:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
-        return [mesh], False
+    """Split mesh into connected components with cross-platform timeout."""
+    return safe_split_mesh(mesh, timeout_sec=timeout_sec)
 
 
 def auto_orient(mesh):
@@ -126,47 +112,7 @@ def auto_orient(mesh):
         mesh.apply_translation([0, 0, -bounds[0][2]])
         return mesh
 
-# Config loading (same pattern as other scripts)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SKILL_DIR = os.path.dirname(SCRIPT_DIR)
-
-def load_config():
-    config = {}
-    config_path = os.path.join(SKILL_DIR, "config.json")
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            config = json.load(f)
-    return config
-
-# Build volumes (with 10% safety margin)
-BUILD_VOLUMES = {
-    "A1 Mini": (162, 162, 162),
-    "A1": (230, 230, 230),
-    "P1S": (230, 230, 230),
-    "P2S": (230, 230, 230),
-    "X1C": (230, 230, 230),
-    "X1E": (230, 230, 230),
-    "H2C": (230, 230, 230),
-    "H2S": (306, 288, 306),
-    "H2D": (315, 288, 292),
-}
-
-# Material properties
-MATERIALS = {
-    "PLA":  {"min_wall": 1.2, "min_temp": 190, "max_temp": 220, "bed": 60,  "infill_deco": 15, "infill_func": 30, "enclosed": False},
-    "PLA+": {"min_wall": 1.2, "min_temp": 200, "max_temp": 230, "bed": 60,  "infill_deco": 15, "infill_func": 30, "enclosed": False},
-    "PETG": {"min_wall": 1.2, "min_temp": 220, "max_temp": 250, "bed": 80,  "infill_deco": 20, "infill_func": 40, "enclosed": False},
-    "TPU":  {"min_wall": 1.6, "min_temp": 210, "max_temp": 240, "bed": 50,  "infill_deco": 10, "infill_func": 30, "enclosed": False},
-    "ABS":  {"min_wall": 1.2, "min_temp": 230, "max_temp": 260, "bed": 100, "infill_deco": 15, "infill_func": 30, "enclosed": True},
-    "ASA":  {"min_wall": 1.2, "min_temp": 230, "max_temp": 260, "bed": 100, "infill_deco": 15, "infill_func": 30, "enclosed": True},
-    "PA":   {"min_wall": 1.5, "min_temp": 250, "max_temp": 280, "bed": 80,  "infill_deco": 20, "infill_func": 40, "enclosed": True},
-    "PC":   {"min_wall": 1.5, "min_temp": 260, "max_temp": 300, "bed": 100, "infill_deco": 20, "infill_func": 40, "enclosed": True},
-    "PEEK": {"min_wall": 2.0, "min_temp": 330, "max_temp": 350, "bed": 120, "infill_deco": 25, "infill_func": 50, "enclosed": True},
-}
-
-# Printers requiring enclosure
-ENCLOSED_PRINTERS = {"P1S", "P2S", "X1C", "X1E", "H2C", "H2S", "H2D"}
-HIGH_TEMP_PRINTERS = {"H2C", "H2D"}  # 350°C nozzle
 
 
 def analyze_mesh(mesh, printer_model, material, purpose="general"):
@@ -469,38 +415,70 @@ def auto_simplify(mesh, max_dim=None):
 
 def clean_floating_parts(mesh, min_volume_pct=1.0, keep_top_n=None):
     """Remove disconnected parts smaller than min_volume_pct of total volume.
-    If keep_top_n is set (e.g. 1), keep only the largest N components — useful when
-    main body is fragmented among many small pieces (e.g. Tripo 68 parts, main 10%).
+    If keep_top_n is set (e.g. 1), keep only the largest N components.
+
+    Safety: uses FACE COUNT as the primary metric (not volume) because
+    trimesh computes unreliable volumes for non-watertight AI meshes.
+    Also refuses to remove parts if the "kept" set would lose >50% of faces
+    — this catches cases where trimesh.split() mis-fragments a solid mesh.
+
     Returns (cleaned_mesh, removed_count)."""
     import trimesh
-    
+
     bodies, timed_out = _safe_split(mesh)
     if timed_out or len(bodies) <= 1:
         return mesh, 0
-    
-    volumes = [b.volume for b in bodies]
-    total = sum(volumes)
-    if total <= 0:
-        return mesh, 0
-    
+
+    face_counts = [len(b.faces) for b in bodies]
+    total_faces = sum(face_counts) or 1
+
     if keep_top_n is not None:
-        # Keep only largest N components (e.g. keep_top_n=1 = main body only)
-        sorted_pairs = sorted(zip(bodies, volumes), key=lambda x: -x[1])
-        kept = sorted_pairs[:keep_top_n]
+        sorted_pairs = sorted(zip(bodies, face_counts), key=lambda x: -x[1])
+        kept_pairs = sorted_pairs[:keep_top_n]
+        kept_faces = sum(fc for _, fc in kept_pairs)
+
+        # Safety: if keeping top-N would discard >50% of faces, warn and bail
+        if kept_faces < total_faces * 0.5:
+            pct = kept_faces / total_faces * 100
+            print(f"⚠️ Largest {keep_top_n} component(s) = {pct:.0f}% of faces — "
+                  f"split may be unreliable. Skipping clean to avoid data loss.")
+            print(f"   💡 If model truly has floating junk, open in Blender and manually delete")
+            return mesh, 0
+
+        removed = len(bodies) - len(kept_pairs)
+        if removed == 0:
+            return mesh, 0
+        print(f"🗑️ Removed {removed} floating part(s) "
+              f"(kept {kept_faces:,}/{total_faces:,} faces, {kept_faces/total_faces*100:.0f}%)")
+        if len(kept_pairs) == 1:
+            return kept_pairs[0][0], removed
+        return trimesh.util.concatenate([b for b, _ in kept_pairs]), removed
     else:
-        threshold = total * (min_volume_pct / 100.0)
-        kept = [(b, v) for b, v in zip(bodies, volumes) if v >= threshold]
-    removed = len(bodies) - len(kept)
-    
-    if removed == 0:
-        return mesh, 0
-    
-    removed_vol = total - sum(v for _, v in kept)
-    print(f"🗑️ Removed {removed} floating part(s) ({removed_vol:.1f}mm³, {removed_vol/total*100:.1f}% of volume)")
-    
-    if len(kept) == 1:
-        return kept[0][0], removed
-    return trimesh.util.concatenate([b for b, _ in kept]), removed
+        # Volume-based threshold (original behavior) with face-count safety
+        volumes = [b.volume for b in bodies]
+        total_vol = sum(volumes)
+        if total_vol <= 0:
+            return mesh, 0
+        threshold = total_vol * (min_volume_pct / 100.0)
+        kept = [(b, fc) for b, v, fc in zip(bodies, volumes, face_counts) if v >= threshold]
+        removed = len(bodies) - len(kept)
+
+        if removed == 0:
+            return mesh, 0
+
+        kept_faces = sum(fc for _, fc in kept)
+        # Safety: don't remove if we'd lose >40% of geometry
+        if kept_faces < total_faces * 0.6:
+            print(f"⚠️ Cleaning would remove {100 - kept_faces/total_faces*100:.0f}% of faces — "
+                  f"skipping (split may be unreliable on this mesh)")
+            return mesh, 0
+
+        removed_vol = total_vol - sum(b.volume for b, _ in kept)
+        print(f"🗑️ Removed {removed} floating part(s) "
+              f"({removed_vol:.1f}mm³, {removed_vol/total_vol*100:.1f}% of volume)")
+        if len(kept) == 1:
+            return kept[0][0], removed
+        return trimesh.util.concatenate([b for b, _ in kept]), removed
 
 
 def repair_mesh(mesh, output_path=None):

@@ -20,12 +20,8 @@ import os, sys, time, argparse, subprocess, json
 from datetime import datetime, timedelta
 
 # ─── Config ───
-_skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_cfg = {}
-for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".secrets.json")]:
-    if os.path.exists(_p):
-        with open(_p) as _f:
-            _cfg.update(json.load(_f))
+from common import SKILL_DIR as _skill_dir, load_config
+_cfg = load_config(include_secrets=True)
 
 BAMBU_IP = os.environ.get("BAMBU_IP", _cfg.get("printer_ip", ""))
 BAMBU_ACCESS_CODE = os.environ.get("BAMBU_ACCESS_CODE", _cfg.get("access_code", ""))
@@ -113,8 +109,10 @@ def notify(title, message, snapshot=None):
         pass
     # Also try macOS notification as fallback
     try:
+        msg_safe = message.replace("\\", "\\\\").replace('"', '\\"')
+        title_safe = title.replace("\\", "\\\\").replace('"', '\\"')
         subprocess.run(["osascript", "-e",
-            f'display notification "{message}" with title "🖨️ {title}"'],
+            f'display notification "{msg_safe}" with title "🖨️ {title_safe}"'],
             capture_output=True, timeout=5)
     except Exception:
         pass

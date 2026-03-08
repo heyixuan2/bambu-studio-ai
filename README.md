@@ -2,7 +2,7 @@
 
 Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/openclaw/openclaw).
 
-**Idea → Search/Generate → Analyze & Repair → Preview → Print → Monitor → Notify**
+**Idea → Search/Generate → Analyze & Repair → Preview → Open Bambu Studio → User Slice & Confirm → Print → Monitor → Notify**
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-bambu--studio--ai-blue)](https://clawhub.ai/heyixuan2/bambu-studio-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -110,7 +110,7 @@ This skill has ~400 lines of instructions with multi-step branching flows. The A
 | ⚠️ **Usable** | Claude Haiku 3.5, GPT-4o-mini, Gemini 2.0 Flash, Llama 3.1/3.3 70B+, DeepSeek-V2.5, Qwen-72B, GLM-4, Yi-Large, or similar mid-tier models | May simplify pre-generation or skip monitoring details |
 | ❌ **Not recommended** | Llama 8B, Phi-3/4, Qwen-7B, ChatGLM-6B, Mistral 7B, or any model under ~30B parameters | Will miss critical safety steps — not safe for printer control |
 
-> **Why it matters:** The skill has a strict pipeline: search → generate → analyze → repair → preview → confirm → print → monitor. Small models tend to skip the analyze/preview steps, which can waste filament, damage prints, or in worst case harm the printer. When in doubt, use a recommended-tier model.
+> **Why it matters:** The skill has a strict pipeline: search → generate → analyze → repair → preview → open Bambu Studio → user slice & confirm → print → monitor. Small models tend to skip the analyze/preview steps, which can waste filament, damage prints, or in worst case harm the printer. When in doubt, use a recommended-tier model.
 
 ---
 
@@ -169,7 +169,7 @@ On your printer's touchscreen:
 ### Print Mode
 
 **Option A: Manual Print (Recommended, Safe)**
-- Agent generates/slices model → opens in Bambu Studio → you review and print
+- Agent generates model → opens in Bambu Studio → you slice, review, and print
 - No special printer settings needed
 - Bambu Studio and Bambu Handy continue working normally
 
@@ -235,12 +235,12 @@ analyze.py → 11-point printability check                    ← Analyze
 Auto-repair if needed                                       ← Repair
 "🔧 Fixed 58K non-manifold edges"
                     ↓
-open -a "BambuStudio" phone_case.3mf                       ← Preview (MANDATORY)
-Agent: "Opened in Bambu Studio. Please check:              ← User must verify
+open -a "BambuStudio" phone_case.3mf                       ← Open in BS (MANDATORY)
+Agent: "Opened in Bambu Studio. Please:                    ← User must verify + slice
   - Does the model look correct?
   - Any floating/disconnected parts?
   - Dimensions right?
-  - Slice it — check time and filament
+  - Slice (Cmd+R) — check time, filament, supports
   Let me know when ready!"
 
 User: "Looks good, print it"
@@ -458,7 +458,7 @@ Use only when you can't be on the same network as the printer.
 | G-code Commands | ❌ |
 | AI Print Monitoring | ❌ |
 | Speed | Slower (via Bambu servers) |
-| Auth | Email + verification code (every 24h) |
+| Auth | Email + verification code (token cached 90 days) |
 
 ---
 
@@ -519,7 +519,7 @@ python3 scripts/bambu.py ams                       # AMS filament status
 python3 scripts/bambu.py snapshot                  # Camera photo
 python3 scripts/bambu.py gcode "G28"               # Send G-code
 
-# Slicing
+# Slicing (optional — users normally slice in Bambu Studio)
 python3 scripts/slice.py model.stl                 # Slice with auto-detect
 python3 scripts/slice.py model.stl --orient        # Auto-orient + slice
 python3 scripts/slice.py model.stl --quality fine  # 0.12mm layer height
@@ -653,13 +653,14 @@ bambu-studio-ai/
 │   └── bambu_filament_colors.json — Bambu Lab 43-color filament palette
 ├── requirements.txt            — Python dependencies
 └── scripts/
+    ├── common.py               — Shared config, constants, utilities (BUILD_VOLUMES, find_blender, timeout)
     ├── bambu.py                — Printer control (Cloud + LAN, token caching)
     ├── generate.py             — AI 3D generation (4 providers, auto-convert, prompt enhancement)
     ├── analyze.py              — 11-point printability analysis + mesh repair
     ├── colorize.py             — Multi-color pipeline v4 (pixel classify → greedy select → vertex color OBJ)
     ├── monitor.py              — Smart print monitor (anomaly detection, notifications)
-    ├── preview.py              — Model preview renderer (matplotlib quick / Blender HQ)
-    ├── slice.py                — CLI slicer (OrcaSlicer backend, auto profile merging)
+    ├── preview.py              — Model preview renderer (Blender HQ)
+    ├── slice.py                — CLI slicer (optional, OrcaSlicer backend)
     ├── search.py               — Model search (MakerWorld, Printables, Thingiverse, Thangs)
     ├── doctor.py               — Dependency doctor (verify all deps + API symbols)
     └── test_boundary.py        — Boundary condition tests

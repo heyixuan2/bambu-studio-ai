@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
-description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.26"
+description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
+version: "0.22.27"
 author: TieGaier
 metadata:
   openclaw:
@@ -110,7 +110,7 @@ keywords:
 
 # 🖨️ Bambu Studio AI
 
-Request → Collect Info → Search/Generate → Analyze(11pt) → [Colorize] → Slice → Preview(chat) → Preview(BS) → Confirm → Print → Monitor
+Request → Collect Info → Search/Generate → Analyze(11pt) → [Colorize] → Preview(chat) → Open BS → [User Slices in BS] → Confirm → Print → Monitor
 
 Pre-check: If `config.json` does not exist → run First-Time Setup before any operation.
 
@@ -142,10 +142,12 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 2. **Get model** → Search or generate per user choice
 3. **Analyze** → `analyze.py --orient --repair` on every model
 4. **Preview to chat** → `preview.py --views turntable` → **send image/GIF to user**
-5. **Slice** (if not user-slicing) → `slice.py`
-6. **Open Bambu Studio** → `open -a "BambuStudio" model.3mf`
+5. **Open Bambu Studio** → `open -a "BambuStudio" model.3mf` (or model.stl/obj)
+6. **User slices in Bambu Studio** → Tell user to slice, inspect, and confirm
 7. **Wait for confirmation** → Do not proceed until user says ready
 8. **Print** → Only after confirmation
+
+> **Note:** `slice.py` (CLI slicing via OrcaSlicer) is **optional** — only use if user explicitly requests CLI slicing. The default is for users to slice in Bambu Studio themselves, where they can adjust supports, infill, and other settings visually.
 
 ### Pipeline Checklist (verify before claiming done)
 ```
@@ -153,8 +155,8 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 [ ] Model obtained (search/generate/download)
 [ ] analyze.py --orient --repair run
 [ ] Preview image/GIF sent to chat
-[ ] slice.py run (or user will slice)
 [ ] Opened in Bambu Studio
+[ ] User sliced + inspected in Bambu Studio
 [ ] User confirmed "looks good" / "print it"
 [ ] Print started (only after confirmation)
 ```
@@ -182,8 +184,8 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
 | Keep main only (remove fragments) | `python3 scripts/analyze.py model.stl --repair --keep-main` |
 | Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`, `--bambu-map`) |
-| Slice | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
-| Slice (specific setup) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
+| Slice (optional CLI) | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
+| Slice (specific setup, optional) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
 | List slicer profiles | `python3 scripts/slice.py --list-profiles` |
 | Preview (quick) | `python3 scripts/preview.py model.stl` |
 | Preview (HQ Blender) | `python3 scripts/preview.py model.stl --hq` |
@@ -211,7 +213,7 @@ Decision 1: Model Source
     └─ D: User-provided file
     │
     ▼
-Model Processing (analyze → repair → orient → [colorize] → slice)
+Model Processing (analyze → repair → orient → [colorize])
     │
     ▼
 Report Results to User
@@ -358,9 +360,9 @@ preview.py model.stl --views turntable -o model_preview.gif
 - Multi-color: renders colorize'd OBJ with vertex colors
 - **MUST send the preview image/GIF to the chat** — user cannot proceed without seeing it
 - If turntable too slow, use `--views perspective` for a single image
-- **Checkpoint:** Have you attached the preview to your message? If not, do it before slice/open
+- **Checkpoint:** Have you attached the preview to your message? If not, do it before opening BS
 
-**Slice (skip if user will slice in Bambu Studio):**
+**Optional CLI Slice** (only if user explicitly requests):
 ```
 slice.py model.stl --orient --arrange --quality standard
 ```
@@ -372,16 +374,15 @@ Auto-detects printer + nozzle. Quality: draft(0.24) / standard(0.20) / fine(0.12
 
 ⛔ **MANDATORY — NEVER SKIP**
 
-**Gate:** Before this step, you MUST have: (1) sent preview to chat, (2) run slice (or user will slice).
+**Gate:** Before this step, you MUST have: (1) sent preview to chat.
 
-1. Open in Bambu Studio: `open -a "BambuStudio" model_sliced.3mf`
-2. Tell user to inspect:
-   > "I've opened the model in Bambu Studio. Please check:
-   > - Does it look correct? Missing or deformed parts?
-   > - Floating/disconnected pieces?
-   > - Correct size? (check dimensions in bottom bar)
-   > - Any red warnings?
-   > - Slice and check: estimated time, filament usage, supports.
+1. Open in Bambu Studio: `open -a "BambuStudio" model.3mf` (or .stl/.obj)
+2. Tell user to inspect and slice:
+   > "I've opened the model in Bambu Studio. Please:
+   > - Check: does it look correct? Missing or deformed parts?
+   > - Check: floating/disconnected pieces?
+   > - Check: correct size? (check dimensions in bottom bar)
+   > - **Slice** in Bambu Studio (Ctrl+R / Cmd+R) and review: estimated time, filament usage, supports.
    > Let me know when ready!"
 3. WAIT for explicit confirmation.
 
@@ -472,7 +473,7 @@ Triggered when `config.json` doesn't exist. Conversational:
 1. **Printer model** — A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D
 2. **Connection** — LAN (recommended: IP + serial + access code) or Cloud (email + password, limited)
 3. **Print mode** — MUST explain clearly to user:
-   - **Option A: Recommended (safe)** — Agent generates/slices model → opens in Bambu Studio → user reviews and prints manually. No special printer settings needed.
+   - **Option A: Recommended (safe)** — Agent generates model → opens in Bambu Studio → user slices, reviews, and prints manually. No special printer settings needed.
    - **Option B: Full auto-print** — Agent controls printer directly (start/stop/monitor via MQTT). Requires:
      - ⚠️ **Developer Mode ON** (printer touchscreen → Settings → LAN Only Mode → ON → Developer Mode → ON)
      - ⚠️ Bambu Studio and Bambu Handy will **completely disconnect** (no cloud, no remote monitoring)
@@ -507,12 +508,12 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 |---------|------------------|
 | Skipping "search vs generate" question | MUST ask user first. Default: search. |
 | Generating without dimensions | MUST ask "How big? e.g., 80mm tall" |
-| Running generate.py then immediately slice | MUST run analyze.py and preview.py in between |
+| Running generate.py then immediately opening BS | MUST run analyze.py and preview.py in between |
 | Saying "I've prepared the model" without sending image | MUST attach preview GIF/image to the message |
 | Opening Bambu Studio without user seeing preview | User must see preview in chat BEFORE you open BS |
 | Proceeding to print without "looks good" | MUST wait for explicit user confirmation |
 | Skipping analyze "because it's from search" | ALL models need analyze — search results can have issues too |
-| Re-generating when model has 68 fragments | Use `analyze.py --repair --keep-main` or let generate auto-clean (≥10 parts, main <50%) |
+| Re-generating when model has 68 fragments | First check preview — AI meshes often report many "bodies" but look fine. Only use `--keep-main` if model is visually fragmented |
 
 ---
 
@@ -526,7 +527,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Cloud verification code | Wait for email, enter once. Token cached 90 days. |
 | Camera timeout | Wake printer (tap screen), check IP. |
 | AI model has holes/floating parts | Expected. Always run `analyze.py --repair`. |
-| Tripo/ Meshy returns 68+ fragments | generate.py auto-keeps main body only. Or: `analyze.py model --repair --keep-main` |
+| Tripo/ Meshy reports 68+ "bodies" | Usually harmless (non-manifold topology, not actual fragments). Check preview first — only use `--keep-main` if model is visually broken |
 
 ---
 

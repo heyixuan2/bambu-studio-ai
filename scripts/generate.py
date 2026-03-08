@@ -10,8 +10,9 @@ Usage:
   python3 scripts/generate.py status <task_id>
   python3 scripts/generate.py download <task_id> [--format 3mf]
 
-When download detects severe fragmentation (≥10 parts, main body <50%), automatically
-keeps only the main body — no need to re-generate. Manual: analyze.py model --repair --keep-main
+Download reports disconnected parts but does NOT auto-delete — AI meshes often have
+non-manifold topology that trimesh.split() misreads as fragments even when the model
+is visually solid. Manual cleanup if truly needed: analyze.py model --repair --keep-main
 """
 
 import os
@@ -63,42 +64,22 @@ def _convert_model(input_path, target_format):
 
 # ─── Config ──────────────────────────────────────────────────────────
 
-# Load from config + secrets
-_skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_cfg = {}
-for _p in [os.path.join(_skill_dir, "config.json"), os.path.join(_skill_dir, ".secrets.json")]:
-    if os.path.exists(_p):
-        import json as _j
-        with open(_p) as _f:
-            _cfg.update(_j.load(_f))
+from common import SKILL_DIR as _skill_dir, BUILD_VOLUMES, load_config
+
+_cfg = load_config(include_secrets=True)
 
 PROVIDER = os.environ.get("BAMBU_3D_PROVIDER", _cfg.get("3d_provider", "meshy")).lower()
-# Provider-specific key lookup: rodin_api_key, tripo_api_key, etc.
 API_KEY = os.environ.get("BAMBU_3D_API_KEY", 
     _cfg.get(f"{PROVIDER}_api_key", _cfg.get("3d_api_key", "")))
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output", "models")
+OUTPUT_DIR = os.path.join(_skill_dir, "output", "models")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 PRINTER_MODEL = os.environ.get("BAMBU_MODEL", _cfg.get("model", ""))
-
-# ─── Build Volume Limits (with 10% safety margin) ────────────────────
-
-BUILD_VOLUMES = {
-    "A1 Mini":  (162, 162, 162),
-    "A1":       (230, 230, 230),
-    "P1S":      (230, 230, 230),
-    "P2S":      (230, 230, 230),
-    "X1C":      (230, 230, 230),
-    "X1E":      (230, 230, 230),
-    "H2C":      (230, 230, 230),
-    "H2S":      (306, 288, 306),
-    "H2D":      (315, 288, 292),
-}
 
 def get_max_size():
     """Return max printable dimensions (W, D, H) in mm."""
     if PRINTER_MODEL in BUILD_VOLUMES:
         return BUILD_VOLUMES[PRINTER_MODEL]
-    return (230, 230, 230)  # safe default
+    return (230, 230, 230)
 
 # ─── Prompt Enhancement ──────────────────────────────────────────────
 
@@ -272,7 +253,10 @@ class MeshyBackend(_BaseBackend):
         return self._download_file(url, task_id, fmt)
     
     def _download_file(self, url, task_id, fmt):
-        return self._download_to(url, f"{task_id}.glb")
+        from urllib.parse import urlparse
+        url_ext = os.path.splitext(urlparse(url).path)[1].lstrip('.').lower()
+        ext = url_ext if url_ext in ("glb", "stl", "obj", "fbx", "gltf") else "glb"
+        return self._download_to(url, f"{task_id}.{ext}")
 
 
 class TripoBackend(_BaseBackend):
@@ -620,10 +604,17 @@ def get_backend():
 
 def _clean_keep_main(file_path):
     """Remove all floating parts, keep only the largest component. In-place overwrite.
-    Returns True if cleaned, False if skipped or failed."""
+    Returns True if cleaned, False if skipped or failed.
+
+    Safety: uses FACE COUNT (not volume) to pick the main body — volume is
+    unreliable for non-watertight AI meshes where trimesh computes negative or
+    near-zero volumes for perfectly good geometry.
+    Also refuses to operate if the 'main' body has < 30% of total faces,
+    because that usually means trimesh.split() mis-fragmented a solid mesh.
+    """
     ext = os.path.splitext(file_path)[1].lower()
     if ext == '.3mf':
-        return False  # 3MF has internal structure trimesh can't preserve
+        return False
     try:
         import trimesh
         mesh = trimesh.load(file_path, force="mesh")
@@ -632,12 +623,23 @@ def _clean_keep_main(file_path):
         bodies = mesh.split(only_watertight=False)
         if len(bodies) <= 1:
             return False
-        volumes = [b.volume for b in bodies]
-        total = sum(volumes) or 1
-        main_pct = max(volumes) / total * 100
-        largest = bodies[volumes.index(max(volumes))]
+
+        face_counts = [len(b.faces) for b in bodies]
+        total_faces = sum(face_counts) or 1
+        max_faces = max(face_counts)
+        main_face_pct = max_faces / total_faces * 100
+
+        # Safety: if "main" body is < 30% of total faces, trimesh likely
+        # mis-split a solid mesh — do NOT auto-clean
+        if main_face_pct < 30:
+            print(f"⚠️ Largest component is only {main_face_pct:.0f}% of faces — "
+                  f"split may be unreliable. Skipping auto-clean.")
+            return False
+
+        largest = bodies[face_counts.index(max_faces)]
         largest.export(file_path)
-        print(f"🗑️ Auto-cleaned: kept main body ({main_pct:.0f}%), removed {len(bodies)-1} floating part(s)")
+        print(f"🗑️ Auto-cleaned: kept main body ({main_face_pct:.0f}% faces), "
+              f"removed {len(bodies)-1} floating part(s)")
         return True
     except Exception as e:
         print(f"⚠️ Auto-clean failed: {e}")
@@ -652,28 +654,19 @@ def _check_connectivity(file_path):
     """
     ext = os.path.splitext(file_path)[1].lower()
     if ext == '.3mf':
-        return None, None  # 3MF internal structure not trivially analyzable
+        return None, None
 
     try:
         import trimesh
-        import signal
+        from common import safe_split_mesh
 
         mesh = trimesh.load(file_path, force="mesh")
         if mesh is None or len(getattr(mesh, 'faces', [])) == 0:
             return None, None
 
-        # Timeout guard — split() can hang on complex topology
-        def _alarm(signum, frame):
-            raise TimeoutError("connectivity check timed out")
-        old = signal.signal(signal.SIGALRM, _alarm)
-        signal.alarm(10)
-        try:
-            bodies = mesh.split(only_watertight=False)
-        except (TimeoutError, Exception):
+        bodies, timed_out = safe_split_mesh(mesh, timeout_sec=10)
+        if timed_out:
             return None, None
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old)
 
         sizes = sorted([b.volume for b in bodies], reverse=True)
         return len(bodies), sizes
@@ -756,25 +749,23 @@ def _finalize(file_path, target_format="stl"):
     # 2. Auto-scale if model uses normalized coordinates
     _auto_scale(file_path)
     
-    # 3. Connectivity check + auto-clean (BEFORE convert — trimesh can't edit 3MF)
+    # 3. Connectivity check — WARN only, never auto-delete
+    # trimesh.split() is unreliable on non-manifold AI meshes: it can fragment
+    # a visually solid model into dozens of "bodies". Auto-deleting based on
+    # split() results destroyed good models (e.g. a mango became a sliver).
+    # Now we only report; user can manually run --keep-main if truly needed.
     current_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
     n_bodies, body_sizes = _check_connectivity(file_path)
     if n_bodies is not None and n_bodies > 1:
         total_vol = sum(body_sizes) or 1
         main_pct = body_sizes[0] / total_vol * 100
-        small_pct = 100 - main_pct
-        # Auto-clean when severely fragmented (e.g. 68 parts, main 10%) — keep main body only
-        if n_bodies >= 10 and main_pct < 50 and current_ext != '3mf':
-            if _clean_keep_main(file_path):
-                pass  # Already printed
-            else:
-                print(f"⚠️  Disconnected parts: {n_bodies} bodies (main {main_pct:.0f}%). Auto-clean skipped.")
-                print(f"   💡 Manual: python3 scripts/analyze.py {file_path} --repair --keep-main")
+        print(f"ℹ️  Connectivity: {n_bodies} bodies detected (main: {main_pct:.0f}% of volume)")
+        if n_bodies >= 10:
+            print(f"   ⚠️ Many disconnected parts — this may be normal for AI models (non-manifold topology)")
+            print(f"   💡 If model looks correct in preview, ignore this warning")
+            print(f"   💡 If model is actually fragmented: python3 scripts/analyze.py {file_path} --repair --keep-main")
         else:
-            print(f"⚠️  Disconnected parts detected: {n_bodies} separate bodies.")
-            print(f"   Main body: {main_pct:.0f}% of volume | Floating pieces: {small_pct:.0f}%")
-            print(f"   💡 To keep main only:  python3 scripts/analyze.py {file_path} --repair --keep-main")
-            print(f"   💡 To re-generate: add '--raw' or prompt 'single solid piece, no floating parts'")
+            print(f"   💡 To keep main only: python3 scripts/analyze.py {file_path} --repair --keep-main")
     
     # 4. Convert if needed
     target = target_format.lower().lstrip('.')

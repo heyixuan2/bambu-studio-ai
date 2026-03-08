@@ -33,29 +33,24 @@ except ImportError:
 
 MODE = os.environ.get("BAMBU_MODE", "").lower()
 
-# Load config.json + .secrets.json (fallback for env vars)
-_config = {}
-_skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_cpath = os.path.join(_skill_dir, "config.json")
-if os.path.exists(_cpath):
-    import json as _j
-    with open(_cpath) as _f:
-        _config = _j.load(_f)
+from common import SKILL_DIR as _skill_dir, load_config as _load_config_base
 
-# Load secrets (only when a command is invoked, not on import)
+# Load config.json at import (non-sensitive).
+# Secrets loaded lazily on first _get_config() call.
+_config = _load_config_base(include_secrets=False)
+
 _secrets_loaded = False
 
 def _load_secrets():
-    """Load secrets from .secrets.json on demand (not at import time)."""
+    """Merge .secrets.json into _config on demand (not at import time)."""
     global _secrets_loaded
     if _secrets_loaded:
         return
     _secrets_loaded = True
-    _secrets_path = os.path.join(_skill_dir, ".secrets.json")
-    if os.path.exists(_secrets_path):
-        import json as _j
-        with open(_secrets_path) as _f:
-            _config.update(_j.load(_f))
+    _secrets = _load_config_base(include_secrets=True)
+    for k, v in _secrets.items():
+        if k not in _config:
+            _config[k] = v
 
 # Config.json values as fallbacks for env vars
 if not MODE:
@@ -573,8 +568,8 @@ class LocalBackend:
                     "vibration_cali": True,
                     "layer_inspect": False,
                     "timelapse": False,
-                    "use_ams": True,
-                    "ams_mapping": ams_mapping or [0]
+                    "use_ams": bool(ams_mapping),
+                    "ams_mapping": ams_mapping if ams_mapping else [0]
                 }
             }
             
@@ -617,12 +612,12 @@ def notify(title, message, channel="auto", image=None):
     
     # Try macOS notification
     try:
-        import subprocess
-        msg_escaped = message.replace('"', '\"')
-        title_escaped = title.replace('"', '\"')
+        import subprocess, shlex
+        msg_safe = message.replace("\\", "\\\\").replace('"', '\\"')
+        title_safe = title.replace("\\", "\\\\").replace('"', '\\"')
         subprocess.run([
             "osascript", "-e",
-            f'display notification "{msg_escaped}" with title "Bambu Studio AI" subtitle "{title_escaped}"'
+            f'display notification "{msg_safe}" with title "Bambu Studio AI" subtitle "{title_safe}"'
         ], timeout=5, capture_output=True)
     except Exception:
         pass

@@ -15,23 +15,7 @@ Usage:
 
 import os, sys, subprocess, argparse, tempfile, json
 
-BLENDER_PATHS = [
-    "/Applications/Blender.app/Contents/MacOS/Blender",
-    "blender",
-]
-
-
-def find_blender():
-    for p in BLENDER_PATHS:
-        if os.path.isfile(p):
-            return p
-        try:
-            result = subprocess.run(["which", p], capture_output=True, text=True)
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception:
-            pass
-    return None
+from common import find_blender
 
 
 def preview(model_path, output_path, views="perspective"):

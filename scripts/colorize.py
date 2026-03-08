@@ -35,12 +35,7 @@ import subprocess
 import tempfile
 import numpy as np
 
-_skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-BLENDER_PATHS = [
-    "/Applications/Blender.app/Contents/MacOS/Blender",
-    "blender",
-]
+from common import find_blender, SKILL_DIR as _skill_dir
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -84,7 +79,8 @@ def extract_texture(glb_path):
 
             if image.bufferView is not None:
                 bv = glb.bufferViews[image.bufferView]
-                data = glb.binary_blob()[bv.byteOffset:bv.byteOffset + bv.byteLength]
+                bv_off = bv.byteOffset or 0
+                data = glb.binary_blob()[bv_off:bv_off + bv.byteLength]
             elif image.uri and image.uri.startswith("data:"):
                 import base64
                 data = base64.b64decode(image.uri.split(",")[1])
@@ -549,8 +545,8 @@ def _curvature_mask_from_glb(glb_path, width, height, percentile=92):
                 continue
             acc = glb.accessors[pos_idx]
             bv = glb.bufferViews[acc.bufferView]
-            start = bv.byteOffset
-            end = start + bv.byteLength
+            start = (bv.byteOffset or 0) + (acc.byteOffset or 0)
+            end = start + acc.count * 3 * 4  # float32 × vec3
             verts = np.frombuffer(blob[start:end], dtype=np.float32).reshape(-1, 3)
 
             # Indices
@@ -558,8 +554,11 @@ def _curvature_mask_from_glb(glb_path, width, height, percentile=92):
             if idx_val is not None:
                 idx_acc = glb.accessors[idx_val]
                 idx_bv = glb.bufferViews[idx_acc.bufferView]
-                dtype = np.uint32 if getattr(idx_acc, "componentType", 5123) == 5125 else np.uint16
-                idx_data = np.frombuffer(blob[idx_bv.byteOffset:idx_bv.byteOffset + idx_bv.byteLength], dtype=dtype)
+                comp_type = getattr(idx_acc, "componentType", 5123)
+                dtype = {5121: np.uint8, 5123: np.uint16, 5125: np.uint32}.get(comp_type, np.uint16)
+                idx_start = (idx_bv.byteOffset or 0) + (idx_acc.byteOffset or 0)
+                idx_end = idx_start + idx_acc.count * dtype().itemsize
+                idx_data = np.frombuffer(blob[idx_start:idx_end], dtype=dtype)
                 faces = idx_data.reshape(-1, 3)
             else:
                 faces = np.arange(len(verts), dtype=np.uint32).reshape(-1, 3)
@@ -570,7 +569,9 @@ def _curvature_mask_from_glb(glb_path, width, height, percentile=92):
                 continue
             uv_acc = glb.accessors[tex_idx]
             uv_bv = glb.bufferViews[uv_acc.bufferView]
-            uvs = np.frombuffer(blob[uv_bv.byteOffset:uv_bv.byteOffset + uv_bv.byteLength], dtype=np.float32).reshape(-1, 2)
+            uv_start = (uv_bv.byteOffset or 0) + (uv_acc.byteOffset or 0)
+            uv_end = uv_start + uv_acc.count * 2 * 4  # float32 × vec2
+            uvs = np.frombuffer(blob[uv_start:uv_end], dtype=np.float32).reshape(-1, 2)
 
             all_verts.append(verts)
             all_faces.append(faces + offset)
@@ -595,23 +596,29 @@ def _curvature_mask_from_glb(glb_path, width, height, percentile=92):
     threshold = np.percentile(face_curv[face_curv > 0], percentile) if np.any(face_curv > 0) else 0.05
     salient_faces = face_curv >= threshold
 
-    # Rasterize: UV (0-1) -> pixel coords. GLB V often needs 1-V for image space
+    # Rasterize salient faces onto texture-space curvature map
     curvature_map = np.zeros((height, width), dtype=np.float32)
-    for i, (fa, salient) in enumerate(zip(faces, salient_faces)):
-        if not salient:
-            continue
+
+    try:
+        from skimage.draw import polygon as _skpoly
+        _has_skimage = True
+    except ImportError:
+        _has_skimage = False
+
+    salient_idx = np.where(salient_faces)[0]
+    for i in salient_idx:
+        fa = faces[i]
         u0, v0 = uvs[fa[0]]
         u1, v1 = uvs[fa[1]]
         u2, v2 = uvs[fa[2]]
-        v0, v1, v2 = 1 - v0, 1 - v1, 1 - v2  # flip V for image Y
+        v0, v1, v2 = 1 - v0, 1 - v1, 1 - v2
         r0, c0 = int(v0 * (height - 1)) % height, int(u0 * (width - 1)) % width
         r1, c1 = int(v1 * (height - 1)) % height, int(u1 * (width - 1)) % width
         r2, c2 = int(v2 * (height - 1)) % height, int(u2 * (width - 1)) % width
-        try:
-            from skimage.draw import polygon
-            rr, cc = polygon([r0, r1, r2], [c0, c1, c2], shape=(height, width))
+        if _has_skimage:
+            rr, cc = _skpoly([r0, r1, r2], [c0, c1, c2], shape=(height, width))
             curvature_map[rr, cc] = np.maximum(curvature_map[rr, cc], face_curv[i])
-        except ImportError:
+        else:
             r_min, r_max = max(0, min(r0, r1, r2)), min(height - 1, max(r0, r1, r2))
             c_min, c_max = max(0, min(c0, c1, c2)), min(width - 1, max(c0, c1, c2))
             for rr in range(r_min, r_max + 1):
@@ -812,16 +819,22 @@ if not mesh.uv_layers.active:
     import sys; sys.exit(1)
 uv = mesh.uv_layers.active.data
 
-print("Writing vertex colors...")
-for fi, poly in enumerate(mesh.polygons):
-    for li in poly.loop_indices:
-        u, v_coord = uv[li].uv
-        px = int(u * tw) % tw
-        py = int(v_coord * th) % th
-        r, g, b = tex_linear[py, px]
-        cl.data[li].color = (r, g, b, 1.0)
-    if fi % 300000 == 0 and fi > 0:
-        print(f"  {{fi:,}}/{{len(mesh.polygons):,}}")
+print("Writing vertex colors (vectorized)...")
+n_loops = len(uv)
+uv_arr = np.empty(n_loops * 2, dtype=np.float32)
+uv[0].id_data.uv_layers.active.data.foreach_get("uv", uv_arr)
+uv_arr = uv_arr.reshape(-1, 2)
+px = (uv_arr[:, 0] * tw).astype(np.int32) % tw
+py = (uv_arr[:, 1] * th).astype(np.int32) % th
+sampled = tex_linear[py, px]  # (n_loops, 3)
+colors_flat = np.empty(n_loops * 4, dtype=np.float32)
+colors_flat[0::4] = sampled[:, 0]
+colors_flat[1::4] = sampled[:, 1]
+colors_flat[2::4] = sampled[:, 2]
+colors_flat[3::4] = 1.0
+cl.data.foreach_set("color", colors_flat)
+mesh.update()
+print(f"  Done: {{n_loops:,}} loop colors set")
 
 # Convert to mm and auto-scale
 bbox_post = [obj.matrix_world @ v.co for v in obj.data.vertices]
@@ -908,15 +921,6 @@ print(f"Done: {{size_mb:.1f}}MB")
 # ═══════════════════════════════════════════════════════════════
 # Main pipeline
 # ═══════════════════════════════════════════════════════════════
-
-def find_blender():
-    for path in BLENDER_PATHS:
-        if os.path.exists(path):
-            return path
-        result = subprocess.run(["which", path], capture_output=True, text=True)
-        if result.returncode == 0:
-            return result.stdout.strip()
-    return None
 
 
 
@@ -1010,33 +1014,45 @@ def _write_bambu_map(mappings, output_path):
 def _snap_vertex_colors(obj_path, selected_colors):
     """Post-process OBJ to snap vertex colors to exact selected RGB values.
     Blender UV sampling causes interpolation → 40+ unique colors instead of 5.
+    Vectorized: reads all vertex colors, batch-converts to LAB, then writes back.
     """
     import numpy as np
-    sel_rgb = np.array([sc["rgb"] for sc in selected_colors])  # float 0-1
-    sel_lab = np.array([sc["lab"] for sc in selected_colors])
-    
-    lines_out = []
-    snapped = 0
+    sel_rgb = np.array([sc["rgb"] for sc in selected_colors], dtype=np.float64)
+    sel_lab = np.array([sc["lab"] for sc in selected_colors], dtype=np.float64)
+
     with open(obj_path) as f:
-        for line in f:
-            if line.startswith('v ') and len(line.split()) >= 7:
-                parts = line.strip().split()
-                xyz = parts[1:4]
-                rgb = np.array([float(parts[4]), float(parts[5]), float(parts[6])])
-                # Find nearest selected color using CIELAB distance
-                rgb_reshaped = rgb.reshape(1, -1)
-                lab = srgb_to_lab(rgb_reshaped)[0]
-                dist = np.sum((sel_lab - lab) ** 2, axis=1)
-                nearest = sel_rgb[np.argmin(dist)]
-                if not np.allclose(rgb, nearest, atol=0.01):
-                    snapped += 1
-                vline = "v %s %s %s %.4f %.4f %.4f\n" % (xyz[0], xyz[1], xyz[2], nearest[0], nearest[1], nearest[2])
-                lines_out.append(vline)
-            else:
-                lines_out.append(line)
-    
+        lines = f.readlines()
+
+    v_indices = []
+    v_xyz = []
+    v_rgb = []
+    for i, line in enumerate(lines):
+        if line.startswith('v '):
+            parts = line.split()
+            if len(parts) >= 7:
+                v_indices.append(i)
+                v_xyz.append(parts[1:4])
+                v_rgb.append([float(parts[4]), float(parts[5]), float(parts[6])])
+
+    if not v_indices:
+        return
+
+    rgb_arr = np.array(v_rgb, dtype=np.float64)
+    lab_arr = srgb_to_lab(rgb_arr)
+
+    # Vectorized nearest-neighbor: (N, 1, 3) - (1, K, 3) → (N, K)
+    dists = np.sum((lab_arr[:, np.newaxis, :] - sel_lab[np.newaxis, :, :]) ** 2, axis=2)
+    nearest_idx = np.argmin(dists, axis=1)
+    nearest_rgb = sel_rgb[nearest_idx]
+
+    snapped = int(np.sum(~np.all(np.abs(rgb_arr - nearest_rgb) < 0.01, axis=1)))
+    for j, vi in enumerate(v_indices):
+        xyz = v_xyz[j]
+        nr = nearest_rgb[j]
+        lines[vi] = "v %s %s %s %.4f %.4f %.4f\n" % (xyz[0], xyz[1], xyz[2], nr[0], nr[1], nr[2])
+
     with open(obj_path, 'w') as f:
-        f.writelines(lines_out)
+        f.writelines(lines)
     print(f"   Snapped {snapped:,} vertex colors to {len(sel_rgb)} exact colors")
 
 
