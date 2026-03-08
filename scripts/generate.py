@@ -9,6 +9,9 @@ Usage:
   python3 scripts/generate.py image photo.jpg --prompt "make it a 3D printable model"
   python3 scripts/generate.py status <task_id>
   python3 scripts/generate.py download <task_id> [--format 3mf]
+
+When download detects severe fragmentation (≥10 parts, main body <50%), automatically
+keeps only the main body — no need to re-generate. Manual: analyze.py model --repair --keep-main
 """
 
 import os
@@ -615,6 +618,32 @@ def get_backend():
 
 # ─── Commands ────────────────────────────────────────────────────────
 
+def _clean_keep_main(file_path):
+    """Remove all floating parts, keep only the largest component. In-place overwrite.
+    Returns True if cleaned, False if skipped or failed."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.3mf':
+        return False  # 3MF has internal structure trimesh can't preserve
+    try:
+        import trimesh
+        mesh = trimesh.load(file_path, force="mesh")
+        if mesh is None or len(getattr(mesh, 'faces', [])) == 0:
+            return False
+        bodies = mesh.split(only_watertight=False)
+        if len(bodies) <= 1:
+            return False
+        volumes = [b.volume for b in bodies]
+        total = sum(volumes) or 1
+        main_pct = max(volumes) / total * 100
+        largest = bodies[volumes.index(max(volumes))]
+        largest.export(file_path)
+        print(f"🗑️ Auto-cleaned: kept main body ({main_pct:.0f}%), removed {len(bodies)-1} floating part(s)")
+        return True
+    except Exception as e:
+        print(f"⚠️ Auto-clean failed: {e}")
+        return False
+
+
 def _check_connectivity(file_path):
     """Quick disconnected-parts check using trimesh.
 
@@ -724,8 +753,30 @@ def _finalize(file_path, target_format="stl"):
         file_path = correct
         print(f"🔄 Format corrected → {actual_ext}")
     
-    # 2. Convert if needed
+    # 2. Auto-scale if model uses normalized coordinates
+    _auto_scale(file_path)
+    
+    # 3. Connectivity check + auto-clean (BEFORE convert — trimesh can't edit 3MF)
     current_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
+    n_bodies, body_sizes = _check_connectivity(file_path)
+    if n_bodies is not None and n_bodies > 1:
+        total_vol = sum(body_sizes) or 1
+        main_pct = body_sizes[0] / total_vol * 100
+        small_pct = 100 - main_pct
+        # Auto-clean when severely fragmented (e.g. 68 parts, main 10%) — keep main body only
+        if n_bodies >= 10 and main_pct < 50 and current_ext != '3mf':
+            if _clean_keep_main(file_path):
+                pass  # Already printed
+            else:
+                print(f"⚠️  Disconnected parts: {n_bodies} bodies (main {main_pct:.0f}%). Auto-clean skipped.")
+                print(f"   💡 Manual: python3 scripts/analyze.py {file_path} --repair --keep-main")
+        else:
+            print(f"⚠️  Disconnected parts detected: {n_bodies} separate bodies.")
+            print(f"   Main body: {main_pct:.0f}% of volume | Floating pieces: {small_pct:.0f}%")
+            print(f"   💡 To keep main only:  python3 scripts/analyze.py {file_path} --repair --keep-main")
+            print(f"   💡 To re-generate: add '--raw' or prompt 'single solid piece, no floating parts'")
+    
+    # 4. Convert if needed
     target = target_format.lower().lstrip('.')
     if current_ext != target and current_ext in ('glb', 'gltf', 'obj'):
         converted = _convert_model(file_path, target)
@@ -733,25 +784,10 @@ def _finalize(file_path, target_format="stl"):
             print(f"🔄 Converted {current_ext.upper()} → {target.upper()}")
             file_path = converted
     
-    # 3. Auto-scale if model uses normalized coordinates
-    _auto_scale(file_path)
-    
-    # 4. Verify file is readable
+    # 5. Verify file is readable
     size = os.path.getsize(file_path)
     if size < 100:
         print(f"⚠️ File suspiciously small ({size} bytes)")
-
-    # 5. Quick connectivity check — warn if disconnected parts detected
-    n_bodies, body_sizes = _check_connectivity(file_path)
-    if n_bodies is not None and n_bodies > 1:
-        total_vol = sum(body_sizes) or 1
-        main_pct = body_sizes[0] / total_vol * 100
-        small_pct = 100 - main_pct
-        print(f"⚠️  Disconnected parts detected: {n_bodies} separate bodies.")
-        print(f"   Main body: {main_pct:.0f}% of volume | Floating pieces: {small_pct:.0f}%")
-        print(f"   💡 To remove floating pieces:  python3 scripts/analyze.py {file_path} --repair")
-        print(f"   💡 To re-generate (often fixes): add '--raw' flag to bypass enhancement,")
-        print(f"       or re-run with a prompt like: 'single solid piece, no floating parts, {os.path.basename(file_path)}'")
 
     return file_path
 

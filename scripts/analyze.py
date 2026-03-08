@@ -467,8 +467,10 @@ def auto_simplify(mesh, max_dim=None):
         return mesh, False
 
 
-def clean_floating_parts(mesh, min_volume_pct=1.0):
+def clean_floating_parts(mesh, min_volume_pct=1.0, keep_top_n=None):
     """Remove disconnected parts smaller than min_volume_pct of total volume.
+    If keep_top_n is set (e.g. 1), keep only the largest N components — useful when
+    main body is fragmented among many small pieces (e.g. Tripo 68 parts, main 10%).
     Returns (cleaned_mesh, removed_count)."""
     import trimesh
     
@@ -481,8 +483,13 @@ def clean_floating_parts(mesh, min_volume_pct=1.0):
     if total <= 0:
         return mesh, 0
     
-    threshold = total * (min_volume_pct / 100.0)
-    kept = [(b, v) for b, v in zip(bodies, volumes) if v >= threshold]
+    if keep_top_n is not None:
+        # Keep only largest N components (e.g. keep_top_n=1 = main body only)
+        sorted_pairs = sorted(zip(bodies, volumes), key=lambda x: -x[1])
+        kept = sorted_pairs[:keep_top_n]
+    else:
+        threshold = total * (min_volume_pct / 100.0)
+        kept = [(b, v) for b, v in zip(bodies, volumes) if v >= threshold]
     removed = len(bodies) - len(kept)
     
     if removed == 0:
@@ -648,6 +655,8 @@ def main():
                         help="Skip auto-repair of minor mesh issues (holes/normals) that are applied by default")
     parser.add_argument("--no-simplify", action="store_true", help="Skip auto-simplification of high-poly meshes")
     parser.add_argument("--no-clean", action="store_true", help="Skip auto-removal of floating parts")
+    parser.add_argument("--keep-main", action="store_true",
+                        help="Keep only the largest component (remove all floating pieces, even if large)")
     parser.add_argument("--output-dir", default=".", help="Directory for rendered images")
     args = parser.parse_args()
 
@@ -744,7 +753,11 @@ def main():
 
     # ─── Auto-clean floating parts ───
     if not args.no_clean:
-        mesh, removed_parts = clean_floating_parts(mesh, min_volume_pct=1.0)
+        mesh, removed_parts = clean_floating_parts(
+            mesh,
+            min_volume_pct=1.0,
+            keep_top_n=1 if getattr(args, "keep_main", False) else None,
+        )
         if removed_parts > 0:
             clean_path = os.path.splitext(args.file)[0] + "_cleaned" + os.path.splitext(args.file)[1]
             mesh.export(clean_path)

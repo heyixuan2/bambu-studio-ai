@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.25"
+version: "0.22.26"
 author: TieGaier
 metadata:
   openclaw:
@@ -180,6 +180,7 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Generate 3D (image) | `python3 scripts/generate.py image photo.jpg --wait` |
 | Download model | `python3 scripts/generate.py download <task_id>` |
 | Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
+| Keep main only (remove fragments) | `python3 scripts/analyze.py model.stl --repair --keep-main` |
 | Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`, `--bambu-map`) |
 | Slice | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
 | Slice (specific setup) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
@@ -511,6 +512,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Opening Bambu Studio without user seeing preview | User must see preview in chat BEFORE you open BS |
 | Proceeding to print without "looks good" | MUST wait for explicit user confirmation |
 | Skipping analyze "because it's from search" | ALL models need analyze — search results can have issues too |
+| Re-generating when model has 68 fragments | Use `analyze.py --repair --keep-main` or let generate auto-clean (≥10 parts, main <50%) |
 
 ---
 
@@ -524,6 +526,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Cloud verification code | Wait for email, enter once. Token cached 90 days. |
 | Camera timeout | Wake printer (tap screen), check IP. |
 | AI model has holes/floating parts | Expected. Always run `analyze.py --repair`. |
+| Tripo/ Meshy returns 68+ fragments | generate.py auto-keeps main body only. Or: `analyze.py model --repair --keep-main` |
 
 ---
 
