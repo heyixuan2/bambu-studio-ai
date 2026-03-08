@@ -1,11 +1,12 @@
 """
 Shared constants, config loading, and utilities for Bambu Studio AI scripts.
-Eliminates duplication across analyze.py, generate.py, colorize.py, preview.py,
+Eliminates duplication across analyze.py, generate.py, colorize/, preview.py,
 slice.py, monitor.py, and bambu.py.
 """
 
 import os
 import json
+import platform
 import subprocess
 import threading
 
@@ -74,13 +75,59 @@ MATERIALS = {
 ENCLOSED_PRINTERS = {"P1S", "P2S", "X1C", "X1E", "H2C", "H2S", "H2D"}
 HIGH_TEMP_PRINTERS = {"H2C", "H2D"}
 
+# ─── Named Constants ─────────────────────────────────────────────
 
-# ─── Blender Discovery ─────────────────────────────────────────────
+MAX_FACES_NO_SIMPLIFY = 500_000
+TOKEN_TTL_SECONDS = 7_776_000  # 90 days
+MAX_POLL_ITERATIONS = 120
+MERGE_DOUBLES_DIST = 0.0001
+ACHROMATIC_BLOCK_DIST = 1e12
+ASSIGN_CHUNK_SIZE = 500_000
 
-BLENDER_PATHS = [
-    "/Applications/Blender.app/Contents/MacOS/Blender",
-    "blender",
-]
+
+# ─── Platform-Aware Tool Paths ────────────────────────────────────
+
+_SYSTEM = platform.system()
+
+if _SYSTEM == "Darwin":
+    BLENDER_PATHS = [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        os.path.expanduser("~/Applications/Blender.app/Contents/MacOS/Blender"),
+        "blender",
+    ]
+    ORCASLICER_PATHS = [
+        "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+        os.path.expanduser("~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer"),
+    ]
+    BAMBU_STUDIO_PROFILE_PATHS = [
+        "/Applications/BambuStudio.app/Contents/Resources/profiles/BBL",
+        os.path.expanduser("~/Library/Application Support/BambuStudio/system/BBL"),
+    ]
+elif _SYSTEM == "Linux":
+    BLENDER_PATHS = [
+        "blender",
+        "/usr/bin/blender",
+        "/snap/bin/blender",
+    ]
+    ORCASLICER_PATHS = [
+        "OrcaSlicer",
+        os.path.expanduser("~/OrcaSlicer/OrcaSlicer"),
+    ]
+    BAMBU_STUDIO_PROFILE_PATHS = [
+        os.path.expanduser("~/.config/BambuStudio/system/BBL"),
+    ]
+else:  # Windows
+    _pf = os.environ.get("PROGRAMFILES", "C:\\Program Files")
+    BLENDER_PATHS = [
+        os.path.join(_pf, "Blender Foundation", "Blender", "blender.exe"),
+        "blender",
+    ]
+    ORCASLICER_PATHS = [
+        os.path.join(_pf, "OrcaSlicer", "orca-slicer.exe"),
+    ]
+    BAMBU_STUDIO_PROFILE_PATHS = [
+        os.path.join(os.environ.get("APPDATA", ""), "BambuStudio", "system", "BBL"),
+    ]
 
 
 def find_blender():
@@ -89,11 +136,30 @@ def find_blender():
         if os.path.isfile(p):
             return p
         try:
-            result = subprocess.run(["which", p], capture_output=True, text=True)
+            result = subprocess.run(
+                ["where" if _SYSTEM == "Windows" else "which", p],
+                capture_output=True, text=True,
+            )
             if result.returncode == 0:
-                return result.stdout.strip()
+                return result.stdout.strip().split("\n")[0]
         except Exception:
             pass
+    return None
+
+
+def find_orcaslicer():
+    """Find OrcaSlicer executable. Returns path or None."""
+    for p in ORCASLICER_PATHS:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def find_bambu_studio_profiles():
+    """Find Bambu Studio profile directory. Returns path or None."""
+    for p in BAMBU_STUDIO_PROFILE_PATHS:
+        if os.path.isdir(p):
+            return p
     return None
 
 

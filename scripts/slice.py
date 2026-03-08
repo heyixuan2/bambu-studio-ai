@@ -18,30 +18,24 @@ Usage:
 import os, sys, json, subprocess, argparse, shutil, tempfile, glob, re
 
 # ─── Paths ───
-from common import SKILL_DIR as _skill_dir, load_config
+from common import (
+    SKILL_DIR as _skill_dir, load_config,
+    find_orcaslicer, find_bambu_studio_profiles,
+)
 _cfg = load_config(include_secrets=True)
 
-# Slicer discovery
-ORCA_PATHS = [
-    "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
-    os.path.expanduser("~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer"),
-]
-BS_PATHS = [
-    "/Applications/BambuStudio.app/Contents/Resources/profiles/BBL",
-    os.path.expanduser("~/Library/Application Support/BambuStudio/system/BBL"),
-]
 
 def find_slicer():
-    for p in ORCA_PATHS:
-        if os.path.exists(p):
-            return p
+    p = find_orcaslicer()
+    if p:
+        return p
     print("❌ OrcaSlicer not found. Install from https://github.com/SoftFever/OrcaSlicer")
     sys.exit(1)
 
 def find_profiles_dir():
-    for p in BS_PATHS:
-        if os.path.isdir(p):
-            return p
+    p = find_bambu_studio_profiles()
+    if p:
+        return p
     print("❌ Bambu Studio profiles not found. Install Bambu Studio first.")
     sys.exit(1)
 

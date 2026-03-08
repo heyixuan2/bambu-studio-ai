@@ -124,7 +124,7 @@ clawhub install bambu-studio-ai
 **Manual:**
 ```bash
 git clone https://github.com/heyixuan2/bambu-studio-ai.git ~/.agents/skills/bambu-studio-ai
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs pygltflib cryptography paho-mqtt
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs pygltflib cryptography paho-mqtt scipy
 ```
 
 **Optional but recommended (macOS):**
@@ -489,11 +489,14 @@ Use only when you can't be on the same network as the printer.
 {
   "password": "bambu_account_password",
   "access_code": "printer_lan_access_code",
-  "3d_api_key": "generation_provider_api_key"
+  "3d_api_key": "generation_provider_api_key",
+  "meshy_api_key": "optional — override per-provider",
+  "tripo_api_key": "optional — override per-provider",
+  "rodin_api_key": "optional — override per-provider"
 }
 ```
 
-**Exact key names matter.** Use these keys exactly as shown above.
+**Key precedence:** `<provider>_api_key` > `3d_api_key` > `BAMBU_3D_API_KEY` env var. Per-provider keys are optional; `3d_api_key` is used as fallback for whichever provider is active.
 
 ---
 
@@ -637,7 +640,7 @@ python3 scripts/monitor.py --interval 300 --auto-pause  # Auto-pause on failure
 
 ```
 bambu-studio-ai/
-├── SKILL.md                    — Agent instructions (770+ lines)
+├── SKILL.md                    — Agent instructions (~430 lines)
 ├── README.md                   — This file
 ├── LICENSE                     — MIT License
 ├── .gitignore
@@ -655,15 +658,16 @@ bambu-studio-ai/
 └── scripts/
     ├── common.py               — Shared config, constants, utilities (BUILD_VOLUMES, find_blender, timeout)
     ├── bambu.py                — Printer control (Cloud + LAN, token caching)
-    ├── generate.py             — AI 3D generation (4 providers, auto-convert, prompt enhancement)
-    ├── analyze.py              — 11-point printability analysis + mesh repair
-    ├── colorize.py             — Multi-color pipeline v4 (pixel classify → greedy select → vertex color OBJ)
+    ├── generate.py             — AI 3D generation (5 providers, auto-convert, prompt enhancement)
+    ├── analyze.py              — 9-point printability analysis + mesh repair
+    ├── colorize/               — Multi-color pipeline v4 (package: color_science, selection, texture, geometry, vertex_colors, bambu_map)
     ├── monitor.py              — Smart print monitor (anomaly detection, notifications)
     ├── preview.py              — Model preview renderer (Blender HQ)
     ├── slice.py                — CLI slicer (optional, OrcaSlicer backend)
     ├── search.py               — Model search (MakerWorld, Printables, Thingiverse, Thangs)
-    ├── doctor.py               — Dependency doctor (verify all deps + API symbols)
-    └── test_boundary.py        — Boundary condition tests
+    └── doctor.py               — Dependency doctor (verify all deps + API symbols)
+├── tests/
+│   └── test_boundary.py        — Color boundary tests
 ```
 
 ---
@@ -748,16 +752,16 @@ We tried three shadow removal approaches before abandoning them all:
 
 | Version | Changes |
 |---------|--------|
+| **0.23.0** | Major refactor: colorize split into package (6 modules), unified generate.py provider backends with shared status normalization, centralized platform paths in common.py, named constants extracted, analyze scoring fixed (recommendations no longer inflate score), Blender BYTE_COLOR double-conversion fix, scipy added to requirements, cross-platform Blender/OrcaSlicer/BS path detection, pyproject.toml + ruff, pytest tests for color science + scoring. |
+| **0.22.30** | OpenClaw audit fixes: OS declaration, pip deps sync, notification scope clarification, env/secrets descriptions. SKILL.md compliance rules strengthened. |
+| **0.22.28** | common.py extraction (shared config, constants, timeout), cross-platform `safe_split_mesh`, byteOffset fix for pygltflib, vertex color vectorization via numpy, snap color precision fix (exact N colors in BS), auto-clean safety guards (face-count based), scoring includes mesh quality + fit check. |
 | **0.22.24** | colorize: fix smooth loop bug (was hardcoded 5 passes, now respects `--smooth`); `cleanup_labels` protects largest component per color (salient small region guard — eyes/buttons no longer erased); fix `--min-pct` help text. generate: stronger prompt enhancement with geometry-type detection (functional/figurine/general), keyword rewriting for problematic terms (smoke/flames/wisps → solid sculptural forms), `refine_prompt_for_retry()` helper; post-download connectivity check warns on disconnected parts with actionable fix hints. analyze: overhang messages now include absolute area (cm²) for context; minor mesh issues (holes + normals) auto-repaired by default without `--repair` flag (low-risk); `--no-auto-repair` opt-out added; disconnected-parts message links to concrete fixes. |
 | **0.22.4** | Colorize: vertex color snap (exact N colors in OBJ), bmesh auto-repair (merge doubles, fix normals, delete loose), post-export non-manifold = 0 |
 | **0.22.3** | Colorize: achromatic constraint (shadow pixels blocked from black, V<0.2 exempt), 2% min threshold for small color families, 5-pass majority vote boundary smoothing, island cleanup (1000px) + median filter, doctor.py syntax fix |
 | **0.22.2** | preview.py rewrite: Blender-only rendering (removed matplotlib), TRACK_TO auto-aim, PBR texture auto-load, dynamic lighting, EEVEE 4.x/5.x compat, --views all (2×2 grid). Audit fixes P1-P4. |
 | **0.22.1** | Colorize v4 rewrite: pixel HSV family classification + greedy area-based color selection + per-pixel CIELAB assign + vertex-color OBJ export. No shadow removal needed — HSV classification bypasses baked lighting. pygltflib texture extraction (no Blender for Step 1). sRGB→linear fix for accurate vertex colors. Audit fixes: --colors validation, low-V achromatic, UV None check, path injection, dead code cleanup. 1118→573 lines. |
 | **0.22.0** | Intrinsic Albedo Extraction replaces AO delight — eliminates false colors (orange/copper/silver) at shadow boundaries. 3-step pipeline: Cycles DIFFUSE COLOR bake + per-channel brightness recovery + white point recovery. Chrominance-weighted CIELAB (L\*=0.1). Region majority cleanup (numpy). 22 bare except→Exception fixes. |
-| **0.21.1** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). | Full manifest metadata restored (env, secrets, install, security, network access, persistence declarations) for ClawHub audit compliance.
-
-| Version | Changes |
-|---------|---------|
+| **0.21.1** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). Full manifest metadata restored for ClawHub audit compliance. |
 | **0.19.0** | Bug fixes (17), color pipeline overhaul (AO delight, shadow-aware mapping, border vote), search rewrite (ddgs), doctor.py cloud+search checks, monitor retry logic, --no_delight flag, --confirmed safety gate |
 | **0.18.0** 🏷️ | Model search (MakerWorld/Printables/Thingiverse/Thangs), notification system, default Bambu Lab color palette |
 | **0.17.0** | Bambu Lab official 43-color palette, direct nearest-neighbor mapping, default LAN mode |

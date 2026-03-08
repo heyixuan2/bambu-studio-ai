@@ -1,0 +1,27 @@
+[project]
+name = "bambu-studio-ai"
+version = "0.23.0"
+description = "Bambu Lab 3D printer control, AI model generation, and multi-color automation"
+requires-python = ">=3.9"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",   # line too long — handled by formatter, many existing long lines
+    "E741",   # ambiguous variable name (l, O, I) — common in math code
+    "F841",   # local variable assigned but never used — some intentional
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F401"]  # unused imports OK in tests (conftest side effects)
+
+[tool.ruff.lint.isort]
+known-first-party = ["colorize", "common"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]

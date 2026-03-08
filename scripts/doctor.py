@@ -8,17 +8,24 @@ Usage: python3 scripts/doctor.py
 
 import sys, os, importlib
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import find_blender, find_orcaslicer, BLENDER_PATHS, ORCASLICER_PATHS
+
 REQUIRED = {
     "requests": {"min": "2.31", "import": "requests"},
     "trimesh": {"min": "4.10", "import": "trimesh"},
     "numpy": {"min": "1.24", "import": "numpy"},
     "Pillow": {"min": "9.0", "import": "PIL"},
+    "scipy": {"min": "1.10", "import": "scipy"},
+    "pygltflib": {"min": "0", "import": "pygltflib"},
+    "cryptography": {"min": "42.0", "import": "cryptography"},
 }
 
 OPTIONAL = {
     "bambulabs-api": {"import": "bambulabs_api", "purpose": "LAN printer control"},
     "bambu-lab-cloud-api": {"import": "bambu_lab_cloud_api", "purpose": "Cloud printer control"},
     "scikit-learn": {"import": "sklearn", "purpose": "Better colorize k-means clustering"},
+    "paho-mqtt": {"import": "paho.mqtt", "purpose": "LAN MQTT printer control"},
 }
 
 def check_version(pkg_name, min_ver, import_name):
@@ -31,14 +38,15 @@ def check_version(pkg_name, min_ver, import_name):
 
 def check_blender():
     import subprocess
-    for path in ["/Applications/Blender.app/Contents/MacOS/Blender", "blender"]:
+    path = find_blender()
+    if path:
         try:
             r = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=10)
             if r.returncode == 0:
                 ver = r.stdout.split("\n")[0]
                 return True, ver, path
         except Exception:
-            continue
+            pass
     return False, None, None
 
 def check_api_symbols():
@@ -124,18 +132,11 @@ def main():
         print("  ⚠️ Not found (needed for multi-color)")
 
     print("\nOrcaSlicer (for slicing):")
-    orca_paths = [
-        "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
-        os.path.expanduser("~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer"),
-    ]
-    orca_found = False
-    for op in orca_paths:
-        if os.path.exists(op):
-            print(f"  ✅ OrcaSlicer found")
-            print(f"     Path: {op}")
-            orca_found = True
-            break
-    if not orca_found:
+    orca_path = find_orcaslicer()
+    if orca_path:
+        print(f"  ✅ OrcaSlicer found")
+        print(f"     Path: {orca_path}")
+    else:
         print("  ⚠️ OrcaSlicer not installed (needed for slice.py)")
         print("     Install from: https://github.com/SoftFever/OrcaSlicer")
 

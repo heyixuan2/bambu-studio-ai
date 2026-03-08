@@ -25,3 +25,13 @@
 - Generate: `POST /v1/generate`
 - Auth: `Bearer {api_key}`
 - Early access (request API key)
+
+## Hyper3D Rodin (developer.hyper3d.ai)
+- Text/Image-to-3D: `POST /api/v2/rodin` (multipart/form-data)
+- Status: `POST /api/v2/status` (subscription_key JWT polling)
+- Download: `POST /api/v2/download` (task_uuid → signed URLs)
+- Auth: `Bearer {api_key}`
+- Tiers: Regular, Gen-2 (set via `BAMBU_RODIN_TIER` or config `rodin_tier`)
+- Formats: GLB (PBR), Quad mesh mode
+- Note: Task ID is composite `uuid::subscription_key` to support status polling
+- Pricing: Business subscription required

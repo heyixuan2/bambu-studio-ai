@@ -1,3 +1,8 @@
+> **Note (v0.23.0):** As of v0.23.0, `colorize.py` has been refactored into the
+> `scripts/colorize/` package (6 modules + `__init__.py` + `__main__.py`).
+> References to `colorize.py` below are historical and correspond to the
+> pre-refactor monolithic script.
+
 # Colorize.py Optimization Research Report
 
 **Date:** 2026-03-04  

@@ -1,13 +1,41 @@
+# Secrets & config
 .secrets.json
 config.json
-__pycache__/
-*.pyc
-.DS_Store
-output/
 .token_cache.json
 .verify_code
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Linting & type checking
+.mypy_cache/
+.ruff_cache/
+
+# IDE & OS
+.DS_Store
+*.bak
+
+# Project outputs
+output/
+*.log
+
+# Agent / skill infrastructure
 .agents/
 skills-lock.json
-*.bak
+
+# Certificates
 references/bambu_connect_cert.pem
 references/bambu_connect_key.pem

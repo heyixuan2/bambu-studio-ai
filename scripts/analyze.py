@@ -18,7 +18,7 @@ import sys
 
 from common import (
     SKILL_DIR, BUILD_VOLUMES, MATERIALS, ENCLOSED_PRINTERS, HIGH_TEMP_PRINTERS,
-    load_config, safe_split_mesh,
+    MAX_FACES_NO_SIMPLIFY, load_config, safe_split_mesh,
 )
 
 
@@ -41,7 +41,7 @@ def auto_orient(mesh):
         # Method 1: Use trimesh's stable poses (decimate first if too large)
         try:
             orient_mesh = mesh
-            if len(mesh.faces) > 500000:
+            if len(mesh.faces) > MAX_FACES_NO_SIMPLIFY:
                 print(f"   Large mesh ({len(mesh.faces):,} faces) — using decimated proxy for orientation...")
                 try:
                     orient_mesh = mesh.simplify_quadric_decimation(100000)
@@ -116,7 +116,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def analyze_mesh(mesh, printer_model, material, purpose="general"):
-    """Run all 10 printability checks + geometry analysis."""
+    """Run printability checks + geometry analysis.
+    Score is based on 9 real checks (tolerance, wall, load, overhang, orientation,
+    floating parts, material compat, mesh quality, build volume fit).
+    Recommendation-only checks (layer height, infill, walls, top layers) are
+    reported but do NOT affect the score."""
     report = {
         "file": None,
         "printer": printer_model,
@@ -134,7 +138,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     bounds = mesh.bounds
     dims = mesh.extents if mesh.extents is not None else [0, 0, 0]  # [x, y, z] dimensions in mm
     # Check if model is too complex (may be too large for printer SD card)
-    if len(mesh.faces) > 500000:
+    if len(mesh.faces) > MAX_FACES_NO_SIMPLIFY:
         report["warnings"].append(
             f"Very high triangle count ({len(mesh.faces):,}). "
             f"Consider simplifying: open in Bambu Studio → right-click → Simplify Model, "
@@ -154,9 +158,10 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     mat_props = MATERIALS.get(material, MATERIALS["PLA"])
     build_vol = BUILD_VOLUMES.get(printer_model, (230, 230, 230))
     checks_passed = 0
-    total_checks = 10
+    total_checks = 0  # only count checks that genuinely test the model
 
     # === CHECK 1: Tolerance / Dimensions ===
+    total_checks += 1
     check1 = {"name": "Dimensional tolerance", "status": "pass"}
     if any(d < 2.0 for d in dims):
         check1["status"] = "warn"
@@ -167,8 +172,8 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     report["checks"].append(check1)
 
     # === CHECK 2: Wall Thickness ===
+    total_checks += 1
     check2 = {"name": "Wall thickness", "status": "pass", "min_required": mat_props["min_wall"]}
-    # Heuristic: check if any dimension is very thin relative to others
     min_dim = min(dims)
     if min_dim < mat_props["min_wall"]:
         check2["status"] = "fail"
@@ -178,6 +183,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     report["checks"].append(check2)
 
     # === CHECK 3: Load direction vs layer lines ===
+    total_checks += 1
     check3 = {"name": "Load direction analysis", "status": "info"}
     aspect = max(dims) / (min(dims) + 0.001)
     if aspect > 5:
@@ -189,6 +195,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     report["checks"].append(check3)
 
     # === CHECK 4: Overhang Detection (area-weighted, material-aware) ===
+    total_checks += 1
     check4 = {"name": "Overhang analysis", "status": "pass"}
     face_normals = mesh.face_normals
     face_areas = mesh.area_faces
@@ -233,6 +240,7 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     report["checks"].append(check4)
 
     # === CHECK 5: Print Orientation ===
+    total_checks += 1
     check5 = {"name": "Print orientation", "status": "pass"}
     # Check if model has a flat base
     z_min_faces = (abs(face_normals[:, 2] + 1.0) < 0.1).sum()  # faces pointing straight down
@@ -246,9 +254,9 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     report["checks"].append(check5)
 
     # === CHECK 5b: Floating Parts Detection ===
+    total_checks += 1
     check5b = {"name": "Floating/disconnected parts", "status": "pass"}
     try:
-        # trimesh can split mesh into connected components
         bodies, split_timeout = _safe_split(mesh)
         if split_timeout:
             check5b["status"] = "warning"
@@ -272,10 +280,9 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         check5b["note"] = "Could not check connectivity."
         checks_passed += 1
     report["checks"].append(check5b)
-    total_checks += 1
 
-    # === CHECK 6: Layer Height ===
-    check6 = {"name": "Layer height recommendation", "status": "pass"}
+    # === Recommendations (informational only — not scored) ===
+    check6 = {"name": "Layer height recommendation", "status": "info"}
     if min_dim < 10:
         check6["recommended"] = "0.12mm (fine detail)"
         report["suggestions"].append("Small features detected. Use 0.12mm layer height for detail.")
@@ -284,35 +291,29 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         report["suggestions"].append("Large model. Consider 0.28mm layer height to save time.")
     else:
         check6["recommended"] = "0.20mm (default, good balance)"
-    checks_passed += 1
     report["checks"].append(check6)
 
-    # === CHECK 7: Infill Recommendation ===
-    check7 = {"name": "Infill recommendation", "status": "pass"}
+    check7 = {"name": "Infill recommendation", "status": "info"}
     if purpose == "decorative":
         check7["recommended"] = f"{mat_props['infill_deco']}%"
     elif purpose == "functional":
         check7["recommended"] = f"{mat_props['infill_func']}%"
     else:
         check7["recommended"] = "15-30% (ask user about purpose)"
-    checks_passed += 1
     report["checks"].append(check7)
 
-    # === CHECK 8: Wall Count ===
-    check8 = {"name": "Wall count", "status": "pass"}
+    check8 = {"name": "Wall count recommendation", "status": "info"}
     check8["recommended"] = "≥3 walls (≥4 for functional parts)"
     if purpose == "functional":
         report["suggestions"].append("Functional part: use 4 walls for strength.")
-    checks_passed += 1
     report["checks"].append(check8)
 
-    # === CHECK 9: Top Layers ===
-    check9 = {"name": "Top layers", "status": "pass"}
+    check9 = {"name": "Top layers recommendation", "status": "info"}
     check9["recommended"] = "≥5 top layers for clean surface"
-    checks_passed += 1
     report["checks"].append(check9)
 
     # === CHECK 10: Material Compatibility ===
+    total_checks += 1
     check10 = {"name": "Material compatibility", "status": "pass"}
     if mat_props.get("enclosed") and printer_model not in ENCLOSED_PRINTERS:
         check10["status"] = "fail"
@@ -401,7 +402,7 @@ def auto_simplify(mesh, max_dim=None):
     import trimesh
     face_count = len(mesh.faces)
     
-    if face_count <= 500_000:
+    if face_count <= MAX_FACES_NO_SIMPLIFY:
         return mesh, False
     
     # Determine target

@@ -64,7 +64,7 @@ def _convert_model(input_path, target_format):
 
 # ─── Config ──────────────────────────────────────────────────────────
 
-from common import SKILL_DIR as _skill_dir, BUILD_VOLUMES, load_config
+from common import SKILL_DIR as _skill_dir, BUILD_VOLUMES, load_config, MAX_POLL_ITERATIONS
 
 _cfg = load_config(include_secrets=True)
 
@@ -163,7 +163,34 @@ def refine_prompt_for_retry(prompt, attempt, failure_reason=""):
 # ─── Provider Backends ───────────────────────────────────────────────
 
 class _BaseBackend:
-    """Shared download helper for all providers."""
+    """Shared helpers for all AI 3D-model providers."""
+
+    # Map provider-specific status strings → unified states
+    _STATUS_MAP = {
+        "completed": "completed", "success": "completed", "succeeded": "completed",
+        "done": "completed",
+        "pending": "pending", "queued": "queued", "waiting": "queued",
+        "processing": "in_progress", "in_progress": "in_progress",
+        "generating": "in_progress", "running": "in_progress",
+        "failed": "failed", "error": "failed", "cancelled": "failed",
+    }
+
+    def _normalize_status(self, raw_status):
+        """Map a provider-specific status string to a unified state."""
+        return self._STATUS_MAP.get(raw_status.lower(), raw_status.lower())
+
+    @staticmethod
+    def _pick_download_url(urls, preferred_fmt="glb"):
+        """Pick best download URL from a dict of {format: url}."""
+        if not urls:
+            return None
+        preferred_fmt = preferred_fmt.lower().lstrip(".")
+        for key in (preferred_fmt, "glb", "obj", "stl", "fbx"):
+            url = urls.get(key)
+            if url:
+                return url
+        return next((v for v in urls.values() if v), None)
+
     def _download_to(self, url, filename, timeout=(10, 120), retries=2):
         """Download URL to OUTPUT_DIR/<filename>, return path. Retries on failure."""
         os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -182,6 +209,13 @@ class _BaseBackend:
                 if attempt < retries:
                     time.sleep(3 * (attempt + 1))
         raise last_err
+
+    def _download_model(self, url, task_id):
+        """Download model, inferring extension from URL."""
+        from urllib.parse import urlparse
+        url_ext = os.path.splitext(urlparse(url).path)[1].lstrip('.').lower()
+        ext = url_ext if url_ext in ("glb", "stl", "obj", "fbx", "gltf") else "glb"
+        return self._download_to(url, f"{task_id}.{ext}")
 
 
 class MeshyBackend(_BaseBackend):
@@ -237,26 +271,19 @@ class MeshyBackend(_BaseBackend):
         r.raise_for_status()
         data = r.json()
         return {
-            "status": data.get("status", "unknown"),
+            "status": self._normalize_status(data.get("status", "unknown")),
             "progress": data.get("progress", 0),
             "model_urls": data.get("model_urls", {}),
             "thumbnail": data.get("thumbnail_url", ""),
         }
-    
+
     def download(self, task_id, fmt="stl"):
         status = self.get_status(task_id)
-        urls = status.get("model_urls", {})
-        url = urls.get(fmt) or urls.get("glb") or urls.get("obj")
+        url = self._pick_download_url(status.get("model_urls", {}), fmt)
         if not url:
             print(f"❌ No download URL. Status: {status['status']}")
             return None
-        return self._download_file(url, task_id, fmt)
-    
-    def _download_file(self, url, task_id, fmt):
-        from urllib.parse import urlparse
-        url_ext = os.path.splitext(urlparse(url).path)[1].lstrip('.').lower()
-        ext = url_ext if url_ext in ("glb", "stl", "obj", "fbx", "gltf") else "glb"
-        return self._download_to(url, f"{task_id}.{ext}")
+        return self._download_model(url, task_id)
 
 
 class TripoBackend(_BaseBackend):
@@ -302,20 +329,20 @@ class TripoBackend(_BaseBackend):
         r = requests.get(f"{self.BASE}/task/{task_id}", headers=self.headers(), timeout=(10, 120))
         r.raise_for_status()
         data = r.json()["data"]
+        output = data.get("output", {})
         return {
-            "status": data.get("status", "unknown"),
+            "status": self._normalize_status(data.get("status", "unknown")),
             "progress": data.get("progress", 0),
-            "model_urls": {"glb": data.get("output", {}).get("pbr_model") or data.get("output", {}).get("model", "")},
+            "model_urls": {"glb": output.get("pbr_model") or output.get("model", "")},
         }
-    
+
     def download(self, task_id, fmt="glb"):
         status = self.get_status(task_id)
-        url = status.get("model_urls", {}).get("glb") or status.get("model_urls", {}).get(fmt)
+        url = self._pick_download_url(status.get("model_urls", {}), fmt)
         if not url:
             print(f"❌ No download URL. Status: {status['status']}")
             return None
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        return self._download_to(url, f"{task_id}.glb")
+        return self._download_model(url, task_id)
 
 
 class PrintpalBackend(_BaseBackend):
@@ -356,9 +383,10 @@ class PrintpalBackend(_BaseBackend):
             headers=self.headers())
         r.raise_for_status()
         data = r.json()
+        raw = data.get("status", "unknown")
         return {
-            "status": data.get("status", "unknown"),
-            "progress": 100 if data.get("status") == "completed" else 0,
+            "status": self._normalize_status(raw),
+            "progress": 100 if raw == "completed" else 0,
             "model_urls": {"glb": data.get("download_url", "")},
         }
     
@@ -412,18 +440,18 @@ class Studio3DBackend(_BaseBackend):
         r.raise_for_status()
         data = r.json()
         return {
-            "status": data.get("status", "unknown"),
+            "status": self._normalize_status(data.get("status", "unknown")),
             "progress": data.get("progress", 0),
             "model_urls": data.get("output", {}),
         }
-    
+
     def download(self, task_id, fmt="stl"):
         status = self.get_status(task_id)
-        url = status.get("model_urls", {}).get(fmt) or status.get("model_urls", {}).get("obj")
+        url = self._pick_download_url(status.get("model_urls", {}), fmt)
         if not url:
             print(f"❌ No URL. Status: {status['status']}")
             return None
-        return self._download_to(url, f"{task_id}.glb")
+        return self._download_model(url, task_id)
 
 
 class RodinBackend(_BaseBackend):
@@ -514,30 +542,23 @@ class RodinBackend(_BaseBackend):
         data = r.json()
         jobs = data.get("jobs", [])
         
-        # Determine overall status from all jobs
         statuses = []
         if isinstance(jobs, list):
             statuses = [j.get("status", "unknown") for j in jobs]
         elif isinstance(jobs, dict):
             statuses = [v.get("status", "unknown") for v in jobs.values()]
-        
-        status_map = {
-            "Succeeded": "succeeded", "Done": "succeeded",
-            "Processing": "in_progress", "Generating": "in_progress",
-            "Running": "in_progress", "Waiting": "queued",
-            "Queued": "queued", "Failed": "failed",
-        }
-        
-        if all(s in ("Done", "Succeeded") for s in statuses):
-            overall = "succeeded"
+
+        normalized = [self._normalize_status(s) for s in statuses]
+        if all(s == "completed" for s in normalized):
+            overall = "completed"
             progress = 100
-        elif any(s == "Failed" for s in statuses):
+        elif any(s == "failed" for s in normalized):
             overall = "failed"
             progress = 0
-        elif any(s in ("Processing", "Generating", "Running") for s in statuses):
-            done_count = sum(1 for s in statuses if s in ("Done", "Succeeded"))
+        elif any(s == "in_progress" for s in normalized):
+            done_count = sum(1 for s in normalized if s == "completed")
             overall = "in_progress"
-            progress = int(done_count / max(len(statuses), 1) * 100)
+            progress = int(done_count / max(len(normalized), 1) * 100)
         else:
             overall = "queued"
             progress = 0
@@ -863,15 +884,16 @@ def cmd_status(task_id):
     state = status["status"]
     progress = status.get("progress", 0)
     
-    icons = {"pending": "⏳", "processing": "🔄", "completed": "✅", "failed": "❌"}
+    icons = {"pending": "⏳", "in_progress": "🔄", "queued": "⏳",
+             "completed": "✅", "failed": "❌"}
     icon = icons.get(state, "❓")
-    
+
     print(f"{icon} Status: {state}")
     if progress:
         bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
         print(f"📊 Progress: [{bar}] {progress}%")
-    
-    if state in ("completed", "success", "succeeded"):
+
+    if state == "completed":
         urls = status.get("model_urls", {})
         if urls:
             print(f"📦 Available formats: {', '.join(urls.keys())}")
@@ -911,7 +933,7 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
     
     retries_502 = 0
     max_502_retries = 10
-    for i in range(120):  # Max 10 min
+    for i in range(MAX_POLL_ITERATIONS):
         time.sleep(5)
         try:
             status = backend.get_status(task_id)
@@ -936,7 +958,7 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
         bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
         print(f"\r  [{bar}] {progress}% - {state}", end="", flush=True)
         
-        if state in ("completed", "success", "succeeded"):
+        if state == "completed":
             print(f"\n✅ Done!")
             path = backend.download(task_id, fmt)
             if path:

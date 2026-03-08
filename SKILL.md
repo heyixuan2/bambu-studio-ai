@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.30"
+version: "0.23.0"
 author: TieGaier
 metadata:
   openclaw:
@@ -13,7 +13,7 @@ metadata:
     install:
       - id: pip-deps
         kind: pip
-        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib", "cryptography", "paho-mqtt"]
+        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib", "cryptography", "paho-mqtt", "scipy"]
         required: true
       - id: ffmpeg
         kind: brew
@@ -186,7 +186,7 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Download model | `python3 scripts/generate.py download <task_id>` |
 | Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
 | Keep main only (remove fragments) | `python3 scripts/analyze.py model.stl --repair --keep-main` |
-| Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`, `--bambu-map`) |
+| Multi-color | `python3 scripts/colorize model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`, `--bambu-map`) |
 | Slice (optional CLI) | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
 | Slice (specific setup, optional) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
 | List slicer profiles | `python3 scripts/slice.py --list-profiles` |
@@ -297,7 +297,7 @@ If no good results → offer AI generate.
 1. Same disclaimer as B
 2. Confirm dimensions + desired colors — **MUST have before** `generate.py text`
 3. `generate.py text "prompt" --wait` → textured GLB
-4. `colorize.py model.glb --height <size> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt (filament suggestions)
+4. `python3 scripts/colorize model.glb --height <size> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt (filament suggestions)
    - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
    - No shadow removal needed — HSV classification bypasses baked lighting
 5. **Send quantized texture preview to user** — colorize outputs `_preview.png` automatically; also run `preview.py model.obj --views turntable -o preview.gif` and **send both images to chat**
@@ -495,7 +495,7 @@ Triggered when `config.json` doesn't exist. Conversational:
 
 **Required:** `python3`, `pip3` (macOS recommended; core scripts work cross-platform)
 ```bash
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs pygltflib cryptography paho-mqtt
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs pygltflib cryptography paho-mqtt scipy
 ```
 **Optional (macOS):** `ffmpeg` (camera), Bambu Studio (model preview + slicing), Blender 4.0+ (multi-color + HQ preview), OrcaSlicer (CLI slicing)
 

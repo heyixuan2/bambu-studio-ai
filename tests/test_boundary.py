@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test color boundary preservation in colorize.py's quantization logic."""
+"""Test color boundary preservation in the colorize package's quantization logic."""
 import colorsys
 import numpy as np
 from collections import defaultdict

@@ -33,7 +33,7 @@ except ImportError:
 
 MODE = os.environ.get("BAMBU_MODE", "").lower()
 
-from common import SKILL_DIR as _skill_dir, load_config as _load_config_base
+from common import SKILL_DIR as _skill_dir, load_config as _load_config_base, TOKEN_TTL_SECONDS
 
 # Load config.json at import (non-sensitive).
 # Secrets loaded lazily on first _get_config() call.
@@ -306,7 +306,7 @@ class CloudBackend:
                     cache_time = _tc.get("timestamp", 0)
                     import time
                     # Token valid for 90 days
-                    if time.time() - cache_time > 7776000:  # 90 days
+                    if time.time() - cache_time > TOKEN_TTL_SECONDS:
                         cached_token = None
                         print("🔄 Cached token expired, re-authenticating...")
             except Exception:
