@@ -243,8 +243,10 @@ if VIEWS == "all":
         import shutil
         shutil.copy(view_imgs[0], OUTPUT_PATH)
     for p in view_imgs:
-        try: os.unlink(p)
-        except: pass
+        try:
+            os.unlink(p)
+        except OSError:
+            pass  # ignore unlink failures (file may already be gone)
 else:
     bpy.context.scene.render.resolution_x = 800
     bpy.context.scene.render.resolution_y = 800

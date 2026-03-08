@@ -184,7 +184,7 @@ On your printer's touchscreen:
 
 Only use if you can't be on the same network. Limited features (no camera, no G-code, no AI monitoring).
 
-First login requires email verification code. Token is cached for 24 hours.
+First login requires email verification code. Token is cached for 90 days.
 
 ---
 
@@ -608,7 +608,7 @@ python3 scripts/monitor.py --interval 300 --auto-pause  # Auto-pause on failure
 | Can't connect (LAN) | 1) LAN Mode ON 2) IP correct 3) Same network |
 | Auth failed (LAN) | Wrong serial or access code |
 | Timeout | Tap printer touchscreen to wake |
-| Token expired | Auto re-authenticates after 24h |
+| Token expired | Auto re-authenticates after 90 days |
 | API method not found | `pip3 install --upgrade bambulabs-api` |
 
 ### Print Issues

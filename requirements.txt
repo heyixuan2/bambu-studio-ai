@@ -1,5 +1,7 @@
 bambulabs-api>=2.6,<3.0
 bambu-lab-cloud-api>=1.0,<2.0
+cryptography>=42.0
+paho-mqtt>=2.0
 trimesh>=4.10,<5.0
 requests>=2.31,<3.0
 numpy>=1.24

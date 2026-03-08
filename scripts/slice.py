@@ -54,7 +54,10 @@ def find_profiles_dir():
 def load_profile(name, subdir, profiles_dir):
     """Load a profile JSON, resolving inheritance + includes recursively."""
     if os.path.isabs(name):
-        path = name
+        path = os.path.realpath(name)
+        profiles_real = os.path.realpath(profiles_dir)
+        if not (path == profiles_real or path.startswith(profiles_real + os.sep)):
+            raise ValueError(f"Profile path must be under profiles dir: {name}")
     else:
         path = os.path.join(profiles_dir, subdir, name)
         if not path.endswith(".json"):

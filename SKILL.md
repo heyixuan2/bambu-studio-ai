@@ -114,6 +114,51 @@ Request → Collect Info → Search/Generate → Analyze(11pt) → [Colorize] �
 
 Pre-check: If `config.json` does not exist → run First-Time Setup before any operation.
 
+**At the start of each turn:** If handling a print request, re-read the Pipeline Checklist and Compliance Rules. Ensure you are not skipping any MUST step.
+
+---
+
+## ⛔ COMPLIANCE RULES — Follow Strictly
+
+**Before every action, verify you are not violating these rules:**
+
+| Rule | Meaning |
+|------|---------|
+| **MUST** | Non-negotiable. Skip = failure. |
+| **NEVER** | Forbidden. Doing it = failure. |
+| **WAIT** | Do not proceed until user responds. |
+
+### NEVER Do These
+- ❌ **NEVER skip Information Collection** — Always ask: model source (search/generate), dimensions (if generating), single/multi-color, material
+- ❌ **NEVER generate without dimensions** — MUST ask "How big? e.g., 80mm tall" before `generate.py`
+- ❌ **NEVER skip analyze** — Every model MUST go through `analyze.py --orient --repair`
+- ❌ **NEVER skip preview** — MUST send preview image/GIF to chat before opening Bambu Studio. User must SEE the model.
+- ❌ **NEVER skip Bambu Studio confirmation** — MUST open in BS, tell user to inspect, WAIT for explicit "looks good" / "print it"
+- ❌ **NEVER auto-print** — No `bambu.py print` without user confirmation. AI models have errors.
+- ❌ **NEVER skip model source choice** — MUST ask user: search vs generate vs not sure (default: search first)
+
+### MUST Do These (in order)
+1. **Collect info** → Ask model source, dimensions (if generate), colors, material
+2. **Get model** → Search or generate per user choice
+3. **Analyze** → `analyze.py --orient --repair` on every model
+4. **Preview to chat** → `preview.py --views turntable` → **send image/GIF to user**
+5. **Slice** (if not user-slicing) → `slice.py`
+6. **Open Bambu Studio** → `open -a "BambuStudio" model.3mf`
+7. **Wait for confirmation** → Do not proceed until user says ready
+8. **Print** → Only after confirmation
+
+### Pipeline Checklist (verify before claiming done)
+```
+[ ] Info collected (source, dimensions, colors, material)
+[ ] Model obtained (search/generate/download)
+[ ] analyze.py --orient --repair run
+[ ] Preview image/GIF sent to chat
+[ ] slice.py run (or user will slice)
+[ ] Opened in Bambu Studio
+[ ] User confirmed "looks good" / "print it"
+[ ] Print started (only after confirmation)
+```
+
 ---
 
 ## Quick Reference
@@ -135,7 +180,7 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Generate 3D (image) | `python3 scripts/generate.py image photo.jpg --wait` |
 | Download model | `python3 scripts/generate.py download <task_id>` |
 | Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
-| Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`) |
+| Multi-color | `python3 scripts/colorize.py model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`, `--bambu-map`) |
 | Slice | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
 | Slice (specific setup) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
 | List slicer profiles | `python3 scripts/slice.py --list-profiles` |
@@ -189,6 +234,8 @@ Print Monitoring (both workflows, or on user request)
 
 ## Step 1: Information Collection
 
+**Gate:** Before ANY search/generate/download, you MUST complete this step.
+
 Collect before proceeding:
 
 **Model requirements:**
@@ -210,9 +257,13 @@ Collect before proceeding:
 
 Default: search first. Common objects (phone stand, hook, vase) almost always exist online.
 
+**Decision flow:** User says "search" / "generate" / "not sure" → If "not sure" → search first → if no good results → offer generate.
+
 ---
 
 ## Step 2: Model Source (Decision Point 1)
+
+**Gate:** Before this step, you MUST have asked user: "Search, generate, or not sure?" Default: search first.
 
 ### Workflow A — Internet Search (preferred)
 
@@ -225,18 +276,22 @@ If no good results → offer AI generate.
 
 ### Workflow B — AI Generate (single-color)
 
+**Checkpoint before generate:** Did you ask for dimensions? If not, ask now.
+
 1. First-time disclaimer (once): "AI models depend on provider + prompt. NOT production-ready — always review in Bambu Studio."
-2. Confirm dimensions
+2. Confirm dimensions — **MUST have before** `generate.py text`
 3. `generate.py text "prompt" --wait` → auto-enhances, auto-limits to build volume
 4. `preview.py model.stl --views turntable -o preview.gif` → **send GIF to chat**
 5. → Model Processing
 
 ### Workflow C — AI Generate (multi-color)
 
+**Checkpoint before generate:** Did you ask for dimensions and colors? If not, ask now.
+
 1. Same disclaimer as B
-2. Confirm dimensions + desired colors
+2. Confirm dimensions + desired colors — **MUST have before** `generate.py text`
 3. `generate.py text "prompt" --wait` → textured GLB
-4. `colorize.py model.glb --height <size> --max_colors 8` → vertex-color OBJ
+4. `colorize.py model.glb --height <size> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt (filament suggestions)
    - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
    - No shadow removal needed — HSV classification bypasses baked lighting
 5. **Send quantized texture preview to user** — colorize outputs `_preview.png` automatically; also run `preview.py model.obj --views turntable -o preview.gif` and **send both images to chat**
@@ -261,6 +316,7 @@ If no good results → offer AI generate.
 | `--no-merge` | off | Disable family group exclusion (all 12 families independent) |
 | `--island-size N` | 1000 | Remove isolated patches < N pixels (0=disabled) |
 | `--smooth N` | 5 | Majority vote boundary passes (0=raw, higher=smoother) |
+| `--bambu-map` | off | Output _color_map.txt with suggested Bambu filaments (CIELAB match) |
 
 ### Workflow D — User-Provided File
 
@@ -271,7 +327,9 @@ If no good results → offer AI generate.
 
 ## Step 3: Model Processing
 
-All models MUST go through this. No exceptions.
+**Gate:** Before this step, you MUST have a model file (from search, generate, or user).
+
+All models MUST go through this. No exceptions. **NEVER skip analyze or preview.**
 
 **Analysis (11-point check):**
 ```
@@ -291,15 +349,15 @@ Checks: dimensional tolerance, wall thickness, load direction, overhangs (>45°)
 
 Example: "Score 8/10. Repaired 58K non-manifold edges. Walls: 1.5mm ✅ Overhangs: 3.2% ✅ Recommended: 0.20mm layers, 20% infill, PLA 210°C."
 
-**Preview rendering (MANDATORY — always send image to user):**
+**Preview rendering (MANDATORY — NEVER skip):**
 ```
 preview.py model.stl --views turntable -o model_preview.gif
 ```
 - Single-color: renders STL/3MF with default blue material
 - Multi-color: renders colorize'd OBJ with vertex colors
-- **ALWAYS send the preview image/GIF to the chat** so user can see the model before proceeding
+- **MUST send the preview image/GIF to the chat** — user cannot proceed without seeing it
 - If turntable too slow, use `--views perspective` for a single image
-- Never skip preview — user must see what they're printing
+- **Checkpoint:** Have you attached the preview to your message? If not, do it before slice/open
 
 **Slice (skip if user will slice in Bambu Studio):**
 ```
@@ -312,6 +370,8 @@ Auto-detects printer + nozzle. Quality: draft(0.24) / standard(0.20) / fine(0.12
 ## Step 4: User Confirmation
 
 ⛔ **MANDATORY — NEVER SKIP**
+
+**Gate:** Before this step, you MUST have: (1) sent preview to chat, (2) run slice (or user will slice).
 
 1. Open in Bambu Studio: `open -a "BambuStudio" model_sliced.3mf`
 2. Tell user to inspect:
@@ -440,6 +500,20 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 
 ---
 
+## Common Agent Mistakes (self-check)
+
+| Mistake | Correct behavior |
+|---------|------------------|
+| Skipping "search vs generate" question | MUST ask user first. Default: search. |
+| Generating without dimensions | MUST ask "How big? e.g., 80mm tall" |
+| Running generate.py then immediately slice | MUST run analyze.py and preview.py in between |
+| Saying "I've prepared the model" without sending image | MUST attach preview GIF/image to the message |
+| Opening Bambu Studio without user seeing preview | User must see preview in chat BEFORE you open BS |
+| Proceeding to print without "looks good" | MUST wait for explicit user confirmation |
+| Skipping analyze "because it's from search" | ALL models need analyze — search results can have issues too |
+
+---
+
 ## Common Issues
 
 | Problem | Fix |
@@ -447,7 +521,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | SSL handshake error (LAN) | Normal (self-signed certs). Handled automatically. |
 | API method not found | `pip3 install --upgrade bambulabs-api` (v2.6.6+) |
 | Can't connect (LAN) | LAN Mode ON + correct IP + same network |
-| Cloud verification code | Wait for email, enter once. Token cached 24h. |
+| Cloud verification code | Wait for email, enter once. Token cached 90 days. |
 | Camera timeout | Wake printer (tap screen), check IP. |
 | AI model has holes/floating parts | Expected. Always run `analyze.py --repair`. |
 

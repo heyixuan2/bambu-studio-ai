@@ -18,6 +18,9 @@ Usage:
 
   # Manual colors (legacy mode):
   python3 scripts/colorize.py model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80
+
+  # With Bambu filament suggestions:
+  python3 scripts/colorize.py model.glb --height 80 --bambu-map
 """
 
 import os
@@ -94,20 +97,23 @@ def extract_texture_blender(glb_path, blender_path):
     from PIL import Image
 
     out_png = os.path.join(tempfile.gettempdir(), "bambu_extracted_texture.png")
-    glb_repr = repr(glb_path)
-    out_repr = repr(out_png)
+    glb_esc = json.dumps(glb_path)
+    out_esc = json.dumps(out_png)
     script = f'''
 import bpy
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath={glb_repr})
-obj = [o for o in bpy.context.scene.objects if o.type == 'MESH'][0]
+bpy.ops.import_scene.gltf(filepath={glb_esc})
+meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+if not meshes:
+    raise RuntimeError("No mesh found in GLB")
+obj = meshes[0]
 for mat in obj.data.materials:
     if mat and mat.use_nodes:
         for link in mat.node_tree.links:
             if link.to_node.type == 'BSDF_PRINCIPLED' and link.to_socket.name == 'Base Color':
                 if link.from_node.type == 'TEX_IMAGE':
                     img = link.from_node.image
-                    img.filepath_raw = {out_repr}
+                    img.filepath_raw = {out_esc}
                     img.file_format = 'PNG'
                     img.save()
                     print("SAVED")
@@ -598,10 +604,10 @@ def apply_vertex_colors(glb_path, quantized_npy_path, output_path, blender_path,
                         height_mm=0, subdivide=1):
     """Load GLB in Blender, sample quantized texture to vertex colors, export OBJ."""
 
-    # Use repr() for safe path embedding
-    glb_esc = repr(glb_path)
-    npy_esc = repr(quantized_npy_path)
-    out_esc = repr(output_path)
+    # Use json.dumps for safe path embedding (avoids injection)
+    glb_esc = json.dumps(glb_path)
+    npy_esc = json.dumps(quantized_npy_path)
+    out_esc = json.dumps(output_path)
 
     script = f'''
 import bpy
@@ -621,6 +627,8 @@ elif ext == '.stl':
     bpy.ops.wm.stl_import(filepath={glb_esc})
 
 meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+if not meshes:
+    raise RuntimeError("No mesh found in model")
 bpy.context.view_layer.objects.active = meshes[0]
 for o in meshes:
     o.select_set(True)
@@ -783,6 +791,92 @@ def find_blender():
 
 
 
+def _load_bambu_palette():
+    """Load Bambu Lab filament palette from references/bambu_filament_colors.json.
+    Returns list of dicts: {line, name, hex, rgb, lab}.
+    """
+    path = os.path.join(_skill_dir, "references", "bambu_filament_colors.json")
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        data = json.load(f)
+    palette = []
+    for line_name, colors in data.get("filaments", {}).items():
+        for color_name, hex_val in colors.items():
+            hex_val = hex_val.strip().lstrip("#")
+            if len(hex_val) != 6:
+                continue
+            r, g, b = int(hex_val[0:2], 16) / 255.0, int(hex_val[2:4], 16) / 255.0, int(hex_val[4:6], 16) / 255.0
+            rgb = np.array([[r, g, b]])
+            lab = srgb_to_lab(rgb)[0]
+            palette.append({
+                "line": line_name,
+                "name": color_name,
+                "hex": f"#{hex_val.upper()}",
+                "rgb": np.array([r, g, b]),
+                "lab": lab,
+            })
+    return palette
+
+
+def _map_colors_to_filaments(selected_colors, palette):
+    """Map each selected color to closest Bambu filament by CIELAB distance.
+    Returns list of dicts: {color_idx, hex, family, pct, best: {line, name, hex, delta_e}, alternatives: [...]}.
+    """
+    if not palette:
+        return []
+    sel_lab = np.array([sc["lab"] for sc in selected_colors])
+    pal_lab = np.array([p["lab"] for p in palette])
+    mappings = []
+    for i, sc in enumerate(selected_colors):
+        dists = np.sum((pal_lab - sel_lab[i]) ** 2, axis=1)
+        order = np.argsort(dists)
+        best = palette[order[0]]
+        delta_e = float(np.sqrt(dists[order[0]]))
+        alternatives = []
+        for j in range(1, min(4, len(order))):
+            alt = palette[order[j]]
+            alt_delta = float(np.sqrt(dists[order[j]]))
+            alternatives.append({"line": alt["line"], "name": alt["name"], "hex": alt["hex"], "delta_e": round(alt_delta, 1)})
+        rgb_int = (sc["rgb"] * 255).astype(int)
+        hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
+        mappings.append({
+            "color_idx": i + 1,
+            "hex": hex_c,
+            "family": sc["family"],
+            "percentage": sc["percentage"],
+            "best": {
+                "line": best["line"],
+                "name": best["name"],
+                "hex": best["hex"],
+                "delta_e": round(delta_e, 1),
+            },
+            "alternatives": alternatives,
+        })
+    return mappings
+
+
+def _write_bambu_map(mappings, output_path):
+    """Write _color_map.txt with Bambu filament suggestions."""
+    map_path = os.path.splitext(output_path)[0] + "_color_map.txt"
+    lines = [
+        "Bambu Lab Filament Mapping Suggestions",
+        "======================================",
+        "Map each detected color to AMS slots in Bambu Studio.",
+        "",
+    ]
+    for m in mappings:
+        lines.append(f"Color {m['color_idx']}: {m['hex']} ({m['family']}, {m['percentage']:.1f}%)")
+        lines.append(f"  → Best match: {m['best']['line']} / {m['best']['name']} {m['best']['hex']} (ΔE {m['best']['delta_e']})")
+        if m["alternatives"]:
+            alts = ", ".join(f"{a['line']} {a['name']}" for a in m["alternatives"])
+            lines.append(f"  → Alternatives: {alts}")
+        lines.append("")
+    with open(map_path, "w") as f:
+        f.write("\n".join(lines))
+    return map_path
+
+
 def _snap_vertex_colors(obj_path, selected_colors):
     """Post-process OBJ to snap vertex colors to exact selected RGB values.
     Blender UV sampling causes interpolation → 40+ unique colors instead of 5.
@@ -818,7 +912,7 @@ def _snap_vertex_colors(obj_path, selected_colors):
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
              colors=None, min_pct=0.001, no_merge=False, island_size=1000, smooth=5,
-             method="hybrid"):
+             method="hybrid", bambu_map=False):
     """
     Convert GLB to multi-color vertex-color OBJ.
 
@@ -904,6 +998,14 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
         if result:
             size_kb = os.path.getsize(output_path) // 1024
             print(f"\n✅ Output: {output_path} ({size_kb} KB)")
+            if bambu_map:
+                palette = _load_bambu_palette()
+                if palette:
+                    mappings = _map_colors_to_filaments(manual_selected, palette)
+                    map_path = _write_bambu_map(mappings, output_path)
+                    print(f"   📋 Bambu map: {map_path}")
+                else:
+                    print("   ⚠️ bambu_filament_colors.json not found, skip Bambu mapping")
             return output_path
         return None
 
@@ -1033,6 +1135,16 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
             rgb_int = (sc["rgb"] * 255).astype(int)
             hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
             print(f"   {i+1}. {hex_c} ({sc['family']}, {sc['percentage']:.1f}%)")
+        if bambu_map:
+            palette = _load_bambu_palette()
+            if palette:
+                mappings = _map_colors_to_filaments(selected, palette)
+                map_path = _write_bambu_map(mappings, output_path)
+                print(f"   📋 Bambu map: {map_path}")
+                for m in mappings:
+                    print(f"      {m['hex']} → {m['best']['line']} {m['best']['name']} (ΔE {m['best']['delta_e']})")
+            else:
+                print("   ⚠️ bambu_filament_colors.json not found, skip Bambu mapping")
         print(f"\n📋 Next: Import OBJ into Bambu Studio → map vertex colors to AMS filaments")
         return output_path
     else:
@@ -1063,6 +1175,8 @@ def main():
                             help="Island cleanup threshold in pixels (0=disabled)")
     parser.add_argument("--smooth", type=int, default=5,
                             help="Majority vote smoothing passes (0=disabled)")
+    parser.add_argument("--bambu-map", action="store_true",
+                            help="Output _color_map.txt with suggested Bambu filaments for each color")
 
     args = parser.parse_args()
 
@@ -1080,6 +1194,7 @@ def main():
         island_size=getattr(args, "island_size", 1000),
         smooth=getattr(args, "smooth", 5),
         method=getattr(args, "method", "hybrid"),
+        bambu_map=getattr(args, "bambu_map", False),
     )
     if result is None:
         sys.exit(1)

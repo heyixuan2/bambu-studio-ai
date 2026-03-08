@@ -310,7 +310,7 @@ class CloudBackend:
                     cached_token = _tc.get("token")
                     cache_time = _tc.get("timestamp", 0)
                     import time
-                    # Token valid for 24 hours
+                    # Token valid for 90 days
                     if time.time() - cache_time > 7776000:  # 90 days
                         cached_token = None
                         print("🔄 Cached token expired, re-authenticating...")
@@ -363,7 +363,7 @@ class CloudBackend:
             with open(_token_cache, "w") as _tf:
                 _tj.dump({"token": token, "timestamp": _tt.time(), "email": email}, _tf)
             os.chmod(_token_cache, 0o600)
-            print("✅ Logged in and token cached (valid 24h)")
+            print("✅ Logged in and token cached (valid 90 days)")
 
         except Exception as e:
             print(f"❌ Cloud login failed: {e}")
