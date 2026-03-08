@@ -46,7 +46,7 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 | 📸 **Camera** | RTSP snapshots from printer camera (LAN mode, all models incl. H2D) |
 | 📷 **Model Preview** | HQ rendered preview via Blender (turntable, front/side/top views) |
 | 📡 **Print Monitor** | MQTT status + camera snapshots, milestone notifications (0/25/50/75/100%) |
-| 🔔 **Notifications** | Print alerts via Discord, iMessage, Telegram, WhatsApp, Slack |
+| 🔔 **Notifications** | macOS system notifications + agent chat alerts for print milestones |
 
 ---
 
@@ -124,12 +124,12 @@ clawhub install bambu-studio-ai
 **Manual:**
 ```bash
 git clone https://github.com/heyixuan2/bambu-studio-ai.git ~/.agents/skills/bambu-studio-ai
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh cryptography paho-mqtt
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs pygltflib cryptography paho-mqtt
 ```
 
-**Optional but recommended:**
+**Optional but recommended (macOS):**
 ```bash
-brew install --cask bambu-studio  # Required for model preview before printing
+brew install --cask bambu-studio  # Model preview + slicing (macOS)
 ```
 
 ---

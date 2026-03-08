@@ -1,17 +1,19 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.22.27"
+version: "0.22.28"
 author: TieGaier
 metadata:
   openclaw:
     emoji: "🖨️"
+    os: ["macos"]
+    os_note: "Core scripts (analyze, generate, colorize, search) work cross-platform. macOS required for: Bambu Studio integration (open -a), Homebrew cask installs, macOS notifications (osascript). Linux/Windows users can run the Python scripts directly but lose BS integration."
     requires:
       bins: ["python3", "pip3"]
     install:
       - id: pip-deps
         kind: pip
-        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib"]
+        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib", "cryptography", "paho-mqtt"]
         required: true
       - id: ffmpeg
         kind: brew
@@ -22,63 +24,63 @@ metadata:
         kind: cask
         package: bambu-studio
         optional: true
-        label: "Model preview and manual slicing"
+        label: "Model preview and manual slicing (macOS)"
       - id: blender
         kind: cask
         package: blender
         optional: true
-        label: "Multi-color pipeline + HQ preview rendering"
+        label: "Multi-color pipeline + HQ preview rendering (macOS)"
       - id: orcaslicer
         kind: cask
         package: orcaslicer
         optional: true
-        label: "CLI slicing backend"
+        label: "Optional CLI slicing backend (macOS)"
 env:
   - name: BAMBU_MODE
     required: false
-    description: "Connection mode: cloud (default) or local"
+    description: "Connection mode: local (default, recommended) or cloud"
   - name: BAMBU_MODEL
     required: false
     description: "Printer model (e.g., H2D, A1 Mini, X1C)"
   - name: BAMBU_EMAIL
     required: false
-    description: "Bambu account email (cloud mode)"
+    description: "Bambu account email (cloud mode only)"
   - name: BAMBU_IP
     required: false
-    description: "Printer LAN IP (local mode)"
+    description: "Printer LAN IP (local mode only)"
   - name: BAMBU_SERIAL
     required: false
-    description: "Printer serial number (local mode)"
+    description: "Printer serial number (local mode only)"
   - name: BAMBU_ACCESS_CODE
     required: false
-    description: "LAN access code from printer touchscreen (local mode)"
+    description: "LAN access code from printer touchscreen (local mode only)"
   - name: BAMBU_VERIFY_CODE
     required: false
-    description: "Cloud login verification code (one-time)"
+    description: "Cloud login verification code (one-time, cloud mode only)"
   - name: BAMBU_DEVICE_ID
     required: false
-    description: "Cloud device ID (auto-detected)"
+    description: "Cloud device ID (auto-detected, cloud mode only)"
   - name: BAMBU_3D_PROVIDER
     required: false
-    description: "AI 3D gen provider: meshy, tripo, printpal, 3daistudio, rodin"
+    description: "AI 3D gen provider: meshy, tripo, printpal, 3daistudio, rodin (optional)"
   - name: BAMBU_3D_API_KEY
     required: false
-    description: "API key for chosen 3D generation provider"
+    description: "API key for chosen 3D generation provider (optional)"
 secrets:
   - name: BAMBU_PASSWORD
     required_when: "mode=cloud"
     storage: ".secrets.json"
-    description: "Bambu Lab account password"
+    description: "Bambu Lab account password (cloud mode only)"
   - name: BAMBU_ACCESS_CODE
     required_when: "mode=local"
     storage: ".secrets.json"
-    description: "LAN access code from printer Settings → Device"
+    description: "LAN access code from printer Settings → Device (local mode only)"
   - name: BAMBU_3D_API_KEY
     required_when: "3D generation enabled"
     storage: ".secrets.json"
-    description: "API key from chosen 3D generation provider"
+    description: "API key from chosen 3D generation provider (optional)"
 security:
-  no_credentials_shipped: true  # X.509 cert/key downloaded on demand, not shipped
+  no_credentials_shipped: true
   secrets_storage: ".secrets.json (chmod 600, git-ignored)"
   config_storage: "config.json (non-sensitive printer settings, git-ignored)"
   token_cache: ".token_cache.json (cloud auth token, 90d TTL, git-ignored). User can delete to force re-auth."
@@ -88,16 +90,17 @@ security:
   shipped_credentials: "NONE — no credentials, certificates, or keys are shipped or auto-downloaded."
   x509_setup: "User provides authentication certificate during setup if they enable Developer Mode auto-print. Stored locally in references/*.pem (git-ignored, key chmod 600). Not shipped, not downloaded by code."
   x509_scope: "Signs MQTT commands for LAN auto-print only. Requires user's own access code + same network."
+  notifications: "Notifications use ONLY local macOS osascript (display notification) and a local JSONL log file. No external notification services (Discord/Telegram/Slack/etc.) are implemented in code — those are handled by the agent's own messaging tools if available. The skill itself makes NO outbound calls for notifications."
   network_access:
-    - "Bambu Lab Cloud API (bambulab.com) — printer control, cloud mode only"
-    - "Bambu Lab MQTT (LAN) — printer control, local mode only"
-    - "Meshy API (api.meshy.ai) — 3D generation, optional"
-    - "Tripo3D API (api.tripo3d.ai) — 3D generation, optional"
-    - "Hyper3D Rodin API (hyperhuman.deemos.com) — 3D generation, optional (Business subscription)"
-    - "Printpal API — 3D generation, optional"
-    - "3D AI Studio API — 3D generation, optional"
-    - "DuckDuckGo (via ddgs) — model search, optional"
-  consent: "All network calls, file writes, printer operations, and monitoring require explicit user consent."
+    - "Bambu Lab Cloud API (bambulab.com) — printer control, cloud mode only, requires user credentials"
+    - "Bambu Lab MQTT (LAN, local network only) — printer control, local mode only"
+    - "Meshy API (api.meshy.ai) — 3D generation, optional, requires user-provided API key"
+    - "Tripo3D API (api.tripo3d.ai) — 3D generation, optional, requires user-provided API key"
+    - "Hyper3D Rodin API (hyperhuman.deemos.com) — 3D generation, optional, requires user-provided API key"
+    - "Printpal API — 3D generation, optional, requires user-provided API key"
+    - "3D AI Studio API — 3D generation, optional, requires user-provided API key"
+    - "DuckDuckGo (via ddgs library) — model search, no API key needed"
+  consent: "All network calls, file writes, printer operations, and monitoring require explicit user consent. No credentials are auto-fetched or auto-stored without user confirmation."
 keywords:
   - 3d printing
   - bambu lab
@@ -481,7 +484,7 @@ Triggered when `config.json` doesn't exist. Conversational:
      - Agent still ALWAYS shows preview before printing (never auto-prints without user confirmation)
    - Save choice as `print_mode: "manual"` or `print_mode: "auto"` in config.json
 4. **3D generation** (optional) — Meshy, Tripo, Printpal, 3D AI Studio + API key
-5. **Notifications** — auto / Discord / iMessage / Telegram / etc.
+5. **Notifications** — macOS system notifications (automatic). Agent handles chat notifications via its own messaging tools.
 6. **Save** — `config.json` + `.secrets.json` (chmod 600, git-ignored)
 7. **Verify** (ask permission) — test connection, camera, AMS
 8. **Summary**
@@ -490,11 +493,11 @@ Triggered when `config.json` doesn't exist. Conversational:
 
 ## Environment & Dependencies
 
-**Required:** `python3`, `pip3`
+**Required:** `python3`, `pip3` (macOS recommended; core scripts work cross-platform)
 ```bash
-pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs cryptography paho-mqtt
+pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddgs pygltflib cryptography paho-mqtt
 ```
-**Optional:** `ffmpeg` (camera), Bambu Studio (preview/slicing), Blender 4.0+ (multi-color + HQ preview), OrcaSlicer (CLI slicing)
+**Optional (macOS):** `ffmpeg` (camera), Bambu Studio (model preview + slicing), Blender 4.0+ (multi-color + HQ preview), OrcaSlicer (CLI slicing)
 
 **Env vars** (override config.json): `BAMBU_MODE`, `BAMBU_MODEL`, `BAMBU_EMAIL`, `BAMBU_IP`, `BAMBU_SERIAL`, `BAMBU_3D_PROVIDER`
 
