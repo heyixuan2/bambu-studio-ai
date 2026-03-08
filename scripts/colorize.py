@@ -1012,48 +1012,69 @@ def _write_bambu_map(mappings, output_path):
 
 
 def _snap_vertex_colors(obj_path, selected_colors):
-    """Post-process OBJ to snap vertex colors to exact selected RGB values.
-    Blender UV sampling causes interpolation → 40+ unique colors instead of 5.
-    Vectorized: reads all vertex colors, batch-converts to LAB, then writes back.
+    """Post-process OBJ to snap vertex colors to EXACT selected sRGB values.
+
+    Problem: Blender stores vertex colors in linear space, quantizes to BYTE_COLOR
+    (8-bit per channel), then OBJ export writes those drifted values. Bambu Studio
+    detects every micro-variation as a separate color (e.g., 2 target colors → 7 in BS).
+
+    Solution: For each vertex, find nearest target color (simple RGB Euclidean distance
+    in whatever space the values are in — linear or sRGB, doesn't matter for nearest-
+    neighbor when targets are well-separated). Then write the EXACT same string for every
+    vertex of that color, guaranteeing Bambu Studio sees exactly N colors.
     """
     import numpy as np
+
+    # Build exact sRGB target strings (one per color, bit-exact)
     sel_rgb = np.array([sc["rgb"] for sc in selected_colors], dtype=np.float64)
-    sel_lab = np.array([sc["lab"] for sc in selected_colors], dtype=np.float64)
+    color_strings = []
+    for rgb in sel_rgb:
+        color_strings.append("%.6f %.6f %.6f" % (rgb[0], rgb[1], rgb[2]))
 
     with open(obj_path) as f:
         lines = f.readlines()
 
     v_indices = []
-    v_xyz = []
+    v_xyz_strs = []
     v_rgb = []
     for i, line in enumerate(lines):
         if line.startswith('v '):
             parts = line.split()
             if len(parts) >= 7:
                 v_indices.append(i)
-                v_xyz.append(parts[1:4])
+                v_xyz_strs.append(" ".join(parts[1:4]))
                 v_rgb.append([float(parts[4]), float(parts[5]), float(parts[6])])
 
     if not v_indices:
         return
 
     rgb_arr = np.array(v_rgb, dtype=np.float64)
-    lab_arr = srgb_to_lab(rgb_arr)
 
-    # Vectorized nearest-neighbor: (N, 1, 3) - (1, K, 3) → (N, K)
-    dists = np.sum((lab_arr[:, np.newaxis, :] - sel_lab[np.newaxis, :, :]) ** 2, axis=2)
+    # OBJ values may be in linear space (from Blender), but that's fine —
+    # nearest-neighbor works in any space when target colors are distinct.
+    # We also try matching against linear-converted targets for robustness.
+    sel_linear = np.where(sel_rgb <= 0.04045, sel_rgb / 12.92,
+                          ((sel_rgb + 0.055) / 1.055) ** 2.4)
+
+    # Distance to sRGB targets
+    dists_srgb = np.sum((rgb_arr[:, np.newaxis, :] - sel_rgb[np.newaxis, :, :]) ** 2, axis=2)
+    # Distance to linear targets
+    dists_lin = np.sum((rgb_arr[:, np.newaxis, :] - sel_linear[np.newaxis, :, :]) ** 2, axis=2)
+    # Take whichever is closer (handles both Blender export modes)
+    dists = np.minimum(dists_srgb, dists_lin)
+
     nearest_idx = np.argmin(dists, axis=1)
-    nearest_rgb = sel_rgb[nearest_idx]
-
-    snapped = int(np.sum(~np.all(np.abs(rgb_arr - nearest_rgb) < 0.01, axis=1)))
+    snapped = 0
     for j, vi in enumerate(v_indices):
-        xyz = v_xyz[j]
-        nr = nearest_rgb[j]
-        lines[vi] = "v %s %s %s %.4f %.4f %.4f\n" % (xyz[0], xyz[1], xyz[2], nr[0], nr[1], nr[2])
+        cidx = nearest_idx[j]
+        lines[vi] = "v %s %s\n" % (v_xyz_strs[j], color_strings[cidx])
+        snapped += 1
 
     with open(obj_path, 'w') as f:
         f.writelines(lines)
-    print(f"   Snapped {snapped:,} vertex colors to {len(sel_rgb)} exact colors")
+
+    unique_colors = len(set(nearest_idx))
+    print(f"   Snapped {snapped:,} vertices → {unique_colors} exact colors (of {len(sel_rgb)} targets)")
 
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
