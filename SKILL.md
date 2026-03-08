@@ -228,7 +228,8 @@ If no good results → offer AI generate.
 1. First-time disclaimer (once): "AI models depend on provider + prompt. NOT production-ready — always review in Bambu Studio."
 2. Confirm dimensions
 3. `generate.py text "prompt" --wait` → auto-enhances, auto-limits to build volume
-4. → Model Processing
+4. `preview.py model.stl --views turntable -o preview.gif` → **send GIF to chat**
+5. → Model Processing
 
 ### Workflow C — AI Generate (multi-color)
 
@@ -238,7 +239,7 @@ If no good results → offer AI generate.
 4. `colorize.py model.glb --height <size> --max_colors 8` → vertex-color OBJ
    - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
    - No shadow removal needed — HSV classification bypasses baked lighting
-5. **Show quantized texture preview to user** — send the `_preview.png` image
+5. **Send quantized texture preview to user** — colorize outputs `_preview.png` automatically; also run `preview.py model.obj --views turntable -o preview.gif` and **send both images to chat**
 6. **Analyze results and suggest tuning** if needed:
    - Report detected colors with names, hex codes, and percentages
    - If small but meaningful colors were lost (e.g., <1% features like eyes, accessories):
@@ -289,6 +290,16 @@ Checks: dimensional tolerance, wall thickness, load direction, overhangs (>45°)
 - Recommended settings (layer height, infill, walls, temps, supports)
 
 Example: "Score 8/10. Repaired 58K non-manifold edges. Walls: 1.5mm ✅ Overhangs: 3.2% ✅ Recommended: 0.20mm layers, 20% infill, PLA 210°C."
+
+**Preview rendering (MANDATORY — always send image to user):**
+```
+preview.py model.stl --views turntable -o model_preview.gif
+```
+- Single-color: renders STL/3MF with default blue material
+- Multi-color: renders colorize'd OBJ with vertex colors
+- **ALWAYS send the preview image/GIF to the chat** so user can see the model before proceeding
+- If turntable too slow, use `--views perspective` for a single image
+- Never skip preview — user must see what they're printing
 
 **Slice (skip if user will slice in Bambu Studio):**
 ```
