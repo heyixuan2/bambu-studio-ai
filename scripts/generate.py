@@ -99,22 +99,82 @@ def get_max_size():
 
 # ─── Prompt Enhancement ──────────────────────────────────────────────
 
-def enhance_prompt(user_prompt, max_size=None):
-    """Add 3D-printing-specific instructions to user prompt."""
+def enhance_prompt(user_prompt, max_size=None, geometry_type="auto"):
+    """Add 3D-printing-specific instructions to user prompt.
+
+    Focus on connected printable geometry. Also rewrites a few common prompt
+    failure words (particles, wisps, detached flames, etc.) into solid
+    sculptural equivalents that text-to-3D models handle more reliably.
+    """
     if not max_size:
         max_size = get_max_size()
 
+    lower = user_prompt.lower()
     # Don't double-enhance
-    if "3d print" in user_prompt.lower() or "watertight" in user_prompt.lower():
+    if "3d print" in lower or "watertight" in lower:
         return user_prompt
 
+    replacements = {
+        "smoke wisps": "solid smoke shapes attached to the model",
+        "hair strands": "smooth stylized hair mass",
+        "particles": "solid sculptural details",
+        "sparks": "thick attached accents",
+        "smoke": "solid smoke forms attached to the model",
+        "wisps": "solid stylized forms",
+        "flames": "solid sculptural flames attached to the model",
+        "fire": "solid sculptural fire attached to the model",
+        "strands": "smooth connected forms",
+        "floating": "attached",
+        "hovering": "connected",
+    }
+    rewritten = user_prompt
+    for bad, good in sorted(replacements.items(), key=lambda kv: -len(kv[0])):
+        rewritten = rewritten.replace(bad, good)
+        rewritten = rewritten.replace(bad.title(), good)
+
+    if geometry_type == "auto":
+        if any(k in lower for k in ["case", "stand", "hook", "bracket", "mount", "holder"]):
+            geometry_type = "functional"
+        elif any(k in lower for k in ["figurine", "character", "toy", "dragon", "animal", "statue"]):
+            geometry_type = "figurine"
+        else:
+            geometry_type = "general"
+
+    geometry_hint = {
+        "functional": (
+            "Engineering-friendly solid geometry, no separate screws or floating hardware, "
+            "thick connected base or mounting surface, minimum 1.5mm wall thickness."
+        ),
+        "figurine": (
+            "Solid sculpture figurine style, single connected piece, smooth continuous surfaces, "
+            "all limbs and accessories physically connected, no thin protruding details."
+        ),
+        "general": (
+            "Single fully-connected mesh with no floating or detached parts, all appendages must share mesh "
+            "geometry with the main body, minimum feature thickness 2mm, flat stable base for bed adhesion."
+        ),
+    }[geometry_type]
+
     enhanced = (
-        f"{user_prompt}. "
-        f"Solid sculpture figurine style, single connected piece, "
-        f"smooth surfaces, flat stable base, "
-        f"no floating parts or thin protruding details."
+        f"{rewritten}. Designed for FDM 3D printing. "
+        f"CRITICAL STRUCTURAL REQUIREMENTS: {geometry_hint} "
+        f"No overhangs beyond 45° if possible. Maximum size {max_size[0]}×{max_size[1]}×{max_size[2]}mm. "
+        f"Watertight manifold mesh. Compact solid form preferred over open lattice structures."
     )
     return enhanced
+
+
+def refine_prompt_for_retry(prompt, attempt, failure_reason=""):
+    """Tighten prompt constraints after a failed generation/analysis pass."""
+    suffixes = [
+        "IMPORTANT: generate as one single connected solid piece with no disconnected geometry.",
+        "IMPORTANT: avoid floating accessories, particles, wisps, or detached details; merge all details into the main body.",
+        "IMPORTANT: prioritize printability over visual complexity; use thicker, simpler, more connected shapes.",
+    ]
+    extra = suffixes[min(max(attempt, 0), len(suffixes) - 1)]
+    if failure_reason:
+        extra += f" Failure to avoid: {failure_reason}."
+    return f"{prompt} {extra}"
 
 # ─── Provider Backends ───────────────────────────────────────────────
 
@@ -555,6 +615,46 @@ def get_backend():
 
 # ─── Commands ────────────────────────────────────────────────────────
 
+def _check_connectivity(file_path):
+    """Quick disconnected-parts check using trimesh.
+
+    Returns (n_bodies, sorted_volumes_mm3) or (None, None) if check can't run.
+    Skips 3MF (complex internal structure) and uses a 10-second timeout.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.3mf':
+        return None, None  # 3MF internal structure not trivially analyzable
+
+    try:
+        import trimesh
+        import signal
+
+        mesh = trimesh.load(file_path, force="mesh")
+        if mesh is None or len(getattr(mesh, 'faces', [])) == 0:
+            return None, None
+
+        # Timeout guard — split() can hang on complex topology
+        def _alarm(signum, frame):
+            raise TimeoutError("connectivity check timed out")
+        old = signal.signal(signal.SIGALRM, _alarm)
+        signal.alarm(10)
+        try:
+            bodies = mesh.split(only_watertight=False)
+        except (TimeoutError, Exception):
+            return None, None
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old)
+
+        sizes = sorted([b.volume for b in bodies], reverse=True)
+        return len(bodies), sizes
+
+    except ImportError:
+        return None, None
+    except Exception:
+        return None, None
+
+
 def _auto_scale(file_path, target_height_mm=80):
     """Auto-scale models with normalized coordinates to printable mm size.
     Many AI providers (Rodin, Meshy, etc.) output models in normalized units
@@ -640,8 +740,42 @@ def _finalize(file_path, target_format="stl"):
     size = os.path.getsize(file_path)
     if size < 100:
         print(f"⚠️ File suspiciously small ({size} bytes)")
-    
+
+    # 5. Quick connectivity check — warn if disconnected parts detected
+    n_bodies, body_sizes = _check_connectivity(file_path)
+    if n_bodies is not None and n_bodies > 1:
+        total_vol = sum(body_sizes) or 1
+        main_pct = body_sizes[0] / total_vol * 100
+        small_pct = 100 - main_pct
+        print(f"⚠️  Disconnected parts detected: {n_bodies} separate bodies.")
+        print(f"   Main body: {main_pct:.0f}% of volume | Floating pieces: {small_pct:.0f}%")
+        print(f"   💡 To remove floating pieces:  python3 scripts/analyze.py {file_path} --repair")
+        print(f"   💡 To re-generate (often fixes): add '--raw' flag to bypass enhancement,")
+        print(f"       or re-run with a prompt like: 'single solid piece, no floating parts, {os.path.basename(file_path)}'")
+
     return file_path
+
+
+def _maybe_retry_generated_model(path, prompt, fmt="3mf", auto_retry=0):
+    """Return None when the mesh clearly needs a retry, else return path."""
+    if not path:
+        return path
+    try:
+        import trimesh
+        mesh = trimesh.load(path, force="mesh")
+        if not hasattr(mesh, "split"):
+            return path
+        bodies = mesh.split(only_watertight=False)
+        if len(bodies) <= 1:
+            return path
+        print(f"⚠️ Generated mesh has {len(bodies)} disconnected parts.")
+        if auto_retry > 0:
+            print("   Retrying with a stricter prompt...")
+            return None
+    except Exception as e:
+        print(f"⚠️ Post-generation validation skipped: {e}")
+    return path
+
 
 
 def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
@@ -649,26 +783,36 @@ def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
         print("❌ Empty prompt. Please describe what you want to generate.")
         return
     backend = get_backend()
+    auto_retry = max(0, int(kwargs.pop("auto_retry", 0)))
 
-    # Enhance prompt for printability
+    original = prompt
+    base_prompt = prompt
     if not kwargs.get("raw"):
-        original = prompt
-        prompt = enhance_prompt(prompt)
+        base_prompt = enhance_prompt(prompt)
         max_sz = get_max_size()
         if PRINTER_MODEL:
             print(f"🖨️ Printer: {PRINTER_MODEL} (max {max_sz[0]}x{max_sz[1]}x{max_sz[2]}mm)")
         print(f"📝 Original: {original}")
-        print(f"✨ Enhanced: {prompt[:120]}...")
+        print(f"✨ Enhanced: {base_prompt[:160]}...")
         print()
 
-    task_id = backend.text_to_3d(prompt, **kwargs)
-    
-    if wait:
-        return _wait_and_download(backend, task_id, kwargs.get("format", "3mf"))
-    else:
-        print(f"\n💡 Check status: python3 scripts/generate.py status {task_id}")
-        print(f"💡 Download:     python3 scripts/generate.py download {task_id}")
-    return task_id
+    last_task_id = None
+    for attempt in range(auto_retry + 1):
+        effective_prompt = base_prompt if attempt == 0 else refine_prompt_for_retry(base_prompt, attempt - 1, "disconnected parts or fragile geometry")
+        if attempt > 0:
+            print(f"🔁 Retry attempt {attempt}/{auto_retry} with stronger printability constraints...")
+        task_id = backend.text_to_3d(effective_prompt, **kwargs)
+        last_task_id = task_id
+        if wait:
+            path = _wait_and_download(backend, task_id, kwargs.get("format", "3mf"))
+            path = _maybe_retry_generated_model(path, effective_prompt, kwargs.get("format", "3mf"), auto_retry=(auto_retry - attempt))
+            if path or attempt == auto_retry:
+                return path
+        else:
+            print(f"\n💡 Check status: python3 scripts/generate.py status {task_id}")
+            print(f"💡 Download:     python3 scripts/generate.py download {task_id}")
+            return task_id
+    return last_task_id
 
 def cmd_image(image_path, prompt="", wait=False, **kwargs):
     if not image_path.startswith("http") and not os.path.exists(image_path):
@@ -794,6 +938,7 @@ def main():
     p_text.add_argument("--format", default="3mf", help="Output format (3mf recommended for Bambu Lab) (stl/obj/glb/3mf)")
     p_text.add_argument("--style", default="realistic", help="Art style")
     p_text.add_argument("--raw", action="store_true", help="Skip prompt enhancement")
+    p_text.add_argument("--auto-retry", type=int, default=0, choices=range(0, 4), help="Retry generation 1-3 times if downloaded mesh has disconnected parts")
     
     p_img = sub.add_parser("image", help="Image to 3D model")
     p_img.add_argument("image", help="Image path or URL")
@@ -816,7 +961,7 @@ def main():
         sys.exit(1)
     
     if args.command == "text":
-        cmd_text(args.prompt, wait=args.wait, format=args.format, style=args.style, raw=args.raw)
+        cmd_text(args.prompt, wait=args.wait, format=args.format, style=args.style, raw=args.raw, auto_retry=args.auto_retry)
     elif args.command == "image":
         cmd_image(args.image, prompt=args.prompt, wait=args.wait, format=args.format, raw=args.raw)
     elif args.command == "status":

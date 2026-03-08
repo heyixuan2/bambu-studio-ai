@@ -264,14 +264,23 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     
     overhang_area = face_areas[overhang_mask].sum()
     overhang_pct = round(overhang_area / total_area * 100, 1)
+    # Express absolute area in cm² for context (20% of a tiny model ≠ 20% of a large one)
+    overhang_area_cm2 = round(overhang_area / 100, 1)
     check4["overhang_area_pct"] = overhang_pct
+    check4["overhang_area_cm2"] = overhang_area_cm2
     check4["threshold_deg"] = threshold_deg
     if overhang_pct > 20:
         check4["status"] = "fail"
-        report["issues"].append(f"{overhang_pct}% surface area exceeds {threshold_deg}° overhang. Needs supports or reorientation.")
+        report["issues"].append(
+            f"{overhang_pct}% surface area ({overhang_area_cm2}cm²) exceeds {threshold_deg}° overhang. "
+            f"Needs supports or reorientation."
+        )
     elif overhang_pct > 5:
         check4["status"] = "warn"
-        report["warnings"].append(f"{overhang_pct}% surface area has >{threshold_deg}° overhang. Consider tree supports or rotating the model.")
+        report["warnings"].append(
+            f"{overhang_pct}% surface area ({overhang_area_cm2}cm²) has >{threshold_deg}° overhang. "
+            f"Consider tree supports or rotating the model."
+        )
         checks_passed += 1
     else:
         checks_passed += 1
@@ -635,6 +644,8 @@ def main():
     parser.add_argument("--height", type=float, default=0, help="Target height in mm (auto-scale model)")
     parser.add_argument("--orient", action="store_true", help="Auto-orient for optimal print position")
     parser.add_argument("--repair", action="store_true", help="Auto-repair non-manifold mesh before analysis")
+    parser.add_argument("--no-auto-repair", action="store_true",
+                        help="Skip auto-repair of minor mesh issues (holes/normals) that are applied by default")
     parser.add_argument("--no-simplify", action="store_true", help="Skip auto-simplification of high-poly meshes")
     parser.add_argument("--no-clean", action="store_true", help="Skip auto-removal of floating parts")
     parser.add_argument("--output-dir", default=".", help="Directory for rendered images")
@@ -756,16 +767,23 @@ def main():
         if has_disconnected: print(f"   - {len(bodies)} disconnected parts")
 
         if severity == "minor":
-            # Small holes only — light repair
-            if args.repair:
+            # Holes only — hole-filling + normal-fixing is low-risk and always improves quality.
+            # Auto-apply unless user opts out with --no-auto-repair.
+            if not getattr(args, 'no_auto_repair', False):
+                print(f"\n🔧 Auto-repairing minor issues (holes + normals — low risk)...")
+                repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
+                mesh, was_repaired = repair_mesh(mesh, repair_path)
+                if not was_repaired:
+                    print(f"   ℹ️ Pass --no-auto-repair to skip this step.")
+            elif args.repair:
                 print(f"\n🔧 Light repair (filling holes, fixing normals)...")
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)
             else:
-                print(f"\n💡 Minor issues found. Run with --repair to auto-fix.")
+                print(f"\n💡 Minor issues found. Will auto-repair on next run (or pass --repair).")
         elif severity == "major":
-            # Non-manifold — full repair
-            print(f"\n🔧 Full repair (voxel remesh may be needed for severe cases)...")
+            # Non-manifold — full repair, requires explicit --repair (more destructive)
+            print(f"\n🔧 Full repair needed (non-manifold edges).")
             print(f"   💡 If auto-repair fails, try in Blender:")
             print(f"      Remesh modifier → Voxel (size: 0.15-0.25mm) → Smooth")
             print(f"      ⚠️ Use smallest voxel size that preserves detail")
@@ -773,10 +791,11 @@ def main():
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)
             else:
-                print(f"\n💡 Major issues found. Run with --repair to auto-fix.")
+                print(f"\n💡 Major issues found. Run with --repair to attempt auto-fix.")
         else:
-            print(f"\n⚠️ Disconnected parts — repair may not help.")
-            print(f"   Consider re-generating or manually merging in Blender.")
+            print(f"\n⚠️ Disconnected parts detected.")
+            print(f"   Auto-remove floating pieces: python3 scripts/analyze.py {args.file} --repair")
+            print(f"   Or re-generate with a prompt that says 'single solid piece, no floating parts'.")
             if args.repair:
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)

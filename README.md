@@ -37,7 +37,7 @@ Full-stack Bambu Lab 3D printing skill for [OpenClaw](https://github.com/opencla
 |---------|-------------|
 | 🔎 **Model Search** | Search Printables, MakerWorld, Thingiverse, Thangs for existing models |
 | 🎨 **AI 3D Generation** | Text-to-3D and Image-to-3D via Meshy, Tripo3D, Printpal, or 3D AI Studio |
-| 🎨 **Multi-Color AMS** | Auto-detect ≤8 colors from texture, vertex-color OBJ pipeline, tunable parameters |
+| 🎨 **Multi-Color AMS** | Auto-detect ≤8 colors from texture, vertex-color OBJ pipeline, salient-detail protection, tunable parameters |
 | 🔆 **AI Shadow Handling** | Pixel-level HSV family classification bypasses baked lighting — no shadow removal needed |
 | 🔍 **11-Point Analysis** | Printability check: walls, overhangs, tolerance, infill, layer height, floating parts |
 | 🔧 **Auto Mesh Repair** | Fix non-manifold edges, holes, bad normals, tiered by severity |
@@ -530,6 +530,7 @@ python3 scripts/slice.py --list-profiles           # Show available profiles
 
 ```bash
 python3 scripts/generate.py text "phone stand" --wait --format 3mf
+python3 scripts/generate.py text "dragon figurine" --wait --auto-retry 2
 python3 scripts/generate.py image photo.jpg --wait
 python3 scripts/generate.py status <task_id>
 python3 scripts/generate.py download <task_id> --format 3mf
@@ -746,6 +747,7 @@ We tried three shadow removal approaches before abandoning them all:
 
 | Version | Changes |
 |---------|--------|
+| **0.22.24** | colorize: fix smooth loop bug (was hardcoded 5 passes, now respects `--smooth`); `cleanup_labels` protects largest component per color (salient small region guard — eyes/buttons no longer erased); fix `--min-pct` help text. generate: stronger prompt enhancement with geometry-type detection (functional/figurine/general), keyword rewriting for problematic terms (smoke/flames/wisps → solid sculptural forms), `refine_prompt_for_retry()` helper; post-download connectivity check warns on disconnected parts with actionable fix hints. analyze: overhang messages now include absolute area (cm²) for context; minor mesh issues (holes + normals) auto-repaired by default without `--repair` flag (low-risk); `--no-auto-repair` opt-out added; disconnected-parts message links to concrete fixes. |
 | **0.22.4** | Colorize: vertex color snap (exact N colors in OBJ), bmesh auto-repair (merge doubles, fix normals, delete loose), post-export non-manifold = 0 |
 | **0.22.3** | Colorize: achromatic constraint (shadow pixels blocked from black, V<0.2 exempt), 2% min threshold for small color families, 5-pass majority vote boundary smoothing, island cleanup (1000px) + median filter, doctor.py syntax fix |
 | **0.22.2** | preview.py rewrite: Blender-only rendering (removed matplotlib), TRACK_TO auto-aim, PBR texture auto-load, dynamic lighting, EEVEE 4.x/5.x compat, --views all (2×2 grid). Audit fixes P1-P4. |

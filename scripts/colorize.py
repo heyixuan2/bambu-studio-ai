@@ -180,6 +180,31 @@ def classify_pixels(pixels):
 # Step 3: Greedy color-mode selection
 # ═══════════════════════════════════════════════════════════════
 
+def _representative_color(rgb_pixels, lab_pixels):
+    """Stable representative color for a region/family.
+
+    Uses a trimmed median/mean blend to reduce baked-shadow bias while keeping
+    the robustness of median statistics.
+    """
+    if len(rgb_pixels) == 0:
+        return np.array([0.5, 0.5, 0.5]), np.array([50.0, 0.0, 0.0])
+    if len(rgb_pixels) < 16:
+        return np.median(rgb_pixels, axis=0), np.median(lab_pixels, axis=0)
+
+    luminance = rgb_pixels.max(axis=1)
+    lo = np.quantile(luminance, 0.10)
+    hi = np.quantile(luminance, 0.90)
+    keep = (luminance >= lo) & (luminance <= hi)
+    trimmed_rgb = rgb_pixels[keep] if np.any(keep) else rgb_pixels
+    trimmed_lab = lab_pixels[keep] if np.any(keep) else lab_pixels
+
+    median_rgb = np.median(trimmed_rgb, axis=0)
+    median_lab = np.median(trimmed_lab, axis=0)
+    mean_rgb = np.mean(trimmed_rgb, axis=0)
+    mean_lab = np.mean(trimmed_lab, axis=0)
+    return 0.7 * median_rgb + 0.3 * mean_rgb, 0.7 * median_lab + 0.3 * mean_lab
+
+
 def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pct=0.001, no_merge=False):
     """
     Greedy select representative colors:
@@ -224,9 +249,8 @@ def greedy_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
         if total == 0:
             break
 
-        # Representative: median in RGB and LAB
-        median_rgb = np.median(pixels[group_mask], axis=0)
-        median_lab = np.median(pixel_lab[group_mask], axis=0)
+        # Representative: trimmed median/mean blend in RGB and LAB
+        median_rgb, median_lab = _representative_color(pixels[group_mask], pixel_lab[group_mask])
 
         pct = total / N * 100
         group_names = [FAMILY_NAMES[gf] for gf in group]
@@ -340,8 +364,7 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
         if count < N * min_pct:
             continue
         pct = count / N * 100
-        median_rgb = np.median(pixels[mask], axis=0)
-        median_lab = np.median(pixel_lab[mask], axis=0)
+        median_rgb, median_lab = _representative_color(pixels[mask], pixel_lab[mask])
         family_data.append({
             "fid": fid,
             "rgb": median_rgb,
@@ -409,8 +432,10 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
                 sub_count = int(np.sum(sub_mask_full))
                 if sub_count < N * min_pct:
                     continue
-                med_rgb = np.median(f_rgb[sub_mask_full], axis=0) if len(f_rgb) == len(full_labels) else np.median(f_rgb_sub[km.labels_ == sub_id], axis=0)
-                med_lab = np.median(f_lab[sub_mask_full], axis=0)
+                if len(f_rgb) == len(full_labels):
+                    med_rgb, med_lab = _representative_color(f_rgb[sub_mask_full], f_lab[sub_mask_full])
+                else:
+                    med_rgb, med_lab = _representative_color(f_rgb_sub[km.labels_ == sub_id], f_lab_sub[km.labels_ == sub_id])
                 selected.append({
                     "rgb": med_rgb,
                     "lab": med_lab,
@@ -485,23 +510,37 @@ def assign_pixels(pixel_lab, selected_colors, pixel_families=None, pixels=None):
 
 def cleanup_labels(labels_2d, min_island=1000):
     """Remove tiny isolated color regions by majority vote of neighbors.
-    
-    For each pixel, if its connected component (same-color island) has fewer
-    than min_island pixels, replace it with the most common neighbor color.
+
+    Protects the LARGEST connected component of each color from removal, so
+    small but salient features (eyes, buttons, accessories) that are the only
+    representative of their color are never erased — only redundant satellite
+    blobs below min_island pixels are removed.
     """
     from scipy import ndimage
     h, w = labels_2d.shape
     cleaned = labels_2d.copy()
-    
+
     unique_labels = np.unique(labels_2d)
     for lbl in unique_labels:
         mask = labels_2d == lbl
         # Find connected components for this color
         components, n_comp = ndimage.label(mask)
-        for comp_id in range(1, n_comp + 1):
-            comp_mask = components == comp_id
-            if np.sum(comp_mask) >= min_island:
+        if n_comp <= 1:
+            continue  # Only one component — nothing to clean up
+
+        # Find sizes so we can protect the largest representative
+        comp_sizes = [int(np.sum(components == cid)) for cid in range(1, n_comp + 1)]
+        max_size = max(comp_sizes)
+
+        for comp_id, comp_size in enumerate(comp_sizes, 1):
+            # Always keep the largest component for this color (salient region guard).
+            # This prevents small but important color regions (e.g., a character's eyes
+            # that are the only white pixels) from being wiped out by island cleanup.
+            if comp_size == max_size:
                 continue
+            if comp_size >= min_island:
+                continue
+            comp_mask = components == comp_id
             # Dilate to find neighbors
             dilated = ndimage.binary_dilation(comp_mask, iterations=1)
             neighbor_mask = dilated & ~comp_mask
@@ -512,8 +551,37 @@ def cleanup_labels(labels_2d, min_island=1000):
             counts = np.bincount(neighbor_labels)
             majority = np.argmax(counts)
             cleaned[comp_mask] = majority
-    
+
     return cleaned
+
+
+def preserve_salient_regions(labels_2d, pixel_lab_2d, min_region=64, contrast_delta=18.0):
+    """Protect small-but-meaningful regions from later smoothing.
+
+    Returns a boolean mask of pixels that belong to connected regions which are
+    small enough to be at risk, but visually distinct enough from their
+    neighbors that they should be preserved.
+    """
+    from scipy import ndimage
+    protected = np.zeros(labels_2d.shape, dtype=bool)
+    for lbl in np.unique(labels_2d):
+        mask = labels_2d == lbl
+        components, n_comp = ndimage.label(mask)
+        for comp_id in range(1, n_comp + 1):
+            comp_mask = components == comp_id
+            area = int(np.sum(comp_mask))
+            if area < min_region:
+                continue
+            dilated = ndimage.binary_dilation(comp_mask, iterations=1)
+            ring = dilated & ~comp_mask
+            if not np.any(ring):
+                continue
+            region_lab = np.median(pixel_lab_2d[comp_mask], axis=0)
+            ring_lab = np.median(pixel_lab_2d[ring], axis=0)
+            delta = float(np.linalg.norm(region_lab - ring_lab))
+            if delta >= contrast_delta:
+                protected[comp_mask] = True
+    return protected
 
 
 def build_quantized_texture(pixels, labels, selected_colors, width, height):
@@ -902,28 +970,36 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
 
     # ── Step 4b: Boundary erosion + island cleanup ──
     labels_2d = labels.reshape(h, w)
-    
-    # Majority vote smoothing — each pixel adopts the most common color in its neighborhood
-    from scipy.ndimage import uniform_filter
+    pixel_lab_2d = pixel_lab.reshape(h, w, 3)
+    protected_mask = preserve_salient_regions(labels_2d, pixel_lab_2d, min_region=max(32, island_size // 6), contrast_delta=18.0)
+
+    # Majority vote smoothing — each pixel adopts the most common color in its neighborhood,
+    # but we protect small high-contrast regions so eyes / accents / key details survive.
+    from scipy.ndimage import uniform_filter, median_filter
     n_colors = len(selected)
-    for vote_pass in range(5):
-        # Build per-color density maps, pick highest density at each pixel
-        best = np.zeros_like(labels_2d, dtype=np.int32)
-        best_score = np.zeros(labels_2d.shape, dtype=np.float32)
-        for lbl in range(n_colors):
-            density = uniform_filter((labels_2d == lbl).astype(np.float32), size=7)
-            better = density > best_score
-            best[better] = lbl
-            best_score[better] = density[better]
-        labels_2d = best
-    print(f"   Boundary smoothing ({smooth}-pass majority vote, 7×7 window)")
-    
-    labels_2d = cleanup_labels(labels_2d, min_island=island_size)
-    # Median filter to smooth thin strips and jagged edges
-    from scipy.ndimage import median_filter
-    labels_2d = median_filter(labels_2d, size=7)
+    if smooth > 0:
+        window = 5 if smooth <= 2 else 7
+        for _ in range(smooth):
+            best = labels_2d.copy()
+            best_score = np.full(labels_2d.shape, -1.0, dtype=np.float32)
+            for lbl in range(n_colors):
+                density = uniform_filter((labels_2d == lbl).astype(np.float32), size=window)
+                better = density > best_score
+                best[better] = lbl
+                best_score[better] = density[better]
+            labels_2d = np.where(protected_mask, labels_2d, best)
+        print(f"   Boundary smoothing ({smooth}-pass majority vote, {window}×{window} window, salient regions protected)")
+    else:
+        print(f"   Boundary smoothing: disabled (smooth=0)")
+
+    if island_size > 0:
+        labels_2d = cleanup_labels(labels_2d, min_island=island_size)
+
+    if smooth > 0:
+        smoothed = median_filter(labels_2d, size=5)
+        labels_2d = np.where(protected_mask, labels_2d, smoothed)
     labels = labels_2d.ravel()
-    print(f"   Cleaned isolated patches + median smoothed")
+    print(f"   Cleaned isolated patches + edge-aware smoothing (protected {protected_mask.mean()*100:.1f}% salient pixels)")
 
     # ── Step 5: Build quantized texture ──
     print(f"\n🖼️  Step 5: Quantized texture")
@@ -972,7 +1048,7 @@ def main():
     parser.add_argument("input", help="Input model (GLB/GLTF/OBJ/FBX/STL)")
     parser.add_argument("--output", "-o", help="Output OBJ path")
     parser.add_argument("--min-pct", type=float, default=1.0,
-                        help="Min %% for small color families (default 2.0, set 0 to keep all)")
+                        help="Min %% for color families / sub-clusters to keep (default 1.0, set 0 to keep nearly everything)")
     parser.add_argument("--max_colors", "-n", type=int, default=8, choices=range(1, 9),
                         help="Maximum colors (1-8, default 8)")
     parser.add_argument("--height", type=float, default=0, help="Target height mm (0=keep)")
