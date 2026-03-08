@@ -201,8 +201,13 @@ bpy.context.scene.cycles.device = 'CPU'
 try:
     prefs = bpy.context.preferences.addons.get('cycles')
     if prefs:
-        prefs.preferences.compute_device_type = 'METAL'
-        bpy.context.scene.cycles.device = 'GPU'
+        for gpu_type in ['METAL', 'CUDA', 'OPTIX', 'HIP']:
+            try:
+                prefs.preferences.compute_device_type = gpu_type
+                bpy.context.scene.cycles.device = 'GPU'
+                break
+            except Exception:
+                continue
 except Exception:
     pass
 

@@ -131,12 +131,8 @@ for mat in obj.data.materials:
 FAMILY_NAMES = ["black", "dark_gray", "light_gray", "white",
                 "red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink"]
 
-# Families that exclude each other during greedy selection
-# Default: all 12 families are independent (no auto-merge)
-# User can request merging manually after seeing results
-FAMILY_GROUPS = {
-    # All families map to themselves only — no auto-exclusion
-}
+# Legacy family groups (empty — all 12 families independent since v0.22.20)
+FAMILY_GROUPS = {}
 
 
 def classify_pixels(pixels):
@@ -401,28 +397,26 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8, min_pc
             if center_dist < 10:  # too similar, don't split
                 continue
             
-            # Replace original family with two sub-clusters
-            sub0 = km.labels_ == 0
-            sub1 = km.labels_ == 1
-            
-            c0 = int(np.sum(sub0))
-            c1 = int(np.sum(sub1))
+            # Predict on FULL family pixels (not just subsample) for accurate counts
+            full_labels = km.predict(f_lab)
             
             # Remove original from selected
             selected = [s for s in selected if s.get("fid") != fd["fid"]]
             
-            for sub_mask, sub_count in [(sub0, c0), (sub1, c1)]:
+            for sub_id in [0, 1]:
+                sub_mask_full = full_labels == sub_id
+                sub_count = int(np.sum(sub_mask_full))
                 if sub_count < N * min_pct:
                     continue
-                med_rgb = np.median(f_rgb_sub[sub_mask], axis=0)
-                med_lab = np.median(f_lab_sub[sub_mask], axis=0)
+                med_rgb = np.median(f_rgb[sub_mask_full], axis=0) if len(f_rgb) == len(full_labels) else np.median(f_rgb_sub[km.labels_ == sub_id], axis=0)
+                med_lab = np.median(f_lab[sub_mask_full], axis=0)
                 selected.append({
                     "rgb": med_rgb,
                     "lab": med_lab,
                     "family": fd["family"],
                     "group_names": [fd["family"]],
-                    "pixel_count": int(sub_count / len(f_lab_sub) * fcount),
-                    "percentage": sub_count / len(f_lab_sub) * fd["percentage"],
+                    "pixel_count": sub_count,
+                    "percentage": sub_count / N * 100,
                 })
             
             slots_left -= 1

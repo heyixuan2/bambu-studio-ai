@@ -101,7 +101,7 @@ def print_results(results):
     print("💡 To use a model:")
     print("   1. Download the STL/OBJ from the link above")
     print("   2. Run: python3 scripts/analyze.py <file> --height 80 --orient --repair")
-    print("   3. For multi-color: python3 scripts/colorize.py <file.glb> --palette bambu")
+    print("   3. For multi-color: python3 scripts/colorize.py <file.glb> --max_colors 6")
 
 
 def main():

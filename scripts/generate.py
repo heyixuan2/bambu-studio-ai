@@ -99,7 +99,7 @@ def get_max_size():
 
 # ─── Prompt Enhancement ──────────────────────────────────────────────
 
-def enhance_prompt(user_prompt, max_size=None, multicolor=False):
+def enhance_prompt(user_prompt, max_size=None):
     """Add 3D-printing-specific instructions to user prompt."""
     if not max_size:
         max_size = get_max_size()
@@ -118,7 +118,29 @@ def enhance_prompt(user_prompt, max_size=None, multicolor=False):
 
 # ─── Provider Backends ───────────────────────────────────────────────
 
-class MeshyBackend:
+class _BaseBackend:
+    """Shared download helper for all providers."""
+    def _download_to(self, url, filename, timeout=(10, 120), retries=2):
+        """Download URL to OUTPUT_DIR/<filename>, return path. Retries on failure."""
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        out = os.path.join(OUTPUT_DIR, filename)
+        last_err = None
+        for attempt in range(1 + retries):
+            try:
+                r = requests.get(url, stream=True, timeout=timeout)
+                r.raise_for_status()
+                with open(out, "wb") as f:
+                    for chunk in r.iter_content(8192):
+                        f.write(chunk)
+                return out
+            except Exception as e:
+                last_err = e
+                if attempt < retries:
+                    time.sleep(3 * (attempt + 1))
+        raise last_err
+
+
+class MeshyBackend(_BaseBackend):
     """Meshy.ai — docs.meshy.ai"""
     BASE = "https://api.meshy.ai"
     
@@ -187,17 +209,10 @@ class MeshyBackend:
         return self._download_file(url, task_id, fmt)
     
     def _download_file(self, url, task_id, fmt):
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
-        r = requests.get(url, stream=True, timeout=(10, 120))
-        r.raise_for_status()
-        with open(out, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
-        return out
+        return self._download_to(url, f"{task_id}.glb")
 
 
-class TripoBackend:
+class TripoBackend(_BaseBackend):
     """Tripo3D — platform.tripo3d.ai"""
     BASE = "https://api.tripo3d.ai/v2/openapi"
     
@@ -253,15 +268,10 @@ class TripoBackend:
             print(f"❌ No download URL. Status: {status['status']}")
             return None
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
-        r = requests.get(url, stream=True, timeout=(10, 120))
-        with open(out, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
-        return out
+        return self._download_to(url, f"{task_id}.glb")
 
 
-class PrintpalBackend:
+class PrintpalBackend(_BaseBackend):
     """Printpal.io — printpal.io/api/documentation"""
     BASE = "https://printpal.io"
     
@@ -306,18 +316,19 @@ class PrintpalBackend:
         }
     
     def download(self, task_id, fmt="stl"):
+        # Printpal returns the file directly from this endpoint
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
         r = requests.get(f"{self.BASE}/api/generate/{task_id}/download",
             headers=self.headers(), params={"format": fmt}, stream=True)
         r.raise_for_status()
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
         with open(out, "wb") as f:
             for chunk in r.iter_content(8192):
                 f.write(chunk)
         return out
 
 
-class Studio3DBackend:
+class Studio3DBackend(_BaseBackend):
     """3D AI Studio — docs.3daistudio.com/API"""
     BASE = "https://api.3daistudio.com"
     
@@ -365,16 +376,10 @@ class Studio3DBackend:
         if not url:
             print(f"❌ No URL. Status: {status['status']}")
             return None
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
-        r = requests.get(url, stream=True, timeout=(10, 120))
-        with open(out, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
-        return out
+        return self._download_to(url, f"{task_id}.glb")
 
 
-class RodinBackend:
+class RodinBackend(_BaseBackend):
     """Hyper3D Rodin — developer.hyper3d.ai (Business subscription)"""
     BASE = "https://api.hyper3d.com/api/v2"
 
@@ -518,12 +523,7 @@ class RodinBackend:
             print(f"❌ No download URL found")
             return None
         
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{uuid}.glb")
-        r = requests.get(target_url, stream=True, timeout=(10, 300))
-        with open(out, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
+        out = self._download_to(target_url, f"{uuid}.glb", timeout=(10, 300))
         print(f"📥 Downloaded: {os.path.basename(out)} ({os.path.getsize(out) / 1024:.0f} KB)")
         return out
 
@@ -559,7 +559,11 @@ def _auto_scale(file_path, target_height_mm=80):
     """Auto-scale models with normalized coordinates to printable mm size.
     Many AI providers (Rodin, Meshy, etc.) output models in normalized units
     (~1-2 units max). This detects tiny models and scales to target_height_mm.
+    Skip 3MF — trimesh destroys internal G-code/config on re-export.
     """
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.3mf':
+        return  # 3MF has internal structure trimesh can't preserve
     try:
         import trimesh
         mesh = trimesh.load(file_path, force="mesh")

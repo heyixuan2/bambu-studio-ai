@@ -18,6 +18,7 @@ REQUIRED = {
 OPTIONAL = {
     "bambulabs-api": {"import": "bambulabs_api", "purpose": "LAN printer control"},
     "bambu-lab-cloud-api": {"import": "bambu_lab_cloud_api", "purpose": "Cloud printer control"},
+    "scikit-learn": {"import": "sklearn", "purpose": "Better colorize k-means clustering"},
 }
 
 def check_version(pkg_name, min_ver, import_name):

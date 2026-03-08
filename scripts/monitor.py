@@ -64,13 +64,15 @@ def _save_state(state):
 
 def take_snapshot():
     """Capture a frame from printer camera via RTSP."""
+    from urllib.parse import quote
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     outpath = os.path.join(SNAPSHOT_DIR, f"snap_{ts}.jpg")
+    safe_code = quote(BAMBU_ACCESS_CODE, safe='')
     try:
         r = subprocess.run(
             ["ffmpeg", "-y", "-rtsp_transport", "tcp", "-loglevel", "error",
-             "-i", f"rtsps://bblp:{BAMBU_ACCESS_CODE}@{BAMBU_IP}:322/streaming/live/1",
+             "-i", f"rtsps://bblp:{safe_code}@{BAMBU_IP}:322/streaming/live/1",
              "-frames:v", "1", outpath],
             capture_output=True, timeout=15)
         return outpath if r.returncode == 0 and os.path.exists(outpath) else None
