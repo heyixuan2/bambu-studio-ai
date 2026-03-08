@@ -21,6 +21,9 @@ Usage:
 
   # With Bambu filament suggestions:
   python3 scripts/colorize.py model.glb --height 80 --bambu-map
+
+  # Disable geometry-based eye/button protection (texture-only):
+  python3 scripts/colorize.py model.glb --height 80 --no-geometry-protect
 """
 
 import os
@@ -510,17 +513,141 @@ def assign_pixels(pixel_lab, selected_colors, pixel_families=None, pixels=None):
 
 
 # ═══════════════════════════════════════════════════════════════
+# Geometry-based saliency (curvature → protect eyes, buttons, etc.)
+# ═══════════════════════════════════════════════════════════════
+
+def _curvature_mask_from_glb(glb_path, width, height, percentile=92):
+    """Build a 2D mask from mesh curvature: convex regions (eyes, buttons) = True.
+    Uses trimesh vertex_defects + UV rasterization. Returns (height, width) bool array.
+    """
+    try:
+        import pygltflib
+        import trimesh
+    except ImportError:
+        return None
+
+    ext = os.path.splitext(glb_path)[1].lower()
+    if ext not in (".glb", ".gltf"):
+        return None
+
+    try:
+        glb = pygltflib.GLTF2().load(glb_path)
+        blob = glb.binary_blob() if hasattr(glb, "binary_blob") else getattr(glb, "_glb_data", None)
+        if blob is None:
+            return None
+    except Exception:
+        return None
+
+    all_verts, all_faces, all_uvs = [], [], []
+    offset = 0
+
+    for mesh in glb.meshes:
+        for prim in mesh.primitives:
+            attrs = prim.attributes
+            pos_idx = getattr(attrs, "POSITION", None) or (attrs.get("POSITION") if isinstance(attrs, dict) else None)
+            if pos_idx is None:
+                continue
+            acc = glb.accessors[pos_idx]
+            bv = glb.bufferViews[acc.bufferView]
+            start = bv.byteOffset
+            end = start + bv.byteLength
+            verts = np.frombuffer(blob[start:end], dtype=np.float32).reshape(-1, 3)
+
+            # Indices
+            idx_val = prim.indices
+            if idx_val is not None:
+                idx_acc = glb.accessors[idx_val]
+                idx_bv = glb.bufferViews[idx_acc.bufferView]
+                dtype = np.uint32 if getattr(idx_acc, "componentType", 5123) == 5125 else np.uint16
+                idx_data = np.frombuffer(blob[idx_bv.byteOffset:idx_bv.byteOffset + idx_bv.byteLength], dtype=dtype)
+                faces = idx_data.reshape(-1, 3)
+            else:
+                faces = np.arange(len(verts), dtype=np.uint32).reshape(-1, 3)
+
+            # UV
+            tex_idx = getattr(attrs, "TEXCOORD_0", None) or getattr(attrs, "texcoord_0", None) or (attrs.get("TEXCOORD_0") if isinstance(attrs, dict) else None)
+            if tex_idx is None:
+                continue
+            uv_acc = glb.accessors[tex_idx]
+            uv_bv = glb.bufferViews[uv_acc.bufferView]
+            uvs = np.frombuffer(blob[uv_bv.byteOffset:uv_bv.byteOffset + uv_bv.byteLength], dtype=np.float32).reshape(-1, 2)
+
+            all_verts.append(verts)
+            all_faces.append(faces + offset)
+            all_uvs.append(uvs)
+            offset += len(verts)
+
+    if not all_verts:
+        return None
+
+    verts = np.vstack(all_verts)
+    faces = np.vstack(all_faces)
+    uvs = np.vstack(all_uvs)
+
+    try:
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        defects = trimesh.curvature.vertex_defects(mesh)
+    except Exception:
+        return None
+
+    # Per-face curvature = max of 3 vertex defects (convex = positive)
+    face_curv = np.maximum.reduce([defects[faces[:, 0]], defects[faces[:, 1]], defects[faces[:, 2]]])
+    threshold = np.percentile(face_curv[face_curv > 0], percentile) if np.any(face_curv > 0) else 0.05
+    salient_faces = face_curv >= threshold
+
+    # Rasterize: UV (0-1) -> pixel coords. GLB V often needs 1-V for image space
+    curvature_map = np.zeros((height, width), dtype=np.float32)
+    for i, (fa, salient) in enumerate(zip(faces, salient_faces)):
+        if not salient:
+            continue
+        u0, v0 = uvs[fa[0]]
+        u1, v1 = uvs[fa[1]]
+        u2, v2 = uvs[fa[2]]
+        v0, v1, v2 = 1 - v0, 1 - v1, 1 - v2  # flip V for image Y
+        r0, c0 = int(v0 * (height - 1)) % height, int(u0 * (width - 1)) % width
+        r1, c1 = int(v1 * (height - 1)) % height, int(u1 * (width - 1)) % width
+        r2, c2 = int(v2 * (height - 1)) % height, int(u2 * (width - 1)) % width
+        try:
+            from skimage.draw import polygon
+            rr, cc = polygon([r0, r1, r2], [c0, c1, c2], shape=(height, width))
+            curvature_map[rr, cc] = np.maximum(curvature_map[rr, cc], face_curv[i])
+        except ImportError:
+            r_min, r_max = max(0, min(r0, r1, r2)), min(height - 1, max(r0, r1, r2))
+            c_min, c_max = max(0, min(c0, c1, c2)), min(width - 1, max(c0, c1, c2))
+            for rr in range(r_min, r_max + 1):
+                for cc in range(c_min, c_max + 1):
+                    u_pt = cc / (width - 1) if width > 1 else 0.5
+                    v_pt = 1 - rr / (height - 1) if height > 1 else 0.5
+                    if _point_in_triangle(u_pt, v_pt, u0, v0, u1, v1, u2, v2):
+                        curvature_map[rr, cc] = max(curvature_map[rr, cc], face_curv[i])
+
+    return curvature_map > 0
+
+
+def _point_in_triangle(px, py, x0, y0, x1, y1, x2, y2):
+    """Barycentric test for point in triangle."""
+    d = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+    if abs(d) < 1e-10:
+        return False
+    a = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / d
+    b = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / d
+    c = 1 - a - b
+    return 0 <= a <= 1 and 0 <= b <= 1 and 0 <= c <= 1
+
+
+# ═══════════════════════════════════════════════════════════════
 # Step 5: Build quantized texture
 # ═══════════════════════════════════════════════════════════════
 
 
-def cleanup_labels(labels_2d, min_island=1000):
+def cleanup_labels(labels_2d, min_island=1000, protect_mask=None):
     """Remove tiny isolated color regions by majority vote of neighbors.
 
     Protects the LARGEST connected component of each color from removal, so
     small but salient features (eyes, buttons, accessories) that are the only
     representative of their color are never erased — only redundant satellite
     blobs below min_island pixels are removed.
+    protect_mask: optional (H,W) bool — pixels in high-curvature regions (eyes, etc.) are never merged.
     """
     from scipy import ndimage
     h, w = labels_2d.shape
@@ -547,6 +674,9 @@ def cleanup_labels(labels_2d, min_island=1000):
             if comp_size >= min_island:
                 continue
             comp_mask = components == comp_id
+            # Geometry protect: never merge components that overlap high-curvature regions (eyes, etc.)
+            if protect_mask is not None and np.any(protect_mask & comp_mask):
+                continue
             # Dilate to find neighbors
             dilated = ndimage.binary_dilation(comp_mask, iterations=1)
             neighbor_mask = dilated & ~comp_mask
@@ -912,7 +1042,7 @@ def _snap_vertex_colors(obj_path, selected_colors):
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
              colors=None, min_pct=0.001, no_merge=False, island_size=1000, smooth=5,
-             method="hybrid", bambu_map=False):
+             method="hybrid", bambu_map=False, geometry_protect=True):
     """
     Convert GLB to multi-color vertex-color OBJ.
 
@@ -1075,6 +1205,13 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
     pixel_lab_2d = pixel_lab.reshape(h, w, 3)
     protected_mask = preserve_salient_regions(labels_2d, pixel_lab_2d, min_region=max(32, island_size // 6), contrast_delta=18.0)
 
+    # Geometry-based protection: convex regions (eyes, buttons) from mesh curvature
+    if geometry_protect and os.path.splitext(input_path)[1].lower() in (".glb", ".gltf"):
+        geom_mask = _curvature_mask_from_glb(os.path.abspath(input_path), w, h)
+        if geom_mask is not None:
+            protected_mask = protected_mask | geom_mask
+            print(f"   Geometry protect: {geom_mask.mean()*100:.1f}% convex regions (eyes, etc.)")
+
     # Majority vote smoothing — each pixel adopts the most common color in its neighborhood,
     # but we protect small high-contrast regions so eyes / accents / key details survive.
     from scipy.ndimage import uniform_filter, median_filter
@@ -1095,7 +1232,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
         print(f"   Boundary smoothing: disabled (smooth=0)")
 
     if island_size > 0:
-        labels_2d = cleanup_labels(labels_2d, min_island=island_size)
+        labels_2d = cleanup_labels(labels_2d, min_island=island_size, protect_mask=protected_mask)
 
     if smooth > 0:
         smoothed = median_filter(labels_2d, size=5)
@@ -1177,6 +1314,8 @@ def main():
                             help="Majority vote smoothing passes (0=disabled)")
     parser.add_argument("--bambu-map", action="store_true",
                             help="Output _color_map.txt with suggested Bambu filaments for each color")
+    parser.add_argument("--no-geometry-protect", action="store_true",
+                            help="Disable curvature-based protection for eyes/buttons (use texture-only)")
 
     args = parser.parse_args()
 
@@ -1195,6 +1334,7 @@ def main():
         smooth=getattr(args, "smooth", 5),
         method=getattr(args, "method", "hybrid"),
         bambu_map=getattr(args, "bambu_map", False),
+        geometry_protect=not getattr(args, "no_geometry_protect", False),
     )
     if result is None:
         sys.exit(1)
