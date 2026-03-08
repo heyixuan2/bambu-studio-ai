@@ -325,17 +325,26 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
         checks_passed += 1
     report["checks"].append(check10)
 
-    # === MESH QUALITY ===
+    # === MESH QUALITY (affects score) ===
+    total_checks += 1
     if not mesh.is_watertight:
-        report["issues"].append("Mesh is NOT watertight. May cause slicing errors. Try mesh repair in Bambu Studio.")
-    if not mesh.is_volume:
+        report["issues"].append("Mesh is NOT watertight. May cause slicing errors. Use Fix Model in Bambu Studio.")
+    elif not mesh.is_volume:
         report["warnings"].append("Non-manifold geometry detected. Bambu Studio may auto-repair, but review in preview.")
+        checks_passed += 1  # warning only, partial credit
+    else:
+        checks_passed += 1
 
-    # === FIT CHECK ===
+    # === FIT CHECK (affects score) ===
+    total_checks += 1
+    fits = True
     for i, (dim, vol) in enumerate(zip(dims, build_vol)):
         axis = ["X", "Y", "Z"][i]
         if dim > vol:
+            fits = False
             report["issues"].append(f"Model {axis} dimension ({dim:.1f}mm) exceeds {printer_model} build volume ({vol}mm). Scale down or split.")
+    if fits:
+        checks_passed += 1
 
     # === PRINT SETTINGS RECOMMENDATION ===
     report["print_settings"] = {
@@ -729,12 +738,12 @@ def main():
             mesh.export(simp_path)
             print(f"💾 Simplified model: {simp_path}")
 
-    # ─── Auto-clean floating parts ───
-    if not args.no_clean:
+    # ─── Floating parts handling ───
+    # Only aggressive cleaning when user explicitly requests --keep-main.
+    # Default: report only (trimesh.split is unreliable on AI-generated non-manifold meshes).
+    if getattr(args, "keep_main", False):
         mesh, removed_parts = clean_floating_parts(
-            mesh,
-            min_volume_pct=1.0,
-            keep_top_n=1 if getattr(args, "keep_main", False) else None,
+            mesh, min_volume_pct=1.0, keep_top_n=1,
         )
         if removed_parts > 0:
             clean_path = os.path.splitext(args.file)[0] + "_cleaned" + os.path.splitext(args.file)[1]
