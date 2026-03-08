@@ -752,26 +752,14 @@ We tried three shadow removal approaches before abandoning them all:
 
 | Version | Changes |
 |---------|--------|
-| **0.23.0** | Major refactor: colorize split into package (6 modules), unified generate.py provider backends with shared status normalization, centralized platform paths in common.py, named constants extracted, analyze scoring fixed (recommendations no longer inflate score), Blender BYTE_COLOR double-conversion fix, scipy added to requirements, cross-platform Blender/OrcaSlicer/BS path detection, pyproject.toml + ruff, pytest tests for color science + scoring. |
-| **0.22.30** | OpenClaw audit fixes: OS declaration, pip deps sync, notification scope clarification, env/secrets descriptions. SKILL.md compliance rules strengthened. |
-| **0.22.28** | common.py extraction (shared config, constants, timeout), cross-platform `safe_split_mesh`, byteOffset fix for pygltflib, vertex color vectorization via numpy, snap color precision fix (exact N colors in BS), auto-clean safety guards (face-count based), scoring includes mesh quality + fit check. |
-| **0.22.24** | colorize: fix smooth loop bug (was hardcoded 5 passes, now respects `--smooth`); `cleanup_labels` protects largest component per color (salient small region guard — eyes/buttons no longer erased); fix `--min-pct` help text. generate: stronger prompt enhancement with geometry-type detection (functional/figurine/general), keyword rewriting for problematic terms (smoke/flames/wisps → solid sculptural forms), `refine_prompt_for_retry()` helper; post-download connectivity check warns on disconnected parts with actionable fix hints. analyze: overhang messages now include absolute area (cm²) for context; minor mesh issues (holes + normals) auto-repaired by default without `--repair` flag (low-risk); `--no-auto-repair` opt-out added; disconnected-parts message links to concrete fixes. |
-| **0.22.4** | Colorize: vertex color snap (exact N colors in OBJ), bmesh auto-repair (merge doubles, fix normals, delete loose), post-export non-manifold = 0 |
-| **0.22.3** | Colorize: achromatic constraint (shadow pixels blocked from black, V<0.2 exempt), 2% min threshold for small color families, 5-pass majority vote boundary smoothing, island cleanup (1000px) + median filter, doctor.py syntax fix |
-| **0.22.2** | preview.py rewrite: Blender-only rendering (removed matplotlib), TRACK_TO auto-aim, PBR texture auto-load, dynamic lighting, EEVEE 4.x/5.x compat, --views all (2×2 grid). Audit fixes P1-P4. |
-| **0.22.1** | Colorize v4 rewrite: pixel HSV family classification + greedy area-based color selection + per-pixel CIELAB assign + vertex-color OBJ export. No shadow removal needed — HSV classification bypasses baked lighting. pygltflib texture extraction (no Blender for Step 1). sRGB→linear fix for accurate vertex colors. Audit fixes: --colors validation, low-V achromatic, UV None check, path injection, dead code cleanup. 1118→573 lines. |
-| **0.22.0** | Intrinsic Albedo Extraction replaces AO delight — eliminates false colors (orange/copper/silver) at shadow boundaries. 3-step pipeline: Cycles DIFFUSE COLOR bake + per-channel brightness recovery + white point recovery. Chrominance-weighted CIELAB (L\*=0.1). Region majority cleanup (numpy). 22 bare except→Exception fixes. |
-| **0.21.1** | `preview.py` — model preview renderer (matplotlib quick + Blender HQ). SKILL.md rewritten (875→294 lines) with full workflow spec. `doctor.py` checks matplotlib. Blender engine compat (EEVEE/EEVEE_NEXT). Path-safe Blender scripts (json.dumps escaping). Full manifest metadata restored for ClawHub audit compliance. |
-| **0.19.0** | Bug fixes (17), color pipeline overhaul (AO delight, shadow-aware mapping, border vote), search rewrite (ddgs), doctor.py cloud+search checks, monitor retry logic, --no_delight flag, --confirmed safety gate |
-| **0.18.0** 🏷️ | Model search (MakerWorld/Printables/Thingiverse/Thangs), notification system, default Bambu Lab color palette |
-| **0.17.0** | Bambu Lab official 43-color palette, direct nearest-neighbor mapping, default LAN mode |
-| **0.16.0** | Unit detection fix, start_print plate_number, MTL color fix |
-| **0.15.0** | GLB format fix, error handling (401/403/429), input validation, pre-decimation |
-| **0.14.0** | GLB-as-3MF fix, meter→mm auto-detection, corrupt file handling |
-| **0.13.0** | 10 bugfixes from sub-agent testing (--wait loop, Tripo path, trimesh API, etc.) |
-| **0.12.0** | Multi-color v2: Delight + CIELAB K-means + texture smoothing |
-| **0.11.0** | Multi-color AMS printing (colorize.py), auto-detect AMS colors |
-| **0.10.2** | **First production-ready release** — bambulabs-api v2.6.6 compat, H2D tested |
+| **0.23.0** | Major refactor: colorize → package (6 modules), common.py (cross-platform paths, config), pyproject.toml, pytest test suite, analyze scoring fix, Blender BYTE_COLOR fix. |
+| **0.22.24** | Colorize smooth/cleanup fixes, generate prompt refinement + auto-retry, analyze auto-repair. |
+| **0.22.0** | Colorize v4: HSV family + CIELAB assign + vertex-color OBJ. Albedo extraction. Preview renderer (Blender Cycles). |
+| **0.20.0** | CLI slicing (OrcaSlicer), auto-orient, Hyper3D Rodin provider, X.509 MQTT auto-print (Developer Mode). |
+| **0.18.0** | Model search (MakerWorld/Printables/Thingiverse/Thangs), notification system. |
+| **0.10.2** | First production-ready release — bambulabs-api v2.6.6, H2D tested. |
+
+Full changelog: [GitHub Releases](https://github.com/heyixuan2/bambu-studio-ai/releases)
 
 ---
 
