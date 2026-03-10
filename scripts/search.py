@@ -58,6 +58,19 @@ def _web_search(query, site=None, limit=5):
         return []
 
 
+def _dedup_results(results):
+    """Deduplicate results by URL path (ignore query params). Keep first occurrence."""
+    from urllib.parse import urlparse
+    seen = set()
+    deduped = []
+    for r in results:
+        key = urlparse(r["url"])._replace(query="", fragment="").geturl()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
+    return deduped
+
+
 def search(query, source="all", limit=5):
     """Search 3D model repositories."""
     results = []
@@ -83,7 +96,7 @@ def search(query, source="all", limit=5):
                 "id": model_id,
             })
 
-    return results
+    return _dedup_results(results)
 
 
 def print_results(results):
@@ -121,7 +134,18 @@ def main():
         print(json.dumps(results, indent=2))
     else:
         print_results(results)
+        if not results:
+            sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⏹️ Cancelled.")
+        sys.exit(130)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"❌ Search error: {e}", file=sys.stderr)
+        sys.exit(1)

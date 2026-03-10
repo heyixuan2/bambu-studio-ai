@@ -160,6 +160,125 @@ def refine_prompt_for_retry(prompt, attempt, failure_reason=""):
         extra += f" Failure to avoid: {failure_reason}."
     return f"{prompt} {extra}"
 
+
+# ─── Image Preprocessing ─────────────────────────────────────────────
+
+def validate_image(path):
+    """Validate image file for 3D generation. Returns (ok, info_dict)."""
+    info = {"path": path, "width": 0, "height": 0, "format": "", "file_size": 0}
+    if not os.path.exists(path):
+        print(f"❌ Image not found: {path}")
+        return False, info
+    info["file_size"] = os.path.getsize(path)
+    if info["file_size"] > 20 * 1024 * 1024:
+        print(f"❌ Image too large ({info['file_size'] // 1024 // 1024}MB). Max 20MB.")
+        return False, info
+    if info["file_size"] > 10 * 1024 * 1024:
+        print(f"⚠️ Large image ({info['file_size'] // 1024 // 1024}MB) — may be slow to upload")
+    try:
+        from PIL import Image
+        img = Image.open(path)
+        info["width"], info["height"] = img.size
+        info["format"] = img.format or ""
+        info["has_alpha"] = img.mode in ("RGBA", "LA", "PA")
+        if info["format"] not in ("JPEG", "PNG", "WEBP", "BMP", "TIFF"):
+            print(f"⚠️ Unusual image format: {info['format']}. JPEG/PNG recommended.")
+        if info["width"] < 256 or info["height"] < 256:
+            print(f"❌ Image too small ({info['width']}×{info['height']}). Min 256×256 for decent 3D generation.")
+            return False, info
+        print(f"📷 Image: {info['width']}×{info['height']} {info['format']} ({info['file_size'] // 1024}KB)")
+    except ImportError:
+        print("⚠️ PIL not installed — skipping image validation (pip install Pillow)")
+        return True, info
+    except Exception as e:
+        print(f"❌ Cannot read image: {e}")
+        return False, info
+    return True, info
+
+
+def remove_background(image_path, info=None):
+    """Remove background using rembg. Returns path to processed image."""
+    if info and info.get("has_alpha"):
+        print("   Image already has alpha channel — skipping background removal")
+        return image_path
+    try:
+        from rembg import remove as rembg_remove
+        from PIL import Image
+    except ImportError:
+        print("⚠️ rembg not installed — skipping background removal (pip install rembg)")
+        return image_path
+
+    stem = os.path.splitext(image_path)[0]
+    out_path = f"{stem}_nobg.png"
+    try:
+        img = Image.open(image_path)
+        result = rembg_remove(img)
+        result.save(out_path, "PNG")
+        print(f"   ✅ Background removed → {os.path.basename(out_path)}")
+        return out_path
+    except Exception as e:
+        print(f"⚠️ Background removal failed: {e} — using original image")
+        return image_path
+
+
+def _download_url_image(url):
+    """Download URL image to temp file. Returns local path."""
+    import tempfile
+    suffix = ".jpg"
+    for ext in (".png", ".webp", ".bmp", ".jpeg", ".jpg"):
+        if ext in url.lower():
+            suffix = ext
+            break
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        content_type = r.headers.get("content-type", "")
+        if "png" in content_type:
+            suffix = ".png"
+        elif "webp" in content_type:
+            suffix = ".webp"
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir=OUTPUT_DIR)
+        tmp.write(r.content)
+        tmp.close()
+        print(f"📥 Downloaded image → {os.path.basename(tmp.name)} ({len(r.content) // 1024}KB)")
+        return tmp.name
+    except Exception as e:
+        print(f"❌ Failed to download image: {e}")
+        return None
+
+
+def enhance_image_prompt(user_prompt="", max_size=None):
+    """Build a prompt for image-to-3D with 3D-printing constraints."""
+    if not max_size:
+        max_size = get_max_size()
+    if user_prompt and ("3d print" in user_prompt.lower() or "watertight" in user_prompt.lower()):
+        return user_prompt
+    base = user_prompt.strip() if user_prompt else "Convert this image to a 3D model"
+    return (
+        f"{base}. "
+        f"Designed for FDM 3D printing: single connected solid piece, smooth continuous surfaces, "
+        f"all parts physically attached, minimum feature thickness 2mm, flat stable base. "
+        f"Watertight manifold mesh. Max size {max_size[0]}×{max_size[1]}×{max_size[2]}mm."
+    )
+
+
+def _detect_texture_in_glb(file_path):
+    """Check if a GLB/GLTF file contains embedded textures. Returns True/False/None."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext not in (".glb", ".gltf"):
+        return None
+    try:
+        import pygltflib
+        glb = pygltflib.GLTF2().load(file_path)
+        if glb.images and len(glb.images) > 0:
+            return True
+        return False
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
 # ─── Provider Backends ───────────────────────────────────────────────
 
 class _BaseBackend:
@@ -192,20 +311,33 @@ class _BaseBackend:
         return next((v for v in urls.values() if v), None)
 
     def _download_to(self, url, filename, timeout=(10, 120), retries=2):
-        """Download URL to OUTPUT_DIR/<filename>, return path. Retries on failure."""
+        """Download URL to OUTPUT_DIR/<filename>, return path. Retries on failure.
+        Writes to a .tmp file first and verifies Content-Length to prevent truncation.
+        """
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         out = os.path.join(OUTPUT_DIR, filename)
+        tmp = out + ".tmp"
         last_err = None
         for attempt in range(1 + retries):
             try:
                 r = requests.get(url, stream=True, timeout=timeout)
                 r.raise_for_status()
-                with open(out, "wb") as f:
+                expected_size = int(r.headers.get("Content-Length", 0)) or None
+                written = 0
+                with open(tmp, "wb") as f:
                     for chunk in r.iter_content(8192):
                         f.write(chunk)
+                        written += len(chunk)
+                if expected_size and written < expected_size:
+                    raise IOError(f"Incomplete download: got {written} bytes, expected {expected_size}")
+                os.replace(tmp, out)
                 return out
             except Exception as e:
                 last_err = e
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
                 if attempt < retries:
                     time.sleep(3 * (attempt + 1))
         raise last_err
@@ -391,16 +523,9 @@ class PrintpalBackend(_BaseBackend):
         }
     
     def download(self, task_id, fmt="stl"):
-        # Printpal returns the file directly from this endpoint
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, f"{task_id}.glb")
-        r = requests.get(f"{self.BASE}/api/generate/{task_id}/download",
-            headers=self.headers(), params={"format": fmt}, stream=True)
-        r.raise_for_status()
-        with open(out, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
-        return out
+        ext = fmt.lower().lstrip('.') if fmt else "glb"
+        url = f"{self.BASE}/api/generate/{task_id}/download?format={ext}"
+        return self._download_to(url, f"{task_id}.{ext}")
 
 
 class Studio3DBackend(_BaseBackend):
@@ -733,7 +858,7 @@ def _auto_scale(file_path, target_height_mm=80):
         print(f"⚠️ Auto-scale failed: {e}")
 
 
-def _finalize(file_path, target_format="stl"):
+def _finalize(file_path, target_format="stl", target_height_mm=0):
     """Unified post-download processing: validate format, convert, scale, verify."""
     if not file_path or not os.path.exists(file_path):
         print(f"❌ File not found: {file_path}")
@@ -768,7 +893,7 @@ def _finalize(file_path, target_format="stl"):
         print(f"🔄 Format corrected → {actual_ext}")
     
     # 2. Auto-scale if model uses normalized coordinates
-    _auto_scale(file_path)
+    _auto_scale(file_path, target_height_mm=target_height_mm or 80)
     
     # 3. Connectivity check — WARN only, never auto-delete
     # trimesh.split() is unreliable on non-manifold AI meshes: it can fragment
@@ -832,6 +957,7 @@ def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
         return
     backend = get_backend()
     auto_retry = max(0, int(kwargs.pop("auto_retry", 0)))
+    target_height = float(kwargs.pop("height", 0))
 
     original = prompt
     base_prompt = prompt
@@ -842,6 +968,8 @@ def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
             print(f"🖨️ Printer: {PRINTER_MODEL} (max {max_sz[0]}x{max_sz[1]}x{max_sz[2]}mm)")
         print(f"📝 Original: {original}")
         print(f"✨ Enhanced: {base_prompt[:160]}...")
+        if target_height > 0:
+            print(f"📏 Target height: {target_height:.0f}mm")
         print()
 
     last_task_id = None
@@ -852,7 +980,8 @@ def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
         task_id = backend.text_to_3d(effective_prompt, **kwargs)
         last_task_id = task_id
         if wait:
-            path = _wait_and_download(backend, task_id, kwargs.get("format", "3mf"))
+            path = _wait_and_download(backend, task_id, kwargs.get("format", "3mf"),
+                                      target_height_mm=target_height)
             path = _maybe_retry_generated_model(path, effective_prompt, kwargs.get("format", "3mf"), auto_retry=(auto_retry - attempt))
             if path or attempt == auto_retry:
                 return path
@@ -863,19 +992,73 @@ def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
     return last_task_id
 
 def cmd_image(image_path, prompt="", wait=False, **kwargs):
-    if not image_path.startswith("http") and not os.path.exists(image_path):
-        print(f"❌ File not found: {image_path}")
-        sys.exit(1)
-    
-    backend = get_backend()
-    task_id = backend.image_to_3d(image_path, prompt, **kwargs)
-    
-    if wait:
-        return _wait_and_download(backend, task_id, kwargs.get("format", "3mf"))
+    no_bg_remove = kwargs.pop("no_bg_remove", False)
+    raw = kwargs.pop("raw", False)
+    target_height = float(kwargs.pop("height", 0))
+
+    # 1. Resolve URL → local file
+    is_url = image_path.startswith("http")
+    if is_url:
+        local_path = _download_url_image(image_path)
+        if not local_path:
+            sys.exit(1)
     else:
-        print(f"\n💡 Check status: python3 scripts/generate.py status {task_id}")
-        print(f"💡 Download:     python3 scripts/generate.py download {task_id}")
-    return task_id
+        local_path = image_path
+
+    # 2. Validate image
+    ok, info = validate_image(local_path)
+    if not ok:
+        sys.exit(1)
+
+    # 3. Background removal
+    processed_path = local_path
+    if not no_bg_remove:
+        processed_path = remove_background(local_path, info)
+
+    # 4. Prompt enhancement
+    effective_prompt = prompt
+    if not raw:
+        effective_prompt = enhance_image_prompt(prompt)
+        if prompt:
+            print(f"📝 Original prompt: {prompt}")
+        print(f"✨ Enhanced: {effective_prompt[:120]}...")
+    if target_height > 0:
+        print(f"📏 Target height: {target_height:.0f}mm")
+    print()
+
+    # 5. Upload & generate
+    backend = get_backend()
+    task_id = backend.image_to_3d(processed_path, effective_prompt, **kwargs)
+
+    # Track temp files for cleanup
+    _temp_files = []
+    if is_url and local_path != image_path:
+        _temp_files.append(local_path)
+    if processed_path != local_path and processed_path != image_path:
+        _temp_files.append(processed_path)
+
+    try:
+        if wait:
+            path = _wait_and_download(backend, task_id, kwargs.get("format", "3mf"),
+                                      target_height_mm=target_height)
+            if path:
+                has_tex = _detect_texture_in_glb(path)
+                if has_tex is True:
+                    print(f"\n🎨 Textured model detected — run colorize for multi-color printing:")
+                    print(f"   python3 scripts/colorize {path} --height {target_height or 80:.0f} --bambu-map")
+                elif has_tex is False:
+                    print(f"\n📦 No texture — single-color model ready for printing")
+            return path
+        else:
+            print(f"\n💡 Check status: python3 scripts/generate.py status {task_id}")
+            print(f"💡 Download:     python3 scripts/generate.py download {task_id}")
+        return task_id
+    finally:
+        for tmp in _temp_files:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 def cmd_status(task_id):
     backend = get_backend()
@@ -902,14 +1085,14 @@ def cmd_status(task_id):
     
     return status
 
-def cmd_download(task_id, fmt="3mf"):
+def cmd_download(task_id, fmt="3mf", height=0):
     backend = get_backend()
     path = backend.download(task_id, fmt)
     if not path:
         return None
     
     # Unified post-processing: format detection, conversion, auto-scale
-    path = _finalize(path, target_format=fmt)
+    path = _finalize(path, target_format=fmt, target_height_mm=height)
     if not path:
         print(f"❌ Post-processing failed")
         return None
@@ -927,7 +1110,7 @@ def cmd_download(task_id, fmt="3mf"):
     print(f"         python3 scripts/bambu.py print {os.path.basename(path)}")
     return path
 
-def _wait_and_download(backend, task_id, fmt="3mf"):
+def _wait_and_download(backend, task_id, fmt="3mf", target_height_mm=0):
     """Poll until complete, then download."""
     print(f"\n⏳ Waiting for generation...")
     
@@ -943,7 +1126,7 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
                 retries_502 += 1
                 if retries_502 <= max_502_retries:
                     print(f"   ⚠️ API returned error ({err_str[:30]}), retry {retries_502}/{max_502_retries}...")
-                    time.sleep(10)  # Wait longer on server error
+                    time.sleep(10)
                     continue
                 else:
                     print(f"   ❌ API error persisted after {max_502_retries} retries.")
@@ -951,7 +1134,7 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
                     print(f"   💡 Or download: python3 scripts/generate.py download {task_id}")
                     sys.exit(1)
             raise
-        retries_502 = 0  # Reset on success
+        retries_502 = 0
         state = status["status"]
         progress = status.get("progress", 0)
         
@@ -962,7 +1145,7 @@ def _wait_and_download(backend, task_id, fmt="3mf"):
             print(f"\n✅ Done!")
             path = backend.download(task_id, fmt)
             if path:
-                path = _finalize(path, target_format=fmt)
+                path = _finalize(path, target_format=fmt, target_height_mm=target_height_mm)
                 print(f"📦 Saved: {path}")
             return path
         elif state == "failed":
@@ -986,6 +1169,7 @@ def main():
     p_text.add_argument("--wait", action="store_true", help="Wait and auto-download")
     p_text.add_argument("--format", default="3mf", help="Output format (3mf recommended for Bambu Lab) (stl/obj/glb/3mf)")
     p_text.add_argument("--style", default="realistic", help="Art style")
+    p_text.add_argument("--height", type=float, default=0, help="Target height in mm (0 = auto: 80mm)")
     p_text.add_argument("--raw", action="store_true", help="Skip prompt enhancement")
     p_text.add_argument("--auto-retry", type=int, default=0, choices=range(0, 4), help="Retry generation 1-3 times if downloaded mesh has disconnected parts")
     
@@ -994,7 +1178,10 @@ def main():
     p_img.add_argument("--prompt", default="", help="Additional description")
     p_img.add_argument("--wait", action="store_true", help="Wait and auto-download")
     p_img.add_argument("--format", default="3mf", help="Output format (3mf recommended for Bambu Lab)")
+    p_img.add_argument("--height", type=float, default=0, help="Target height in mm (0 = auto: 80mm)")
     p_img.add_argument("--raw", action="store_true", help="Skip prompt enhancement")
+    p_img.add_argument("--no-bg-remove", action="store_true",
+                        help="Skip automatic background removal")
     
     p_stat = sub.add_parser("status", help="Check generation status")
     p_stat.add_argument("task_id")
@@ -1002,6 +1189,7 @@ def main():
     p_dl = sub.add_parser("download", help="Download generated model")
     p_dl.add_argument("task_id")
     p_dl.add_argument("--format", default="3mf", help="Output format (auto-converts from GLB if needed)")
+    p_dl.add_argument("--height", type=float, default=0, help="Target height in mm (0 = auto: 80mm)")
     
     args = parser.parse_args()
     if not args.command:
@@ -1010,19 +1198,25 @@ def main():
         sys.exit(1)
     
     if args.command == "text":
-        cmd_text(args.prompt, wait=args.wait, format=args.format, style=args.style, raw=args.raw, auto_retry=args.auto_retry)
+        cmd_text(args.prompt, wait=args.wait, format=args.format, style=args.style,
+                 raw=args.raw, auto_retry=args.auto_retry, height=args.height)
     elif args.command == "image":
-        cmd_image(args.image, prompt=args.prompt, wait=args.wait, format=args.format, raw=args.raw)
+        cmd_image(args.image, prompt=args.prompt, wait=args.wait, format=args.format,
+                  raw=args.raw, no_bg_remove=getattr(args, "no_bg_remove", False),
+                  height=args.height)
     elif args.command == "status":
         cmd_status(args.task_id)
     elif args.command == "download":
-        cmd_download(args.task_id, args.format)
+        cmd_download(args.task_id, args.format, height=getattr(args, "height", 0))
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\n⏹️ Cancelled.")
+        sys.exit(130)
+    except SystemExit:
+        raise
     except Exception as e:
         err = str(e)
         if "401" in err or "Unauthorized" in err:
@@ -1036,3 +1230,4 @@ if __name__ == "__main__":
             print(f"❌ Request timed out. The API may be slow. Try again.")
         else:
             print(f"❌ Error: {e}")
+        sys.exit(1)

@@ -33,7 +33,7 @@ except ImportError:
 
 MODE = os.environ.get("BAMBU_MODE", "").lower()
 
-from common import SKILL_DIR as _skill_dir, load_config as _load_config_base, TOKEN_TTL_SECONDS
+from common import SKILL_DIR as _skill_dir, load_config as _load_config_base, TOKEN_TTL_SECONDS, run_with_timeout
 
 # Load config.json at import (non-sensitive).
 # Secrets loaded lazily on first _get_config() call.
@@ -460,10 +460,16 @@ class LocalBackend:
         try:
             self.printer = bl.Printer(ip, access_code, serial, ssl_verify=False)
         except TypeError:
-            # Older bambulabs-api versions don't accept ssl_verify
             self.printer = bl.Printer(ip, access_code, serial)
-        self.printer.connect()
-        time.sleep(2)
+
+        def _connect_and_wait():
+            self.printer.connect()
+            time.sleep(2)
+
+        _, timed_out = run_with_timeout(_connect_and_wait, timeout_sec=15)
+        if timed_out:
+            print(f"❌ Printer not reachable at {ip} — check IP and that the printer is on.")
+            sys.exit(1)
 
     def get_status(self):
         p = self.printer
@@ -1033,4 +1039,13 @@ def main():
         cmd_speed(args.mode)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⏹️ Cancelled.")
+        sys.exit(130)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"❌ Error: {e}", file=sys.stderr)
+        sys.exit(1)

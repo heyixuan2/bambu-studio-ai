@@ -409,4 +409,13 @@ def main():
         monitor_loop(args.interval, args.auto_pause)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⏹️ Cancelled.")
+        sys.exit(130)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"❌ Monitor error: {e}", file=sys.stderr)
+        sys.exit(1)

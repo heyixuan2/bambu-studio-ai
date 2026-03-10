@@ -709,15 +709,16 @@ def main():
         print(f"⚠️ Small model (max dim: {max_dim:.1f}). Assuming mm. Use --unit cm if wrong.")
 
     # Auto-scale if target height specified
+    height_scaled = False
     if args.height and args.height > 0:
         bounds = mesh.bounds
         current_h = (bounds[1][2] - bounds[0][2])
-        # After unit conversion, current_h should already be in mm
         if current_h < 0.01:
             print(f"⚠️ Model height near zero ({current_h:.6f}). Skipping scale.")
         else:
             scale = args.height / current_h
             mesh.apply_scale(scale)
+            height_scaled = True
             print(f"📏 Scaled to {args.height}mm height (scale factor: {scale:.2f}x)")
             bounds = mesh.bounds
             dims = bounds[1] - bounds[0]
@@ -750,6 +751,12 @@ def main():
             clean_path = os.path.splitext(args.file)[0] + "_cleaned" + os.path.splitext(args.file)[1]
             mesh.export(clean_path)
             print(f"💾 Cleaned model: {clean_path}")
+
+    # ─── Export scaled mesh if --height or unit conversion changed it ───
+    if height_scaled or converted_to_mm:
+        scaled_path = os.path.splitext(args.file)[0] + "_scaled" + os.path.splitext(args.file)[1]
+        mesh.export(scaled_path)
+        print(f"💾 Scaled model: {scaled_path}")
 
     # ─── Run analysis on ORIGINAL mesh first ───
     original_mesh = mesh.copy()
@@ -825,8 +832,10 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\n⏹️ Cancelled.")
-    except SystemExit:
-        pass
+        sys.exit(130)
+    except SystemExit as e:
+        sys.exit(e.code)
     except Exception as e:
         print(f"❌ Analysis failed: {e}")
         print(f"   Try opening the model in Bambu Studio directly — it has built-in repair.")
+        sys.exit(1)

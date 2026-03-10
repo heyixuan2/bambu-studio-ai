@@ -44,20 +44,44 @@ if len(meshes) > 1:
 
 obj = bpy.context.active_object
 
-# Scale to target height
+# Detect units and scale to target height
 height_mm = {height_mm}
+bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
+z_min = min(v.z for v in bbox)
+z_max = max(v.z for v in bbox)
+x_min = min(v.x for v in bbox)
+x_max = max(v.x for v in bbox)
+y_min = min(v.y for v in bbox)
+y_max = max(v.y for v in bbox)
+max_dim_raw = max(x_max - x_min, y_max - y_min, z_max - z_min)
+
+# glTF spec says meters, but many AI generators output normalized ~1-2 unit models.
+# Heuristic: if max_dim < 0.5 → very likely meters; < 10 → likely meters or normalized.
+unit_scale = 1.0
+if max_dim_raw < 0.5:
+    unit_scale = 1000.0
+    print(f"Detected meters (max_dim={{max_dim_raw:.4f}}), converting to mm")
+elif max_dim_raw < 10:
+    unit_scale = 1000.0
+    print(f"Likely meters/normalized (max_dim={{max_dim_raw:.2f}}), converting to mm")
+
+if unit_scale != 1.0:
+    obj.scale *= unit_scale
+    bpy.ops.object.transform_apply(scale=True)
+
 if height_mm > 0:
     bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
     z_min = min(v.z for v in bbox)
     z_max = max(v.z for v in bbox)
-    current_h = (z_max - z_min) * 1000
-    if current_h > 0:
+    current_h = z_max - z_min
+    if current_h > 0.01:
         scale = height_mm / current_h
         obj.scale *= scale
         bpy.ops.object.transform_apply(scale=True)
         bbox2 = [obj.matrix_world @ v.co for v in obj.data.vertices]
         z_min2 = min(v.z for v in bbox2)
         obj.location.z -= z_min2
+        print(f"Scaled to target height: {{height_mm}}mm")
 
 # Subdivide for vertex color resolution
 subdivide = {subdivide}
@@ -120,19 +144,14 @@ cl.data.foreach_set("color", colors_flat)
 mesh.update()
 print(f"  Done: {{n_loops:,}} loop colors set")
 
-# Convert to mm and auto-scale
+# Post-color sanity check: if no explicit height was given, auto-scale outliers
 bbox_post = [obj.matrix_world @ v.co for v in obj.data.vertices]
 xs = [v.x for v in bbox_post]
 ys = [v.y for v in bbox_post]
 zs = [v.z for v in bbox_post]
 dims_post = (max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))
 max_dim = max(dims_post)
-
-if max_dim < 10:
-    obj.scale *= 1000
-    bpy.ops.object.transform_apply(scale=True)
-    max_dim *= 1000
-    print("Converted to mm")
+print(f"Final dims: {{dims_post[0]:.1f}} x {{dims_post[1]:.1f}} x {{dims_post[2]:.1f}} mm (max={{max_dim:.1f}})")
 
 if height_mm == 0 and (max_dim > 200 or max_dim < 10):
     target = 80.0

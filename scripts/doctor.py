@@ -26,6 +26,9 @@ OPTIONAL = {
     "bambu-lab-cloud-api": {"import": "bambu_lab_cloud_api", "purpose": "Cloud printer control"},
     "scikit-learn": {"import": "sklearn", "purpose": "Better colorize k-means clustering"},
     "paho-mqtt": {"import": "paho.mqtt", "purpose": "LAN MQTT printer control"},
+    "manifold3d": {"import": "manifold3d", "purpose": "Parametric modeling (functional parts)"},
+    "rembg": {"import": "rembg", "purpose": "Image-to-3D background removal"},
+    "pymeshlab": {"import": "pymeshlab", "purpose": "Advanced mesh repair"},
 }
 
 def check_version(pkg_name, min_ver, import_name):
@@ -139,6 +142,15 @@ def main():
     else:
         print("  ⚠️ OrcaSlicer not installed (needed for slice.py)")
         print("     Install from: https://github.com/SoftFever/OrcaSlicer")
+
+    print("\nSystem tools:")
+    import shutil
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        print(f"  ✅ ffmpeg found: {ffmpeg_path}")
+    else:
+        print("  ⚠️ ffmpeg not found (needed for camera snapshots in LAN mode)")
+        print("     Install: brew install ffmpeg (macOS) / apt install ffmpeg (Linux)")
 
     print("\nAPI compatibility (LAN):")
     issues = check_api_symbols()

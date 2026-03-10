@@ -9,3 +9,4 @@ Pillow>=9.0
 ddgs>=7.0
 pygltflib
 scipy>=1.10
+manifold3d>=3.0

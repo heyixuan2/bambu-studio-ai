@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.23.5"
+version: "1.0.0"
 license: MIT
 author: TieGaier
 metadata:
@@ -14,7 +14,7 @@ metadata:
     install:
       - id: pip-deps
         kind: pip
-        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib", "cryptography", "paho-mqtt", "scipy"]
+        packages: ["bambulabs-api", "bambu-lab-cloud-api", "requests", "trimesh", "numpy", "Pillow", "ddgs", "pygltflib", "cryptography", "paho-mqtt", "scipy", "manifold3d"]
         required: true
       - id: ffmpeg
         kind: brew
@@ -182,20 +182,26 @@ Pre-check: If `config.json` does not exist → run First-Time Setup before any o
 | Camera snapshot | `python3 scripts/bambu.py snapshot` |
 | Send G-code | `python3 scripts/bambu.py gcode "G28"` |
 | Notification | `python3 scripts/bambu.py notify --message "done"` |
-| Generate 3D (text) | `python3 scripts/generate.py text "desc" --wait` (`--raw` skips auto-enhancement) |
-| Generate 3D (image) | `python3 scripts/generate.py image photo.jpg --wait` |
-| Download model | `python3 scripts/generate.py download <task_id>` |
-| Analyze model | `python3 scripts/analyze.py model.stl --orient --repair --material PLA` |
+| Generate 3D (text) | `python3 scripts/generate.py text "desc" --wait --height 80` (`--raw` skips auto-enhancement; `--height` sets target mm, default auto 80mm) |
+| Generate 3D (image) | `python3 scripts/generate.py image photo.jpg --wait --height 80` (auto: validate, bg-remove, prompt enhance; `--no-bg-remove` / `--raw` to skip) |
+| Download model | `python3 scripts/generate.py download <task_id> --height 80` |
+| Analyze model | `python3 scripts/analyze.py model.stl --height 80 --orient --repair --material PLA` (always exports `_scaled` file when `--height` is used) |
 | Keep main only (remove fragments) | `python3 scripts/analyze.py model.stl --repair --keep-main` |
 | Multi-color | `python3 scripts/colorize model.glb --height 80 --max_colors 8 -o out.obj` (tunable: `--min-pct`, `--no-merge`, `--island-size`, `--smooth`, `--bambu-map`) |
 | Slice (optional CLI) | `python3 scripts/slice.py model.stl --orient --arrange --quality fine` |
 | Slice (specific setup, optional) | `python3 scripts/slice.py model.stl --printer A1 --filament "Bambu PETG Basic"` |
 | List slicer profiles | `python3 scripts/slice.py --list-profiles` |
-| Preview (quick) | `python3 scripts/preview.py model.stl` |
+| Preview (quick) | `python3 scripts/preview.py model.stl` (`--height 80` to verify dimensions) |
 | Preview (HQ Blender) | `python3 scripts/preview.py model.stl --hq` |
 | Search models | `python3 scripts/search.py "phone stand" --limit 5` |
 | Monitor print | `python3 scripts/monitor.py --auto-pause` |
 | Check deps | `python3 scripts/doctor.py` |
+| Parametric box | `python3 scripts/parametric.py box 30 20 10 -o box.stl` |
+| Parametric cylinder | `python3 scripts/parametric.py cylinder --radius 5 --height 20 -o cyl.stl` |
+| Parametric bracket | `python3 scripts/parametric.py bracket --width 30 --height 40 --thickness 3 --hole-diameter 3.2 -o bracket.stl` |
+| Parametric plate with holes | `python3 scripts/parametric.py plate-with-holes --width 60 --depth 40 --holes 4 --hole-diameter 3.2 --hole-spacing 25 -o plate.stl` |
+| Parametric enclosure | `python3 scripts/parametric.py enclosure --width 60 --depth 40 --height 30 --wall 2 --lid -o case.stl` |
+| Parametric CSG (complex) | `python3 scripts/parametric.py csg spec.json -o assembly.stl` |
 
 All scripts support `--help`. `generate.py` auto-enhances prompts and limits size to printer build volume.
 
@@ -214,7 +220,9 @@ Decision 1: Model Source
     ├─ A: Internet Search (preferred default)
     ├─ B: AI Generate (single-color)
     ├─ C: AI Generate (multi-color)
-    └─ D: User-provided file
+    ├─ D: User-provided file
+    ├─ E: Image to 3D
+    └─ F: Parametric (functional parts — manifold3d)
     │
     ▼
 Model Processing (analyze → repair → orient → [colorize])
@@ -266,6 +274,19 @@ Default: search first. Common objects (phone stand, hook, vase) almost always ex
 
 **Decision flow:** User says "search" / "generate" / "not sure" → If "not sure" → search first → if no good results → offer generate.
 
+**Auto-routing (agent determines path based on description):**
+
+| Signal in user's description | Route to | Examples |
+|------------------------------|----------|----------|
+| Specific dimensions / tolerances / fit | Parametric (Workflow F) | "M3 screw hole", "inner diameter 40mm", "press fit" |
+| Standard interfaces / mounting | Parametric (Workflow F) | "USB-C cutout", "GoPro mount", "VESA mount" |
+| Functional part keywords | Parametric (Workflow F) | "bracket", "hinge", "hook", "clip", "gear", "mount", "enclosure", "stand" |
+| Characters / figurines / organic | AI Generate (Workflow B/C) | "pikachu", "dragon", "bust", "sculpture" |
+| Decorative / artistic | AI Generate (Workflow B/C) | "vase", "lamp shade", "desk ornament" |
+| Photo reference | Image-to-3D (Workflow E) | user sends image file or URL |
+
+When the description clearly matches functional/precision signals, skip the source question and route directly to Workflow F. If ambiguous (e.g., "phone stand" — could be searched or parametric), default to search first.
+
 ---
 
 ## Step 2: Model Source (Decision Point 1)
@@ -287,8 +308,8 @@ If no good results → offer AI generate.
 
 1. First-time disclaimer (once): "AI models depend on provider + prompt. NOT production-ready — always review in Bambu Studio."
 2. Confirm dimensions — **MUST have before** `generate.py text`
-3. `generate.py text "prompt" --wait` → auto-enhances, auto-limits to build volume
-4. `preview.py model.stl --views turntable -o preview.gif` → **send GIF to chat**
+3. `generate.py text "prompt" --wait --height <mm>` → auto-enhances, auto-scales to exact target
+4. `preview.py model.stl --views turntable --height <mm> -o preview.gif` → **send GIF to chat** (verifies dimensions)
 5. → Model Processing
 
 ### Workflow C — AI Generate (multi-color)
@@ -300,9 +321,9 @@ Do NOT ask user to specify colors upfront — AI textures determine the colors. 
 2. Confirm **dimensions only** — "What size do you want?" is the only required question
    - Colors are auto-detected from AI texture, NOT user-specified
    - If user volunteers color preferences (e.g., "only 3 colors"), note for colorize params
-3. `generate.py text "prompt" --wait` → textured GLB
-4. `python3 scripts/colorize model.glb --height <size> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt
-5. `preview.py model.obj --views turntable -o preview.gif`
+3. `generate.py text "prompt" --wait --height <mm>` → textured GLB (scaled to target height)
+4. `python3 scripts/colorize model.glb --height <mm> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt
+5. `preview.py model.obj --views turntable --height <mm> -o preview.gif`
 6. **Send ONE consolidated report** (MUST include all of the following in a single message):
 
    **Multi-color report template:**
@@ -340,6 +361,64 @@ Do NOT ask user to specify colors upfront — AI textures determine the colors. 
 
 1. Validate format (STL/OBJ/3MF/GLB), convert if needed
 2. → Model Processing
+
+### Workflow E — Image to 3D
+
+**Trigger:** User provides a photo, image file, or image URL to generate a 3D model from.
+
+**Checkpoint:** Did you ask for dimensions? If not, ask now. Do NOT ask for colors — they come from the image.
+
+1. Same disclaimer as B
+2. Confirm **dimensions only**
+3. Save image to workspace (if from chat) or note the file path/URL
+4. `python3 scripts/generate.py image photo.jpg --wait` (auto: validate, remove background, enhance prompt)
+   - To skip background removal: add `--no-bg-remove`
+   - To skip prompt enhancement: add `--raw`
+5. **Auto-detect single vs multi-color:**
+   - If downloaded GLB has texture → run colorize (same as Workflow C steps 4-6, send consolidated multi-color report)
+   - If no texture → single-color path (same as Workflow B steps 4-5)
+6. Preview + report to user → WAIT for approval
+7. When user approves → Model Processing
+
+**Tips for best results:**
+- Clean product photos on plain/white background work best
+- Single object, centered, well-lit
+- Multiple angles of the same object are NOT supported (single image only)
+- If background removal hurts the result, re-run with `--no-bg-remove`
+
+### Workflow F — Parametric (functional parts)
+
+**Trigger:** User requests a part with precise dimensions, standard interfaces (screw holes, mounts), or functional keywords (bracket, hinge, enclosure). See auto-routing table in Step 1.
+
+**Checkpoint:** MUST have exact dimensions in mm. Do NOT accept vague sizes like "about 80mm" — ask for precise values.
+
+1. Collect **exact dimensions** — width, height, depth, wall thickness, hole sizes, spacing
+2. Identify standard interfaces: screw size (M3? M4?), mounting pattern, clearance vs press fit
+3. Choose the right `parametric.py` command:
+   - Simple shapes → `box`, `cylinder`, `sphere`, `extrude`
+   - L-brackets → `bracket --width W --height H --thickness T --hole-diameter D`
+   - Mounting plates → `plate-with-holes --width W --depth D --holes N --hole-diameter D --hole-spacing S`
+   - Enclosures → `enclosure --width W --depth D --height H --wall T [--lid]`
+   - Complex assemblies → write a JSON spec, use `csg spec.json`
+4. `python3 scripts/parametric.py <command> [args] -o model.stl`
+5. `preview.py model.stl --views turntable -o preview.gif` → **send GIF to chat**
+6. Report dimensions, volume, triangle count (printed by parametric.py)
+7. **WAIT for user approval** — user may request dimension adjustments
+8. If adjustments needed → modify command/spec, regenerate, re-preview
+9. When user approves → Model Processing
+
+**Advantages over AI generation:**
+- Exact dimensions (to 0.01mm precision)
+- Guaranteed watertight mesh (no repair needed)
+- Instant generation (no API call, no waiting)
+- Free (no API credits consumed)
+- Reproducible (same params = same output)
+
+**Limitations:**
+- Geometric shapes only — no organic/artistic forms
+- Single-color output (STL) — no vertex colors or textures
+
+**Reference:** See `references/manifold-examples.md` for tolerance tables, CSG JSON patterns, and design rules.
 
 ---
 
@@ -562,12 +641,14 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Multi-color (colorize) | ⚠️ Colorize pipeline stable; BS vertex-color OBJ import occasionally fails to detect colors — use File → New Project → Import, NOT "Import to plate" |
 | CLI slicing | ✅ OrcaSlicer backend (BS CLI SEGFAULT in v2.5.0) |
 | End-to-end auto-print | ✅ Works with Developer Mode ON (X.509 signed MQTT + FTP upload) |
+| Parametric modeling | ✅ manifold3d — geometric/functional parts only, no organic forms. Single-color STL output. |
 
 ---
 
 ## Reference Documents
 
 - `references/model-specs.md` — All 9 printer specifications
+- `references/manifold-examples.md` — Parametric modeling API, tolerance tables, CSG patterns
 - `references/bambu_filament_colors.json` — Bambu Lab 43-color palette (reference only, colorize v4 uses texture-native colors)
 - `references/bambu-mqtt-protocol.md` — MQTT protocol
 - `references/bambu-cloud-api.md` — Cloud API

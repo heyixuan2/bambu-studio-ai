@@ -18,7 +18,7 @@ import os, sys, subprocess, argparse, tempfile, json
 from common import find_blender
 
 
-def preview(model_path, output_path, views="perspective"):
+def preview(model_path, output_path, views="perspective", expected_height_mm=0):
     """Render model preview using Blender Cycles."""
     blender = find_blender()
     if not blender:
@@ -355,7 +355,21 @@ _shutil.rmtree(_turntable_dir, ignore_errors=True)
                 rendered = True
                 print("   ⚠️ PIL not available — saved single frame PNG instead of GIF")
             if "MODEL_INFO:" in line:
-                print(f"   {line.split('MODEL_INFO: ')[1]}")
+                info_text = line.split('MODEL_INFO: ')[1]
+                print(f"   {info_text}")
+                if expected_height_mm > 0:
+                    try:
+                        dims_str = info_text.split(" mm")[0]
+                        parts = [float(d.strip()) for d in dims_str.split(" x ")]
+                        actual_h = parts[2] if len(parts) >= 3 else max(parts)
+                        diff_pct = abs(actual_h - expected_height_mm) / expected_height_mm * 100
+                        if diff_pct > 10:
+                            print(f"   ⚠️ Height mismatch: expected {expected_height_mm:.0f}mm, "
+                                  f"got {actual_h:.1f}mm ({diff_pct:.0f}% off)")
+                        else:
+                            print(f"   ✅ Height OK: {actual_h:.1f}mm (target {expected_height_mm:.0f}mm)")
+                    except (ValueError, IndexError):
+                        pass
             if "PBR texture" in line or "No texture" in line or "preview material" in line or "Vertex colors" in line:
                 print(f"   {line.strip()}")
 
@@ -389,6 +403,8 @@ def main():
     parser.add_argument("--views", "-v", default="perspective",
                         choices=["perspective", "front", "side", "top", "all", "turntable"],
                         help="View angle (default: perspective, 'all' = 2x2 grid, 'turntable' = 360° GIF)")
+    parser.add_argument("--height", type=float, default=0,
+                        help="Expected height in mm — warns if model dimensions differ significantly")
     args = parser.parse_args()
 
     if not os.path.exists(args.model):
@@ -399,10 +415,20 @@ def main():
         ext = ".gif" if args.views == "turntable" else ".png"
         args.output = os.path.splitext(args.model)[0] + "_preview" + ext
 
-    result = preview(args.model, os.path.abspath(args.output), views=args.views)
+    result = preview(args.model, os.path.abspath(args.output), views=args.views,
+                     expected_height_mm=args.height)
     if result is None:
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⏹️ Cancelled.")
+        sys.exit(130)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"❌ Preview failed: {e}", file=sys.stderr)
+        sys.exit(1)
