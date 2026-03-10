@@ -68,8 +68,23 @@ if subdivide > 0:
         bpy.ops.mesh.subdivide(number_cuts=1)
     bpy.ops.object.mode_set(mode='OBJECT')
 
+# Mesh repair BEFORE vertex colors — bmesh round-trip can destroy color attributes
+import bmesh
+bpy.ops.object.mode_set(mode='OBJECT')
+bm = bmesh.new()
+bm.from_mesh(obj.data)
+bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
+for v in [v for v in bm.verts if not v.link_faces]:
+    bm.verts.remove(v)
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+nm_edges = sum(1 for e in bm.edges if not e.is_manifold)
+print(f"Mesh repair: {{nm_edges}} non-manifold edges remaining")
+bm.to_mesh(obj.data)
+bm.free()
+obj.data.update()
+
 mesh = obj.data
-print(f"Mesh: {{len(mesh.polygons):,}} faces, {{len(mesh.vertices):,}} verts")
+print(f"Mesh: {{len(mesh.polygons):,}} faces, {{len(mesh.vertices):,}} verts (post-repair)")
 
 # Load quantized texture (uint8 sRGB, Y-flipped for UV)
 tex_srgb = np.load({npy_esc})
@@ -114,41 +129,17 @@ dims_post = (max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))
 max_dim = max(dims_post)
 
 if max_dim < 10:
-    # Model in meters, convert to mm
     obj.scale *= 1000
     bpy.ops.object.transform_apply(scale=True)
     max_dim *= 1000
     print("Converted to mm")
 
-# Auto-scale to 80mm if no --height specified and model is too big or too small
 if height_mm == 0 and (max_dim > 200 or max_dim < 10):
     target = 80.0
     scale_factor = target / max_dim
     obj.scale *= scale_factor
     bpy.ops.object.transform_apply(scale=True)
     print(f"Auto-scaled: {{max_dim:.1f}} → {{target:.0f}}mm")
-
-# Mesh repair before export
-import bmesh
-bpy.ops.object.mode_set(mode='OBJECT')
-bm = bmesh.new()
-bm.from_mesh(obj.data)
-
-# Merge by distance
-bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
-# Remove loose
-for v in [v for v in bm.verts if not v.link_faces]:
-    bm.verts.remove(v)
-# Fix normals
-bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-
-# Count non-manifold edges
-nm_edges = sum(1 for e in bm.edges if not e.is_manifold)
-print(f"Mesh repair: {{nm_edges}} non-manifold edges remaining (from original)")
-
-bm.to_mesh(obj.data)
-bm.free()
-obj.data.update()
 
 # Export OBJ with vertex colors
 bpy.ops.wm.obj_export(
