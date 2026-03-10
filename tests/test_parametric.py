@@ -8,6 +8,8 @@ import tempfile
 
 import pytest
 
+manifold3d = pytest.importorskip("manifold3d", reason="manifold3d not installed")
+
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "parametric.py")
 
 

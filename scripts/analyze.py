@@ -360,7 +360,10 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     }
 
     # === SCORE ===
-    report["score"] = round(checks_passed / total_checks * 10, 1)
+    score = round(checks_passed / total_checks * 10, 1)
+    if not fits:
+        score = min(score, 5.0)
+    report["score"] = score
 
     return report
 
