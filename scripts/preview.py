@@ -111,27 +111,75 @@ if not has_texture:
             has_vertex_colors = True
             _vc_name = obj.data.color_attributes[0].name
             break
+        if not has_vertex_colors and hasattr(obj.data, 'vertex_colors') and obj.data.vertex_colors:
+            has_vertex_colors = True
+            _vc_name = obj.data.vertex_colors[0].name
+            break
+
+# Fallback: some Blender versions don't import OBJ vertex colors into
+# color_attributes.  Parse the file directly and build the attribute.
+if not has_texture and not has_vertex_colors and ext == ".obj":
+    import numpy as _np
+    _v_colors = []
+    _has_any_color = False
+    with open(MODEL_PATH) as _f:
+        for _line in _f:
+            if _line.startswith('v '):
+                _parts = _line.split()
+                if len(_parts) >= 7:
+                    _v_colors.append((float(_parts[4]), float(_parts[5]), float(_parts[6])))
+                    _has_any_color = True
+                else:
+                    _v_colors.append(None)
+    if _has_any_color:
+        _vc_arr = _np.full((len(_v_colors), 3), 0.5, dtype=_np.float32)
+        for _ci, _c in enumerate(_v_colors):
+            if _c is not None:
+                _vc_arr[_ci] = _c
+        for obj in meshes:
+            _mesh = obj.data
+            if not _mesh.color_attributes:
+                _mesh.color_attributes.new(name="Col", type='BYTE_COLOR', domain='CORNER')
+            _cl = _mesh.color_attributes[0]
+            _n_loops = len(_mesh.loops)
+            _loop_vi = _np.empty(_n_loops, dtype=_np.int32)
+            _mesh.loops.foreach_get("vertex_index", _loop_vi)
+            _safe_vi = _np.clip(_loop_vi, 0, len(_vc_arr) - 1)
+            _sampled = _vc_arr[_safe_vi]
+            _colors_flat = _np.empty(_n_loops * 4, dtype=_np.float32)
+            _colors_flat[0::4] = _sampled[:, 0]
+            _colors_flat[1::4] = _sampled[:, 1]
+            _colors_flat[2::4] = _sampled[:, 2]
+            _colors_flat[3::4] = 1.0
+            _cl.data.foreach_set("color", _colors_flat)
+            _mesh.update()
+        has_vertex_colors = True
+        _vc_name = "Col"
+        print(f"Manually loaded {{len(_v_colors)}} vertex colors from OBJ (Blender importer missed them)")
 
 if has_texture:
     print("PBR texture loaded from model")
 elif has_vertex_colors:
-    # Vertex color material: Attribute node → Base Color
     mat = bpy.data.materials.new("VertexColor")
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
     bsdf = nodes["Principled BSDF"]
     bsdf.inputs["Roughness"].default_value = 0.4
-    attr_node = nodes.new("ShaderNodeAttribute")
-    attr_node.attribute_name = _vc_name
-    attr_node.attribute_type = 'GEOMETRY'
-    links.new(attr_node.outputs["Color"], bsdf.inputs["Base Color"])
+    try:
+        vc_node = nodes.new("ShaderNodeVertexColor")
+        vc_node.layer_name = _vc_name
+        links.new(vc_node.outputs["Color"], bsdf.inputs["Base Color"])
+    except Exception:
+        attr_node = nodes.new("ShaderNodeAttribute")
+        attr_node.attribute_name = _vc_name
+        attr_node.attribute_type = 'GEOMETRY'
+        links.new(attr_node.outputs["Color"], bsdf.inputs["Base Color"])
     for obj in meshes:
         obj.data.materials.clear()
         obj.data.materials.append(mat)
     print("Vertex colors detected — using vertex color material")
 else:
-    # Default single-color preview
     mat = bpy.data.materials.new("Preview")
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]

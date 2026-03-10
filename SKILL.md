@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.23.2"
+version: "0.23.3"
 license: MIT
 author: TieGaier
 metadata:
@@ -302,7 +302,12 @@ If no good results → offer AI generate.
    - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
    - No shadow removal needed — HSV classification bypasses baked lighting
 5. **Send quantized texture preview to user** — colorize outputs `_preview.png` automatically; also run `preview.py model.obj --views turntable -o preview.gif` and **send both images to chat**
-6. **Analyze results and suggest tuning** if needed:
+6. **Confirm vertex color integrity before BS handoff:**
+   - Preview shows correct color count and distribution?
+   - `_color_map.txt` lists expected colors?
+   - Only proceed to BS import after preview confirmation
+   - ⚠️ BS import may fail to detect vertex colors — see Step 4 for import procedure
+7. **Analyze results and suggest tuning** if needed:
    - Report detected colors with names, hex codes, and percentages
    - If small but meaningful colors were lost (e.g., <1% features like eyes, accessories):
      → Suggest: `--min-pct 0` (keep all colors above 0.1%)
@@ -312,8 +317,8 @@ If no good results → offer AI generate.
      → Suggest: higher `--min-pct` or `--island-size`
    - If boundaries are too noisy or too smooth:
      → Suggest: adjust `--smooth` (0=none, 5=default, higher=smoother)
-7. If user requests changes → re-run colorize with adjusted params → show new preview
-8. When user approves → Model Processing
+8. If user requests changes → re-run colorize with adjusted params → show new preview
+9. When user approves → Model Processing
 
 **Colorize tunable parameters:**
 | Parameter | Default | Effect |
@@ -381,18 +386,25 @@ Auto-detects printer + nozzle. Quality: draft(0.24) / standard(0.20) / fine(0.12
 **Gate:** Before this step, you MUST have: (1) sent preview to chat.
 
 1. Open in Bambu Studio: `open -a "BambuStudio" model.3mf` (or .stl/.obj)
-2. Tell user to inspect and slice:
+2. **Multi-color OBJ — special import procedure (BS import is unstable):**
+   - Always open via **File → New Project → Import**, NOT "Import to current plate"
+   - After import: check color count in right panel — if BS shows 1 color instead of N:
+     1. Close BS completely, reopen, then import again
+     2. Or drag-and-drop the OBJ file into an empty BS window
+   - If BS still refuses to recognize vertex colors → flag as BS import compatibility issue; do NOT re-run colorize
+3. Tell user to inspect and slice:
    > "I've opened the model in Bambu Studio. Please:
    > - Check: does it look correct? Missing or deformed parts?
    > - Check: floating/disconnected pieces?
    > - Check: correct size? (check dimensions in bottom bar)
+   > - **For multi-color:** verify the right panel shows the correct number of colors
    > - **Slice** in Bambu Studio (Ctrl+R / Cmd+R) and review: estimated time, filament usage, supports.
    > Let me know when ready!"
-3. WAIT for explicit confirmation.
+4. WAIT for explicit confirmation.
 
 ⛔ NEVER auto-print. AI models frequently have errors analysis can't fully catch.
 
-4. Ask print method:
+5. Ask print method:
    - Direct automatic printing → Workflow E (Developer Mode only, not recommended)
    - Manual in Bambu Studio → Workflow F
 
@@ -532,6 +544,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Camera timeout | Wake printer (tap screen), check IP. |
 | AI model has holes/floating parts | Expected. Always run `analyze.py --repair`. |
 | Tripo/ Meshy reports 68+ "bodies" | Usually harmless (non-manifold topology, not actual fragments). Check preview first — only use `--keep-main` if model is visually broken |
+| BS imports multi-color OBJ as single color | Close BS → reopen → **File > New Project > Import OBJ** (not "Import to plate"). If still single-color after retry, this is a BS-side compatibility issue — do NOT re-run colorize |
 
 ---
 
@@ -540,7 +553,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 | Feature | Status |
 |---|---|
 | Single-color pipeline | ✅ Stable |
-| Multi-color (colorize) | ✅ Auto-detect ≤8 colors, vertex-color OBJ → BS color merge dialog |
+| Multi-color (colorize) | ⚠️ Colorize pipeline stable; BS vertex-color OBJ import occasionally fails to detect colors — use File → New Project → Import, NOT "Import to plate" |
 | CLI slicing | ✅ OrcaSlicer backend (BS CLI SEGFAULT in v2.5.0) |
 | End-to-end auto-print | ✅ Works with Developer Mode ON (X.509 signed MQTT + FTP upload) |
 

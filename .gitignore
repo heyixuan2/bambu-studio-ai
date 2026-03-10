@@ -39,3 +39,4 @@ skills-lock.json
 # Certificates
 references/bambu_connect_cert.pem
 references/bambu_connect_key.pem
+.cursor/
