@@ -225,7 +225,7 @@ bpy.context.scene.collection.objects.link(rim_obj)
 world = bpy.data.worlds.new("World")
 bpy.context.scene.world = world
 world.use_nodes = True
-world.node_tree.nodes["Background"].inputs[0].default_value = (0.12, 0.12, 0.15, 1)
+world.node_tree.nodes["Background"].inputs[0].default_value = (0.0, 0.0, 0.0, 1)
 
 bpy.context.scene.render.engine = 'CYCLES'
 bpy.context.scene.cycles.samples = 48

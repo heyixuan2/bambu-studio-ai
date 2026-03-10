@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
 description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "0.23.4"
+version: "0.23.5"
 license: MIT
 author: TieGaier
 metadata:
@@ -293,34 +293,40 @@ If no good results → offer AI generate.
 
 ### Workflow C — AI Generate (multi-color)
 
-**Checkpoint before generate:** Did you ask for dimensions and colors? If not, ask now.
+**Checkpoint before generate:** Did you ask for dimensions? If not, ask now.
+Do NOT ask user to specify colors upfront — AI textures determine the colors. Colorize will auto-detect them.
 
 1. Same disclaimer as B
-2. Confirm dimensions + desired colors — **MUST have before** `generate.py text`
+2. Confirm **dimensions only** — "What size do you want?" is the only required question
+   - Colors are auto-detected from AI texture, NOT user-specified
+   - If user volunteers color preferences (e.g., "only 3 colors"), note for colorize params
 3. `generate.py text "prompt" --wait` → textured GLB
-4. `python3 scripts/colorize model.glb --height <size> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt (filament suggestions)
-   - Pixel HSV classify → greedy area-based color select → CIELAB assign → vertex color
-   - No shadow removal needed — HSV classification bypasses baked lighting
-5. **Send quantized texture preview to user** — colorize outputs `_preview.png` automatically; also run `preview.py model.obj --views turntable -o preview.gif` and **send both images to chat**
-6. **Confirm vertex color integrity before BS handoff:**
-   - Preview shows correct color count and distribution?
-   - `_color_map.txt` lists expected colors?
-   - Only proceed to BS import after preview confirmation
-   - ⚠️ BS import may fail to detect vertex colors — see Step 4 for import procedure
-7. **Analyze results and suggest tuning** if needed:
-   - Report detected colors with names, hex codes, and percentages
-   - If small but meaningful colors were lost (e.g., <1% features like eyes, accessories):
-     → Suggest: `--min-pct 0` (keep all colors above 0.1%)
-   - If similar colors are merged incorrectly (e.g., yellow body + brown pants):
-     → Suggest: `--no-merge` (disable family mutual exclusion)
-   - If too many artifact colors appear:
-     → Suggest: higher `--min-pct` or `--island-size`
-   - If boundaries are too noisy or too smooth:
-     → Suggest: adjust `--smooth` (0=none, 5=default, higher=smoother)
-8. If user requests changes → re-run colorize with adjusted params → show new preview
-9. When user approves → Model Processing
+4. `python3 scripts/colorize model.glb --height <size> --max_colors 8 --bambu-map` → vertex-color OBJ + _color_map.txt
+5. `preview.py model.obj --views turntable -o preview.gif`
+6. **Send ONE consolidated report** (MUST include all of the following in a single message):
 
-**Colorize tunable parameters:**
+   **Multi-color report template:**
+   > ## 🎨 [Model Name] Multi-Color Preview
+   >
+   > 📷 [attach _preview.png AND turntable.gif]
+   >
+   > | # | Color | Hex | % | Suggested Filament | ΔE |
+   > |---|-------|-----|---|--------------------|----|
+   > | 1 | yellow | #FFD700 | 58% | PLA Basic Yellow | 3.2 |
+   > | 2 | brown | #8B4513 | 22% | PLA Basic Brown | 5.1 |
+   > | ... | | | | | |
+   >
+   > **N colors detected, AMS compatible.** Ready to proceed?
+   > - Want fewer colors → I'll re-run with `--max_colors N`
+   > - Want to adjust → tell me what to change
+   > - Looks good → I'll open in Bambu Studio
+
+7. **WAIT for user response.** If user requests changes → re-run colorize → show updated report
+8. When user approves → Model Processing
+
+⚠️ BS import may fail to detect vertex colors — see Step 4 for import procedure.
+
+**Colorize tuning (only if user requests adjustments):**
 | Parameter | Default | Effect |
 |-----------|---------|--------|
 | `--max_colors N` | 8 | Maximum colors (hard limit ≤8 for AMS) |
@@ -328,7 +334,7 @@ If no good results → offer AI generate.
 | `--no-merge` | off | Disable family group exclusion (all 12 families independent) |
 | `--island-size N` | 1000 | Remove isolated patches < N pixels (0=disabled) |
 | `--smooth N` | 5 | Majority vote boundary passes (0=raw, higher=smoother) |
-| `--bambu-map` | off | Output _color_map.txt with suggested Bambu filaments (CIELAB match) |
+| `--bambu-map` | on | Output _color_map.txt with suggested Bambu filaments (CIELAB match) |
 
 ### Workflow D — User-Provided File
 
