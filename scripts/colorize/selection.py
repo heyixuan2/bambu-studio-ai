@@ -193,6 +193,7 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8,
                 continue
 
             full_labels = km.predict(f_lab)
+            count_before = len(selected)
             selected = [s for s in selected if s.get("fid") != fd["fid"]]
 
             for sub_id in [0, 1]:
@@ -200,13 +201,8 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8,
                 sub_count = int(np.sum(sub_mask_full))
                 if sub_count < N * min_pct:
                     continue
-                if len(f_rgb) == len(full_labels):
-                    med_rgb, med_lab = _representative_color(
-                        f_rgb[sub_mask_full], f_lab[sub_mask_full])
-                else:
-                    med_rgb, med_lab = _representative_color(
-                        f_rgb_sub[km.labels_ == sub_id],
-                        f_lab_sub[km.labels_ == sub_id])
+                med_rgb, med_lab = _representative_color(
+                    f_rgb[sub_mask_full], f_lab[sub_mask_full])
                 selected.append({
                     "rgb": med_rgb,
                     "lab": med_lab,
@@ -215,7 +211,8 @@ def hybrid_select_colors(pixels, pixel_lab, pixel_families, max_colors=8,
                     "pixel_count": sub_count,
                     "percentage": sub_count / N * 100,
                 })
-            slots_left -= 1
+            net_added = len(selected) - count_before
+            slots_left -= max(net_added, 0)
 
     for s in selected:
         s.pop("mask", None)

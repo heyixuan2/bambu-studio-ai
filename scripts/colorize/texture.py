@@ -102,7 +102,7 @@ for img in bpy.data.images:
 def build_quantized_texture(pixels, labels, selected_colors, width, height):
     """Build quantized RGB texture from labels. Returns uint8 (H,W,3)."""
     sel_rgb = np.array([sc["rgb"] for sc in selected_colors])
-    return (sel_rgb[labels].reshape(height, width, 3) * 255).astype(np.uint8)
+    return np.round(sel_rgb[labels].reshape(height, width, 3) * 255).astype(np.uint8)
 
 
 def cleanup_labels(labels_2d, min_island=1000, protect_mask=None):

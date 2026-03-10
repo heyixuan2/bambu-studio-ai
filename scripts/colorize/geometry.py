@@ -33,8 +33,9 @@ def curvature_mask_from_glb(glb_path, width, height, percentile=92):
     for mesh_obj in glb.meshes:
         for prim in mesh_obj.primitives:
             attrs = prim.attributes
-            pos_idx = (getattr(attrs, "POSITION", None)
-                       or (attrs.get("POSITION") if isinstance(attrs, dict) else None))
+            pos_idx = getattr(attrs, "POSITION", None)
+            if pos_idx is None and isinstance(attrs, dict):
+                pos_idx = attrs.get("POSITION")
             if pos_idx is None:
                 continue
             acc = glb.accessors[pos_idx]
@@ -57,9 +58,11 @@ def curvature_mask_from_glb(glb_path, width, height, percentile=92):
             else:
                 faces = np.arange(len(verts), dtype=np.uint32).reshape(-1, 3)
 
-            tex_idx = (getattr(attrs, "TEXCOORD_0", None)
-                       or getattr(attrs, "texcoord_0", None)
-                       or (attrs.get("TEXCOORD_0") if isinstance(attrs, dict) else None))
+            tex_idx = getattr(attrs, "TEXCOORD_0", None)
+            if tex_idx is None:
+                tex_idx = getattr(attrs, "texcoord_0", None)
+            if tex_idx is None and isinstance(attrs, dict):
+                tex_idx = attrs.get("TEXCOORD_0")
             if tex_idx is None:
                 continue
             uv_acc = glb.accessors[tex_idx]
@@ -125,7 +128,7 @@ def curvature_mask_from_glb(glb_path, width, height, percentile=92):
             for rr in range(r_min, r_max + 1):
                 for cc in range(c_min, c_max + 1):
                     u_pt = cc / (width - 1) if width > 1 else 0.5
-                    v_pt = 1 - rr / (height - 1) if height > 1 else 0.5
+                    v_pt = rr / (height - 1) if height > 1 else 0.5
                     if _point_in_triangle(u_pt, v_pt, u0, v0, u1, v1, u2, v2):
                         curvature_map[rr, cc] = max(curvature_map[rr, cc], face_curv[i])
 
