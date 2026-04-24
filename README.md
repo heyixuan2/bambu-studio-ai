@@ -28,7 +28,7 @@ You tell your AI agent "print me a phone stand", and it handles search, generati
 | **Smart sizing** | `--height` across entire pipeline — generate, analyze, colorize, preview all use the same target | Manually scale in slicer, hope units are right |
 | **Shadow handling** | HSV-based classification immune to baked lighting | Shadow removal artifacts ruin color accuracy |
 | **Monitoring** | AI vision analyzes camera feed, auto-pause on failure | Stare at Bambu Handy or walk to the printer |
-| **9 printers** | All Bambu Lab models with correct build volumes, temp limits, material compatibility | Usually supports 1-2 models |
+| **10 printers** | All Bambu Lab models with correct build volumes, temp limits, material compatibility | Usually supports 1-2 models |
 
 ---
 
@@ -171,7 +171,7 @@ Camera snapshots analyzed by vision AI at configurable intervals:
 |--------|--------|-------------|-----------|-------------|
 | **A** (Entry) | A1 Mini, A1 | 180³ / 256³ mm | 500mm/s | Affordable, open frame |
 | **P** (Prosumer) | P1S, P2S | 256³ mm | 500-600mm/s | Enclosed, AMS |
-| **X** (Pro) | X1C, X1E | 256³ mm | 500mm/s | Lidar, sealed chamber |
+| **X** (Pro) | X1C, X1E, X2D | 256³ mm | 500-1000mm/s | Lidar, sealed chamber, heated enclosure options |
 | **H** (High-Perf) | H2C, H2S, H2D | 256³ / 340³ / 350³ mm | 600-1000mm/s | 350°C nozzle, dual extruder |
 
 ---

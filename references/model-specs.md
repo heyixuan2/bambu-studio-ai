@@ -11,5 +11,6 @@
 | H2C | 256×256×256 | 600mm/s | 350°C | 120°C | 1 | 65°C Heated | AMS 2 Pro |
 | H2S | 340×320×340 | 1000mm/s | 300°C | 110°C | 1 | Enclosed | AMS 2 Pro |
 | H2D | 350×320×325 | 600mm/s | 350°C | 120°C | 2 | Enclosed | AMS 2 Pro |
+| X2D | 256×256×260 | 1000mm/s | 300°C | 120°C | 2 | 65°C Heated | AMS 2 Pro |
 
 Source: bambulab.com/en-us/compare (March 2026)

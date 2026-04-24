@@ -58,6 +58,7 @@ BUILD_VOLUMES = {
     "H2C":      (230, 230, 230),
     "H2S":      (306, 288, 306),
     "H2D":      (315, 288, 292),
+    "X2D":      (230, 230, 234),
 }
 
 # ─── Materials ──────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ MATERIALS = {
     "PEEK": {"min_wall": 2.0, "min_temp": 330, "max_temp": 350, "bed": 120, "infill_deco": 25, "infill_func": 50, "enclosed": True},
 }
 
-ENCLOSED_PRINTERS = {"P1S", "P2S", "X1C", "X1E", "H2C", "H2S", "H2D"}
+ENCLOSED_PRINTERS = {"P1S", "P2S", "X1C", "X1E", "H2C", "H2S", "H2D", "X2D"}
 HIGH_TEMP_PRINTERS = {"H2C", "H2D"}
 
 # ─── Named Constants ─────────────────────────────────────────────
