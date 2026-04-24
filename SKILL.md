@@ -1,7 +1,7 @@
 ---
 name: bambu-studio-ai
-description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 9 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D)."
-version: "1.0.1"
+description: "Bambu Lab 3D printer control and automation. Activate when user mentions: printer status, 3D printing, slice, analyze model, generate 3D, AMS filament, print monitor, Bambu Lab, or any 3D printing task. Full pipeline: search → generate → analyze → colorize → preview → open BS → user slice → print → monitor. Supports all 10 Bambu Lab printers (A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D, X2D)."
+version: "1.0.2"
 license: MIT
 author: TieGaier
 metadata:
@@ -42,7 +42,7 @@ env:
     description: "Connection mode: local (default, recommended) or cloud"
   - name: BAMBU_MODEL
     required: false
-    description: "Printer model (e.g., H2D, A1 Mini, X1C)"
+    description: "Printer model (e.g., X2D, H2D, A1 Mini, X1C)"
   - name: BAMBU_EMAIL
     required: false
     description: "Bambu account email (cloud mode only)"
@@ -571,7 +571,7 @@ User can adjust frequency. Track reported milestones to avoid duplicates.
 
 Triggered when `config.json` doesn't exist. Conversational:
 
-1. **Printer model** — A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D
+1. **Printer model** — A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D, X2D
 2. **Connection** — LAN (recommended: IP + serial + access code) or Cloud (email + password, limited)
 3. **Print mode** — MUST explain clearly to user:
    - **Option A: Recommended (safe)** — Agent generates model → opens in Bambu Studio → user slices, reviews, and prints manually. No special printer settings needed.
@@ -647,7 +647,7 @@ pip3 install bambulabs-api bambu-lab-cloud-api requests trimesh numpy Pillow ddg
 
 ## Reference Documents
 
-- `references/model-specs.md` — All 9 printer specifications
+- `references/model-specs.md` — All 10 printer specifications
 - `references/manifold-examples.md` — Parametric modeling API, tolerance tables, CSG patterns
 - `references/bambu_filament_colors.json` — Bambu Lab 43-color palette (reference only, colorize v4 uses texture-native colors)
 - `references/bambu-mqtt-protocol.md` — MQTT protocol
