@@ -6,8 +6,8 @@ Idea → Search/Generate → Analyze & Repair → Preview → Bambu Studio → P
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-bambu--studio--ai-blue)](https://clawhub.ai/heyixuan2/bambu-studio-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-57%20passed-brightgreen)]()
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)]()
+[![Tests](https://img.shields.io/badge/tests-67%20passed%2C%201%20skipped-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-1.0.2-blue)]()
 
 ---
 
@@ -145,7 +145,7 @@ python3 scripts/bambu.py gcode "G28"     # Raw G-code
 **LAN mode** (recommended): MQTT + FTP, full control, camera access, G-code, sub-second response.
 **Cloud mode**: Remote access when not on same network, limited features.
 
-Supports **all 9 Bambu Lab printers**: A1 Mini, A1, P1S, P2S, X1C, X1E, H2C, H2S, H2D.
+Supports **all 10 Bambu Lab printers**: A1 Mini, A1, P1S, P2S, X1C, X1E, X2D, H2C, H2S, H2D.
 
 ### 8. AI Print Monitoring
 
@@ -298,7 +298,7 @@ bambu-studio-ai/                    ~7,800 lines of Python
 │   ├── slice.py                    OrcaSlicer CLI
 │   ├── doctor.py                   Dependency verification
 │   └── common.py                   Shared config, constants
-├── tests/                          57 tests (pytest)
+├── tests/                          68 tests (pytest)
 ├── references/                     Protocol docs, filament colors, prompt guides
 └── .cursor/rules/                  Agent memory (colorize, parametric)
 ```
@@ -349,6 +349,8 @@ PRs welcome! Areas that need help:
 
 | Version | Highlights |
 |---------|-----------|
+| **1.0.2** | Add X2D printer support, MIT license text fix, CI workflow for pytest + ruff, docs/version sync |
+| **1.0.1** | Test suite fixes: parametric skip handling and scoring stability |
 | **1.0.0** | Pipeline sizing fix (`--height` across all tools), smart unit detection in colorize, Printpal format fix, preview dimension verification, parametric modeling (`manifold3d`), 57-test suite, download integrity, MQTT timeout, search dedup |
 | **0.23.0** | Colorize → 6-module package, common.py, pyproject.toml, pytest, BYTE_COLOR fix |
 | **0.22.0** | Colorize v4: HSV + CIELAB + vertex-color OBJ. Preview renderer (Blender Cycles) |

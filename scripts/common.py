@@ -4,7 +4,7 @@ Eliminates duplication across analyze.py, generate.py, colorize/, preview.py,
 slice.py, monitor.py, and bambu.py.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 
 import os
 import json
