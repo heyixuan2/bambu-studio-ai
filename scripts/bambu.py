@@ -316,6 +316,7 @@ class CloudBackend:
             try:
                 self.client = BambuClient(token=cached_token)
                 print("✅ Using cached login token")
+                self._resolve_device()
                 return
             except Exception:
                 print("⚠️ Cached token invalid, re-authenticating...")
@@ -366,22 +367,32 @@ class CloudBackend:
             print("   💡 TIP: If stuck on verification codes, use LAN mode instead (faster + more features)")
             sys.exit(1)
 
-        # Get printer
+        # Resolve which printer to control (also runs on the cached-token path).
+        self._resolve_device()
+
+    def _resolve_device(self):
+        """Determine self.device_id from env or the account's device list.
+
+        Called on both the cached-token and fresh-login paths so that
+        self.device_id is always set before any command runs.
+        """
         device_id = os.environ.get("BAMBU_DEVICE_ID", "")
         if device_id:
             self.device_id = device_id
-        else:
-            try:
-                devices = self.client.get_devices()
-                if not devices:
-                    print("❌ No printers found on your Bambu account")
-                    sys.exit(1)
-                self.device_id = devices[0].get("dev_id", devices[0].get("id", ""))
-                name = devices[0].get("name", self.device_id)
-                print(f"📡 Using printer: {name}")
-            except Exception as e:
-                print(f"❌ Cannot get printer list: {e}")
+            return
+        try:
+            devices = self.client.get_devices()
+            if not devices:
+                print("❌ No printers found on your Bambu account")
                 sys.exit(1)
+            self.device_id = devices[0].get("dev_id", devices[0].get("id", ""))
+            name = devices[0].get("name", self.device_id)
+            print(f"📡 Using printer: {name}")
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"❌ Cannot get printer list: {e}")
+            sys.exit(1)
 
     def get_status(self):
         try:
