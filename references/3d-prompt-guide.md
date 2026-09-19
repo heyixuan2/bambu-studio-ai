@@ -35,7 +35,7 @@ This is a rule of thumb, not a guarantee: check the result with `analyze.py`, an
 ## Image-to-3D
 
 - One object, centred, evenly lit, on a plain background; no reflections or transparency.
-- The CLI sends one image. PNG or JPEG work everywhere; Meshy does not take WebP.
+- The CLI sends one image. PNG or JPEG work everywhere; a local WebP works only with Rodin.
 - The image leaves the user's computer (it is uploaded to the provider): say so first.
 - `--prompt` is only used by Rodin. Meshy and Tripo image-to-3D have no prompt field, so
   `generate.py` doesn't send it and says so.

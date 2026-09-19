@@ -117,7 +117,7 @@ def build_generator(provider_name, config, *, as_json):
         hint = (f"No API key for {provider_name}. Save it with: python3 scripts/configure.py "
                 f"secret {provider_name}_api_key   (it prompts for the key, or reads it from stdin)")
         return None, fail(hint, EXIT_CONFIG, as_json=as_json, kind="not_configured")
-    options = {"rodin_tier": str(config.get("rodin_tier") or "")}
+    options = {"rodin_tier": str(get_config("BAMBU_RODIN_TIER", config, "rodin_tier") or "")}
     provider = create_provider(provider_name, ProviderSettings(api_key=key, options=options))
     notify = (lambda message: print(f"⏳ {message}", file=sys.stderr))
     generator = Generator(provider, output_dir=Path(output_dir("models", create=False)),

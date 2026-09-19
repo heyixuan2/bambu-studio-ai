@@ -146,6 +146,21 @@ def test_bad_task_id_is_exit_2(capsys):
     assert _json(capsys)[0]["error"]["type"] == "bad_input"
 
 
+def test_rodin_tier_comes_from_env_or_config(monkeypatch, capsys):
+    seen = {}
+
+    def capture(name, settings):
+        seen.update(settings.options)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(generate, "create_provider", capture)
+    monkeypatch.setenv("BAMBU_3D_API_KEY", "k")
+    monkeypatch.setenv("BAMBU_RODIN_TIER", "Gen-2.5-High")
+    with pytest.raises(SystemExit):
+        generate.main(["text", "a cat", "--provider", "rodin"])
+    assert seen == {"rodin_tier": "Gen-2.5-High"}
+
+
 def test_key_lookup_order(monkeypatch):
     config = {"tripo_api_key": "tripo-key", "3d_api_key": "shared-key"}
     assert generate.api_key("tripo", config) == "tripo-key"

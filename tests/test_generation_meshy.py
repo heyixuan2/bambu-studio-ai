@@ -142,6 +142,21 @@ def test_local_image_is_sent_as_a_data_uri(tmp_path):
     assert session.posts("/files") == []  # there is no Meshy upload endpoint
 
 
+def test_image_task_is_polled_on_its_own_route_and_downloaded(tmp_path):
+    (tmp_path / "cat.jpg").write_bytes(image_bytes("JPEG"))
+    model = make_glb(tmp_path / "src.glb", (0.9, 0.7, 1.2))
+    session = (FakeSession().on("POST", I2, "meshy/create_image")
+               .on("GET", f"{I2}/{IMAGE}", "meshy/image_succeeded")
+               .on("GET", asset(IMAGE, "glb"), model))
+    gen = generator(session, tmp_path)
+    ref = gen.submit(GenerationRequest(prompt=None, image=load_image(str(tmp_path / "cat.jpg"))))
+    result = gen.complete(ref, output_format="glb", texture=True, height_mm=None, timeout_s=60)
+    assert result.task_id == f"meshy:image:{IMAGE}"
+    assert session.gets(f"/v1/image-to-3d/{IMAGE}")  # not the text-to-3d route
+    assert session.gets("/v2/text-to-3d") == []
+    assert Path(result.output_file).read_bytes() == model
+
+
 def test_image_url_is_passed_through(tmp_path):
     session = FakeSession().on("POST", I2, "meshy/create_image")
     generator(session, tmp_path).submit(

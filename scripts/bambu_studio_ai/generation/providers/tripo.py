@@ -44,6 +44,8 @@ BASE_URL = "https://openapi.tripo3d.ai/v3"
 DEFAULT_MODEL = "v3.1-20260211"
 #: Formats ``/v3/models/convert`` produces for printing (geometry only).
 SERVER_FORMATS = frozenset({"stl", "3mf"})
+#: ``POST /v3/files`` takes JPEG and PNG (image-to-model also reads WebP, but only by URL).
+UPLOAD_TYPES = frozenset({"image/png", "image/jpeg"})
 
 _STATES = {
     "queued": TaskState.QUEUED,
@@ -92,8 +94,8 @@ class TripoProvider:
         if image.url is not None:
             source = image.url
         else:
-            if image.data is None:
-                raise InputError("the image has no data")
+            if image.data is None or image.mime not in UPLOAD_TYPES:
+                raise InputError(f"Tripo's upload accepts PNG or JPEG images, not {image.mime}")
             files = [("file", (upload_name(image), image.data, image.mime))]
             uploaded = _data(
                 self._http.post_json(f"{BASE_URL}/files", headers=self._headers, files=files)

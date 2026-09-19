@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from bambu_studio_ai.generation import scale
-from bambu_studio_ai.generation.errors import ProviderError
+from bambu_studio_ai.generation.errors import InputError, ProviderError
 from bambu_studio_ai.generation.inputs import load_image
 from bambu_studio_ai.generation.ledger import FollowUpLedger
 from bambu_studio_ai.generation.pipeline import Generator
@@ -66,6 +66,15 @@ def test_local_image_is_uploaded_then_referenced_by_token(tmp_path):
     assert (filename, mime) == ("toy.jpg", "image/jpeg")
     assert data == (tmp_path / "toy.jpg").read_bytes()
     assert create.json == {"input": "file_01J8ZKQ4UPLOAD", "model": "v3.1-20260211"}
+
+
+def test_local_webp_is_rejected_before_uploading(tmp_path):
+    (tmp_path / "toy.webp").write_bytes(image_bytes("WEBP"))
+    session = FakeSession()
+    with pytest.raises(InputError, match="PNG or JPEG"):
+        generator(session, tmp_path).submit(
+            GenerationRequest(prompt=None, image=load_image(str(tmp_path / "toy.webp"))))
+    assert session.calls == []
 
 
 def test_image_url_goes_straight_into_input(tmp_path):
