@@ -35,8 +35,10 @@ def resources_dir():
     """
     candidates = [os.environ.get("BAMBU_STUDIO_RESOURCES", "")] + _DEFAULT_RESOURCES.get(sys.platform, [])
     for candidate in candidates:
-        if candidate and (Path(candidate) / "profiles" / "BBL" / "machine").is_dir():
-            return Path(candidate)
+        # Both halves are needed; ~/Library/.../BambuStudio/system/ has profiles but no printers/.
+        root = Path(candidate) if candidate else None
+        if root and (root / "profiles" / "BBL" / "machine").is_dir() and (root / "printers").is_dir():
+            return root
     return None
 
 
