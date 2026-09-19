@@ -14,9 +14,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import use_utf8_stdio
 from common import (
-    find_blender, find_orcaslicer, find_bambu_studio, BLENDER_PATHS, ORCASLICER_PATHS,
+    find_blender, find_bambu_studio,
     SKILL_DIR, home_dir, user_file, output_dir, __version__,
 )
+from bambu_studio_ai.slicing import find_cli, find_profiles_dir
 
 REQUIRED = {
     "requests": {"min": "2.31", "import": "requests"},  # also model search (MakerWorld + Printables APIs)
@@ -104,6 +105,12 @@ def main():
         print(f"  ✅ {' '.join(bs_cmd)}")
     else:
         print("  ⚠️ Not found — install from https://bambulab.com/en/download/studio")
+    cli = find_cli()
+    profiles = find_profiles_dir(cli=cli)
+    print(f"  ✅ Bambu Studio CLI: {' '.join(cli)}" if cli
+          else "  ⚠️ Bambu Studio CLI: not found (slice.py needs it)")
+    print(f"  ✅ Profiles: {profiles}" if profiles
+          else "  ⚠️ Profiles: not found (slice.py needs them; start Bambu Studio once)")
 
     print("\nBlender:")
     ok, ver, path = check_blender()
@@ -112,15 +119,6 @@ def main():
         print(f"     Path: {path}")
     else:
         print("  ⚠️ Not found (needed for preview.py and colorize) — https://www.blender.org/download/")
-
-    print("\nOrcaSlicer (for slicing):")
-    orca_path = find_orcaslicer()
-    if orca_path:
-        print(f"  ✅ OrcaSlicer found")
-        print(f"     Path: {orca_path}")
-    else:
-        print("  ⚠️ OrcaSlicer not installed (needed for slice.py)")
-        print("     Install from: https://github.com/SoftFever/OrcaSlicer")
 
     print(f"\nConfig ({home_dir()}):")
     legacy_in_use = False

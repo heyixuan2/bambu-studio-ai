@@ -199,38 +199,17 @@ if _SYSTEM == "Darwin":
         os.path.expanduser("~/Applications/Blender.app/Contents/MacOS/Blender"),
         "blender",
     ]
-    ORCASLICER_PATHS = [
-        "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
-        os.path.expanduser("~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer"),
-    ]
-    BAMBU_STUDIO_PROFILE_PATHS = [
-        "/Applications/BambuStudio.app/Contents/Resources/profiles/BBL",
-        os.path.expanduser("~/Library/Application Support/BambuStudio/system/BBL"),
-    ]
 elif _SYSTEM == "Linux":
     BLENDER_PATHS = [
         "blender",
         "/usr/bin/blender",
         "/snap/bin/blender",
     ]
-    ORCASLICER_PATHS = [
-        "OrcaSlicer",
-        os.path.expanduser("~/OrcaSlicer/OrcaSlicer"),
-    ]
-    BAMBU_STUDIO_PROFILE_PATHS = [
-        os.path.expanduser("~/.config/BambuStudio/system/BBL"),
-    ]
 else:  # Windows
     _pf = os.environ.get("PROGRAMFILES", "C:\\Program Files")
     BLENDER_PATHS = [
         os.path.join(_pf, "Blender Foundation", "Blender", "blender.exe"),
         "blender",
-    ]
-    ORCASLICER_PATHS = [
-        os.path.join(_pf, "OrcaSlicer", "orca-slicer.exe"),
-    ]
-    BAMBU_STUDIO_PROFILE_PATHS = [
-        os.path.join(os.environ.get("APPDATA", ""), "BambuStudio", "system", "BBL"),
     ]
 
 
@@ -251,25 +230,10 @@ def find_blender():
     return None
 
 
-def find_orcaslicer():
-    """Find OrcaSlicer executable. Returns path or None."""
-    for p in ORCASLICER_PATHS:
-        if os.path.exists(p):
-            return p
-    return None
-
-
-def find_bambu_studio_profiles():
-    """Find Bambu Studio profile directory. Returns path or None."""
-    for p in BAMBU_STUDIO_PROFILE_PATHS:
-        if os.path.isdir(p):
-            return p
-    return None
-
-
 def find_bambu_studio():
-    """Return the command (list) that launches Bambu Studio, or None if not installed.
-    The model path gets appended to this list."""
+    """Return the command (list) that launches the Bambu Studio app, or None if not installed.
+    The model path gets appended to this list. (Slicing uses the command-line binary:
+    bambu_studio_ai.slicing.find_cli.)"""
     if _SYSTEM == "Darwin":
         for app in ("/Applications/BambuStudio.app",
                     os.path.expanduser("~/Applications/BambuStudio.app")):
