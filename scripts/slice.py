@@ -1,584 +1,346 @@
 #!/usr/bin/env python3
 """
-Bambu Lab Slicer — CLI slicing via OrcaSlicer with auto profile merging.
+Slice a model with the Bambu Studio command line and report print time and filament.
 
-Resolves Bambu Studio profile inheritance chains, fixes known compatibility
-issues, and produces print-ready 3MF files with embedded G-code.
+Uses the Bambu Studio installed on this computer and its own printer profiles, so the
+sliced 3MF keeps the printer's real start sequence (bed levelling, vibration
+compensation, AMS loading) and opens in Bambu Studio ready to print. The time is the
+slicer's own estimate, including that start sequence.
 
 Usage:
-  python3 scripts/slice.py model.stl                          # Slice with defaults (H2D, 0.20mm, PLA)
-  python3 scripts/slice.py model.stl --quality fine            # 0.12mm layer height
-  python3 scripts/slice.py model.stl --quality draft           # 0.28mm layer height
-  python3 scripts/slice.py model.stl --orient --arrange        # Auto-orient + arrange
-  python3 scripts/slice.py model.stl --filament "Bambu PETG Basic"
-  python3 scripts/slice.py model.stl --output /path/to/out.3mf
-  python3 scripts/slice.py --list-profiles                     # Show available profiles
+  python3 scripts/slice.py model.stl                     # configured printer, 0.4 nozzle, its default PLA
+  python3 scripts/slice.py model.3mf --printer P1S --quality fine
+  python3 scripts/slice.py model.stl --material PETG --layer-height 0.16 -o out.3mf
+  python3 scripts/slice.py model.stl --json              # one JSON document on stdout
+  python3 scripts/slice.py --list-profiles --printer A1  # nozzles, qualities, materials
+
+Exit codes: 0 ok · 1 slicing failed · 2 bad arguments / printer not configured ·
+3 Bambu Studio not installed.
 """
 
-import os, sys, json, subprocess, argparse, shutil, tempfile, glob, re
+import argparse
+import json
+import sys
+from pathlib import Path
 
-# ─── Paths ───
-from common import use_utf8_stdio
-from common import (
-    SKILL_DIR as _skill_dir, load_config,
-    find_orcaslicer, find_bambu_studio_profiles,
+from bambu_studio_ai.slicing import (
+    GUI_ONLY_SUFFIXES,
+    MODEL_SUFFIXES,
+    PRINTER_FAMILIES,
+    QUALITIES,
+    PrintRequest,
+    ProfileChoice,
+    ProfileError,
+    ProfileLibrary,
+    ResolveError,
+    SliceError,
+    SliceJob,
+    SliceResult,
+    find_cli,
+    find_profiles_dir,
+    printer_key,
+    resolve_profiles,
+    run_slice,
 )
-_cfg = load_config(include_secrets=True)
+from bambu_studio_ai.slicing.resolve import (
+    compatible,
+    find_filament,
+    find_machine,
+    find_process,
+    layer_heights,
+    machines_by_nozzle,
+    material_types,
+)
+from common import get_config, load_config, use_utf8_stdio
+
+EXIT_OK, EXIT_FAILED, EXIT_CONFIG, EXIT_DEPENDENCY = 0, 1, 2, 3
+
+INSTALL_HINT = (
+    "Bambu Studio not found. Install it from https://bambulab.com/en/download/studio "
+    "(02.05.02 or newer) and start it once. If it is installed somewhere unusual, set "
+    "BAMBU_STUDIO_CLI to its executable and BAMBU_STUDIO_PROFILES to the folder holding BBL.json."
+)
+
+REMOVED_FLAGS = {
+    "--filament": "`--filament` was renamed to `--material`. It takes a type (PLA, PETG, TPU) "
+                  "or a Bambu Studio filament name, e.g. --material \"Bambu PETG HF\".",
+    "--orient": "slice.py no longer re-orients models: it slices them as placed, so the "
+                "orientation chosen by `analyze.py --orient` or in Bambu Studio is what prints.",
+    "--arrange": "slice.py no longer arranges the plate: Bambu Studio centres a single model "
+                 "on the plate, and a 3MF keeps its own arrangement.",
+    "--no-detect": "slice.py no longer asks the printer what it is. It uses --printer, or the "
+                   "configured model (python3 scripts/configure.py set model P1S).",
+}
 
 
-def find_slicer():
-    p = find_orcaslicer()
-    if p:
-        return p
-    print("❌ OrcaSlicer not found. Install from https://github.com/SoftFever/OrcaSlicer")
-    sys.exit(1)
-
-def find_profiles_dir():
-    p = find_bambu_studio_profiles()
-    if p:
-        return p
-    print("❌ Bambu Studio profiles not found. Install Bambu Studio first.")
-    sys.exit(1)
-
-# ─── Profile Merger ───
-
-def load_profile(name, subdir, profiles_dir):
-    """Load a profile JSON, resolving inheritance + includes recursively."""
-    if os.path.isabs(name):
-        path = os.path.realpath(name)
-        profiles_real = os.path.realpath(profiles_dir)
-        if not (path == profiles_real or path.startswith(profiles_real + os.sep)):
-            raise ValueError(f"Profile path must be under profiles dir: {name}")
-    else:
-        path = os.path.join(profiles_dir, subdir, name)
-        if not path.endswith(".json"):
-            path += ".json"
-
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Profile not found: {path}")
-
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Resolve parent inheritance
-    parent_name = data.get("inherits")
-    if parent_name:
-        try:
-            parent = load_profile(parent_name, subdir, profiles_dir)
-            merged = {**parent, **data}
-        except FileNotFoundError:
-            merged = data
-    else:
-        merged = data
-
-    # Resolve includes (template gcode files)
-    includes = data.get("include", [])
-    for inc in includes:
-        try:
-            inc_data = load_profile(inc, subdir, profiles_dir)
-            merged.update(inc_data)
-        except FileNotFoundError:
-            pass
-
-    return merged
-
-def fix_machine_profile(profile, machine_name=""):
-    """Fix known issues in machine profiles for OrcaSlicer CLI compatibility."""
-    # 1. nozzle_volume_type from default
-    if "nozzle_volume_type" not in profile and "default_nozzle_volume_type" in profile:
-        profile["nozzle_volume_type"] = profile["default_nozzle_volume_type"]
-
-    # 2. Ensure 'from' field
-    if not profile.get("from"):
-        profile["from"] = "system"
-
-    # 3. printer_technology
-    if not profile.get("printer_technology"):
-        profile["printer_technology"] = "FFF"
-
-    # 4. Fix name and setting_id (overwritten by last include template)
-    # Must match compatible_printers in process profiles
-    if machine_name:
-        profile["name"] = machine_name
-        profile["setting_id"] = machine_name
-
-    # 5. G92 E0 in layer_change_gcode (required for relative E)
-    lgc = profile.get("layer_change_gcode", "")
-    if "G92 E0" not in lgc:
-        profile["layer_change_gcode"] = "G92 E0\n" + lgc
-
-    # 6. Simplify gcode templates containing BS 2.5+ syntax
-    for gcode_key in ["machine_start_gcode", "change_filament_gcode"]:
-        gc = profile.get(gcode_key, "")
-        # Check for variables OrcaSlicer doesn't know
-        unknown_patterns = [
-            "initial_no_support_extruder", "overall_chamber_temperature",
-            "min_vitrification_temperature", "cooling_filter_enabled",
-            "flush_volumetric_speeds", "retraction_distances_when_cut",
-            "first_non_support_filaments", "filament_map",
-            "has_tpu_in_first_layer", "long_retraction_when_ec",
-            "is_all_bbl_filament", "adaptive_pressure_advance",
-        ]
-        if any(p in gc for p in unknown_patterns):
-            if gcode_key == "machine_start_gcode":
-                profile[gcode_key] = _simplify_start_gcode(gc, profile)
-            else:
-                # For change_filament, use minimal version
-                profile[gcode_key] = "; tool change handled by firmware"
-
-    return profile
-
-def _simplify_start_gcode(gcode, profile):
-    """Strip BS 2.5.0 start gcode and use OrcaSlicer-compatible version.
-    
-    BS 2.5.0 uses many variables OrcaSlicer doesn't know (overall_chamber_temperature,
-    initial_no_support_extruder, cooling_filter_enabled, flush_volumetric_speeds, etc.).
-    Rather than whitelist hundreds of variables, we use a minimal but functional
-    start gcode that works with all OrcaSlicer versions.
-    
-    NOTE: This produces valid G-code for slicing. The actual printer start sequence
-    is handled by the printer firmware, so the simplified version is safe.
-    """
-    return """;===== Bambu Lab start (OrcaSlicer-compatible) =====
-G28 ; home all axes
-G90 ; absolute positioning
-M83 ; relative extruder
-M140 S[bed_temperature_initial_layer_single] ; set bed temp
-M104 S[nozzle_temperature_initial_layer] ; set nozzle temp
-M190 S[bed_temperature_initial_layer_single] ; wait bed
-M109 S[nozzle_temperature_initial_layer] ; wait nozzle
-G28 Z ; home Z after heating
-G1 Z5 F3000
-G1 X10 Y10 F6000 ; move to start
-G1 Z0.3 F1500 ; lower
-G1 X100 E20 F600 ; prime line
-G1 X150 E5 F1200
-G92 E0 ; reset extruder
-;===== start gcode end =====
-"""
-
-def fix_process_profile(profile):
-    """Fix known issues in process profiles."""
-    if not profile.get("from"):
-        profile["from"] = "system"
-
-    # Fix values that OrcaSlicer uses but Bambu Studio doesn't recognize
-    compat_fixes = {
-        "ensure_vertical_shell_thickness": ("ensure_all", {"enabled": "ensure_all"}),
-        "ironing_pattern": ("rectilinear", {"zig-zag": "rectilinear"}),
-        "support_ironing_pattern": ("rectilinear", {"zig-zag": "rectilinear"}),
-    }
-    for key, (default, mapping) in compat_fixes.items():
-        val = profile.get(key)
-        if val in mapping:
-            profile[key] = mapping[val]
-
-    # Fix out-of-range defaults
-    range_fixes = {
-        "prime_tower_brim_width": ("0", 0, None),
-        "solid_infill_filament": ("1", 1, None),
-        "sparse_infill_filament": ("1", 1, None),
-        "wall_filament": ("1", 1, None),
-        "tree_support_wall_count": ("0", 0, 2),
-    }
-    for key, (default, minv, maxv) in range_fixes.items():
-        val = profile.get(key)
-        if val is not None:
-            try:
-                ival = int(val) if isinstance(val, str) else val
-                if minv is not None and ival < minv:
-                    profile[key] = default
-                if maxv is not None and ival > maxv:
-                    profile[key] = default
-            except (ValueError, TypeError):
-                pass
-
-    return profile
-
-def fix_filament_profile(profile):
-    if not profile.get("from"):
-        profile["from"] = "system"
-    return profile
-
-
-def detect_printer_info():
-    """Query printer for hardware info (model, nozzle, filaments)."""
-    script = os.path.join(os.path.dirname(__file__), "bambu.py")
+def millimetres(text: str) -> float:
+    """argparse type for "0.4" / "0.4mm"."""
     try:
-        r = subprocess.run(
-            [sys.executable, script, "info", "--json"],
-            capture_output=True, text=True, timeout=30)
-        if r.returncode == 0:
-            return json.loads(r.stdout)
-    except Exception:
-        pass
+        value = float(text.lower().removesuffix("mm").strip())
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a size in mm: {text!r}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError("must be greater than 0")
+    return value
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Slice a model with Bambu Studio's command line and its own printer "
+                    "profiles; report print time and filament.",
+        epilog="The printer defaults to the configured model (configure.py set model P1S).",
+    )
+    parser.add_argument("model", nargs="?", help="model to slice: " + ", ".join(MODEL_SUFFIXES))
+    parser.add_argument("--printer", metavar="MODEL", help="printer model: " + ", ".join(PRINTER_FAMILIES))
+    parser.add_argument("--nozzle", type=millimetres, default=0.4, metavar="MM",
+                        help="nozzle diameter in mm (default: 0.4)")
+    parser.add_argument("--material", metavar="MATERIAL", help="PLA, PETG, TPU, ABS, … or a Bambu Studio filament name "
+                                           "(default: the printer's default, Bambu PLA Basic)")
+    layers = parser.add_mutually_exclusive_group()
+    layers.add_argument("--quality", choices=QUALITIES, default="standard",
+                        help="draft ≈ 0.6 × nozzle, standard = the printer's default, fine ≈ 0.3 × nozzle")
+    layers.add_argument("--layer-height", type=millimetres, metavar="MM",
+                        help="an exact layer height that has a Bambu Studio preset, e.g. 0.16")
+    parser.add_argument("-o", "--output", metavar="OUT.3mf",
+                        help="sliced 3MF to write (default: <model>_sliced.3mf next to the model)")
+    parser.add_argument("--timeout", type=float, default=300.0, metavar="SECONDS",
+                        help="seconds to allow Bambu Studio (default: 300)")
+    parser.add_argument("--json", action="store_true", help="print one JSON document")
+    parser.add_argument("--list-profiles", action="store_true",
+                        help="list printers, nozzles, qualities and materials instead of slicing")
+    return parser
+
+
+def fail(message, code, *, as_json, kind):
+    """Report an error on stderr (and as JSON on stdout with --json); return the exit code."""
+    if as_json:
+        print(json.dumps({"error": {"type": kind, "message": message}}))
+    print(f"❌ {message}", file=sys.stderr)
+    return code
+
+
+def configured_printer(requested):
+    """(model key, error kind, error message): from --printer, else the configured model."""
+    name = requested or get_config("BAMBU_MODEL", load_config(), "model")
+    valid = ", ".join(PRINTER_FAMILIES)
+    if not name:
+        return None, "not_configured", (
+            f"No printer given and none configured. Pass --printer ({valid}) "
+            "or run: python3 scripts/configure.py set model <model>")
+    key = printer_key(name)
+    if key is None:
+        return None, "unknown_printer", f"Unknown printer {name!r}. Use one of: {valid}"
+    return key, "", ""
+
+
+def load_library(*, as_json):
+    """(cli, library, exit code): the installed Bambu Studio and its profiles."""
+    cli = find_cli()
+    root = find_profiles_dir(cli=cli)
+    if cli is None or root is None:
+        return None, None, fail(INSTALL_HINT, EXIT_DEPENDENCY, as_json=as_json, kind="dependency")
+    try:
+        return cli, ProfileLibrary(root), EXIT_OK
+    except ProfileError as exc:
+        return None, None, fail(f"Bambu Studio's profiles are unreadable: {exc}", EXIT_FAILED,
+                                as_json=as_json, kind="profiles")
+
+
+def check_model(path, *, as_json):
+    """Exit code for a model file that can't be sliced, or None if it can."""
+    suffix = path.suffix.lower()
+    if not path.is_file():
+        return fail(f"File not found: {path}", EXIT_CONFIG, as_json=as_json, kind="not_found")
+    if suffix in GUI_ONLY_SUFFIXES:
+        return fail("Bambu Studio's command line can't read STEP files (the app can). Export an "
+                    "STL or 3MF from your CAD tool, or open the STEP with `python3 scripts/bambu.py "
+                    "open` and slice it in Bambu Studio.",
+                    EXIT_CONFIG, as_json=as_json, kind="unsupported_format")
+    if suffix not in MODEL_SUFFIXES:
+        return fail(f"Can't slice {suffix or 'files without an extension'}. Use one of: "
+                    + ", ".join(MODEL_SUFFIXES), EXIT_CONFIG, as_json=as_json, kind="unsupported_format")
     return None
 
-# ─── Printer Model Mapping ───
 
-PRINTER_PROFILES = {
-    "A1 Mini":  {"machine": "Bambu Lab A1 mini", "process_suffix": "A1M"},
-    "A1":       {"machine": "Bambu Lab A1",      "process_suffix": "A1"},
-    "P1S":      {"machine": "Bambu Lab P1S",     "process_suffix": "X1C"},
-    "P2S":      {"machine": "Bambu Lab P1S",     "process_suffix": "X1C"},  # P2S uses P1S profiles
-    "X1C":      {"machine": "Bambu Lab X1 Carbon", "process_suffix": "X1C"},
-    "X1E":      {"machine": "Bambu Lab X1E",     "process_suffix": "X1E"},
-    "H2C":      {"machine": "Bambu Lab H2C",     "process_suffix": "H2C"},
-    "H2S":      {"machine": "Bambu Lab H2S",     "process_suffix": "H2S"},
-    "H2D":      {"machine": "Bambu Lab H2D",     "process_suffix": "H2D"},
-}
-
-QUALITY_MAP = {
-    "draft":    "0.24mm",
-    "standard": "0.20mm",
-    "fine":     "0.12mm",
-    "extra":    "0.08mm",
-}
-
-def resolve_profiles(printer_model, nozzle, quality, filament_name, profiles_dir):
-    """Resolve profile names for a given printer/quality/filament combo."""
-    info = PRINTER_PROFILES.get(printer_model)
-    if not info:
-        print(f"❌ Unknown printer: {printer_model}")
-        print(f"   Supported: {', '.join(PRINTER_PROFILES.keys())}")
-        sys.exit(1)
-
-    machine_base = info["machine"]
-    proc_suffix = info["process_suffix"]
-
-    # Machine profile
-    machine_name = f"{machine_base} {nozzle} nozzle"
-
-    # Process profile — try quality@suffix, fall back
-    layer = QUALITY_MAP.get(quality, quality)
-    process_candidates = [
-        f"{layer} Standard @BBL {proc_suffix}",
-        f"{layer} Fine @BBL {proc_suffix}",
-        f"{layer} Balanced Quality @BBL {proc_suffix}",
-    ]
-
-    process_name = None
-    for cand in process_candidates:
-        path = os.path.join(profiles_dir, "process", cand + ".json")
-        if os.path.exists(path):
-            process_name = cand
-            break
-
-    if not process_name:
-        # Broader search
-        pattern = os.path.join(profiles_dir, "process", f"{layer}*@BBL {proc_suffix}*.json")
-        matches = glob.glob(pattern)
-        if matches:
-            process_name = os.path.splitext(os.path.basename(matches[0]))[0]
-        else:
-            print(f"❌ No process profile found for {layer} @ {proc_suffix}")
-            sys.exit(1)
-
-    # Filament profile — match to printer
-    fil_candidates = [
-        f"{filament_name} @BBL {proc_suffix}",
-        f"{filament_name} @BBL {machine_base.split()[-1]}",
-    ]
-    filament_resolved = None
-    for cand in fil_candidates:
-        path = os.path.join(profiles_dir, "filament", cand + ".json")
-        if os.path.exists(path):
-            filament_resolved = cand
-            break
-
-    if not filament_resolved:
-        pattern = os.path.join(profiles_dir, "filament", f"{filament_name}*@BBL*{proc_suffix}*.json")
-        matches = glob.glob(pattern)
-        if not matches:
-            pattern = os.path.join(profiles_dir, "filament", f"{filament_name}*.json")
-            matches = glob.glob(pattern)
-        if matches:
-            filament_resolved = os.path.splitext(os.path.basename(matches[0]))[0]
-        else:
-            print(f"❌ No filament profile found for: {filament_name}")
-            sys.exit(1)
-
-    return machine_name, process_name, filament_resolved
-
-# ─── Main Slice ───
+def output_path(model, requested):
+    if requested:
+        return Path(requested).expanduser().resolve()
+    return model.with_name(f"{model.stem}_sliced.3mf")
 
 
-def _fix_3mf_compat(path):
-    """Patch 3MF config to use BS 2.5.0 compatible values."""
-    import zipfile, shutil, tempfile
-    
-    # Values that OrcaSlicer writes but BS considers outdated
-    replacements = {
-        '"ensure_vertical_shell_thickness": "ensure_all"': '"ensure_vertical_shell_thickness": "enabled"',
-        '"ironing_pattern": "rectilinear"': '"ironing_pattern": "zig-zag"',
-        '"support_ironing_pattern": "rectilinear"': '"support_ironing_pattern": "zig-zag"',
+def format_duration(seconds):
+    minutes = max(1, round(seconds / 60))
+    hours, mins = divmod(minutes, 60)
+    return f"{hours} h {mins} min" if hours else f"{mins} min"
+
+
+def slice_report(choice: ProfileChoice, result: SliceResult, *, model, cli, library):
+    """The --json document for a finished slice."""
+    estimate = result.estimate
+    return {
+        "schema": 1,
+        "output_file": str(result.output_file),
+        "input_file": str(model),
+        "printer": choice.printer,
+        "nozzle_mm": float(choice.nozzle),
+        "layer_height_mm": choice.layer_height_mm,
+        "material": choice.material,
+        "machine_profile": choice.machine,
+        "process_profile": choice.process,
+        "filament_profiles": [choice.filament],
+        "plate": choice.bed_type or None,
+        # total_predication: what the printer shows, start sequence included
+        "print_time_s": round(estimate.print_time_s),
+        "print_time_includes_start_sequence": True,
+        "filament_g": round(estimate.filament_g, 2),
+        "filaments": [
+            {"slot": use.slot, "filament_id": use.filament_id, "grams": round(use.grams, 2),
+             "profile": choice.filament if use.slot == 1 else None}
+            for use in estimate.filaments
+        ],
+        "plates": estimate.plates,
+        "estimate_source": estimate.source,
+        "warnings": list(estimate.warnings),
+        "bambu_studio": {"version": result.bambu_studio_version, "cli": " ".join(cli),
+                         "profiles_dir": str(library.root), "profiles_version": library.version},
+        "slice_seconds": round(result.seconds, 2),
     }
-    
-    tmppath = path + ".tmp"
-    changed = False
-    with zipfile.ZipFile(path, 'r') as zin, zipfile.ZipFile(tmppath, 'w') as zout:
-        for item in zin.infolist():
-            data = zin.read(item.filename)
-            if item.filename.endswith('.config') or item.filename.endswith('.json'):
-                text = data.decode('utf-8', errors='replace')
-                for old_val, new_val in replacements.items():
-                    if old_val in text:
-                        text = text.replace(old_val, new_val)
-                        changed = True
-                data = text.encode('utf-8')
-            zout.writestr(item, data)
-    
-    if changed:
-        shutil.move(tmppath, path)
-        print("   🔧 Patched OrcaSlicer→BS compat values")
-    else:
-        os.remove(tmppath)
 
-def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
-                quality="standard", filament="Bambu PLA Basic",
-                orient=False, arrange=False):
-    """Slice an STL file and produce a 3MF with embedded G-code."""
 
-    if not os.path.exists(stl_path):
-        # Try adding common extensions
-        for ext in [".stl", ".obj", ".3mf"]:
-            if os.path.exists(stl_path + ext):
-                stl_path = stl_path + ext
-                break
-        else:
-            print(f"❌ File not found: {stl_path}")
-            sys.exit(1)
+def print_slice(choice: ProfileChoice, result: SliceResult):
+    estimate = result.estimate
+    version = f" {result.bambu_studio_version}" if result.bambu_studio_version else ""
+    print(f"🖨️ {choice.printer} · {choice.nozzle} mm nozzle · {choice.layer_height_mm:g} mm layers · "
+          f"{choice.material}")
+    print(f"   Profiles: {choice.machine} | {choice.process} | {choice.filament}")
+    if choice.bed_type:
+        print(f"   Plate: {choice.bed_type} (the printer's default)")
+    print(f"✅ Sliced with Bambu Studio{version} in {result.seconds:.1f} s")
+    for warning in estimate.warnings:
+        print(f"⚠️ {warning}")
+    print(f"≈ {format_duration(estimate.print_time_s)} incl. start sequence · "
+          f"{estimate.filament_g:.1f} g {choice.material}")
+    print(f"➡️ Use this file: {result.output_file}")
 
-    # Resolve to absolute (relative paths break 3MF post-processing)
-    stl_path = os.path.abspath(stl_path)
-    if output_path:
-        output_path = os.path.abspath(output_path)
 
-    slicer = find_slicer()
-    profiles_dir = find_profiles_dir()
-
-    print(f"🔧 Slicer: {os.path.basename(slicer)}")
-    print(f"🖨️ Printer: {printer_model} ({nozzle}mm nozzle)")
-    print(f"📐 Quality: {quality} ({QUALITY_MAP.get(quality, quality)})")
-    print(f"🧵 Filament: {filament}")
-
-    # Resolve profile names
-    machine_name, process_name, filament_name = resolve_profiles(
-        printer_model, nozzle, quality, filament, profiles_dir)
-
-    print(f"\n📋 Profiles:")
-    print(f"   Machine:  {machine_name}")
-    print(f"   Process:  {process_name}")
-    print(f"   Filament: {filament_name}")
-
-    # Build merged profiles
-    tmpdir = tempfile.mkdtemp(prefix="bambu_slice_")
-
+def cmd_slice(args):
+    as_json = args.json
+    model = Path(args.model).expanduser().resolve()
+    code = check_model(model, as_json=as_json)
+    if code is not None:
+        return code
+    printer, kind, problem = configured_printer(args.printer)
+    if printer is None:
+        return fail(problem, EXIT_CONFIG, as_json=as_json, kind=kind)
+    output = output_path(model, args.output)
+    if output.suffix.lower() != ".3mf" or output == model:
+        return fail("-o must name a new .3mf file (not the input)", EXIT_CONFIG,
+                    as_json=as_json, kind="bad_output")
+    cli, library, code = load_library(as_json=as_json)
+    if library is None:
+        return code
+    request = PrintRequest(printer=printer, nozzle_mm=args.nozzle, material=args.material,
+                           quality=args.quality, layer_height_mm=args.layer_height)
     try:
-        # Machine
-        machine = load_profile(f"{machine_name}.json", "machine", profiles_dir)
-        machine = fix_machine_profile(machine, machine_name=machine_name)
-        machine_path = os.path.join(tmpdir, "machine.json")
-        with open(machine_path, "w", encoding="utf-8") as f:
-            json.dump(machine, f, indent=2)
+        choice = resolve_profiles(library, request)
+        job = SliceJob(model=model, output=output, timeout_s=args.timeout, bed_type=choice.bed_type,
+                       machine=library.flatten("machine", choice.machine),
+                       process=library.flatten("process", choice.process),
+                       filament=library.flatten("filament", choice.filament))
+    except ResolveError as exc:
+        return fail(str(exc), EXIT_CONFIG, as_json=as_json, kind="no_profile")
+    except ProfileError as exc:
+        return fail(f"Bambu Studio's profiles are inconsistent: {exc}", EXIT_FAILED,
+                    as_json=as_json, kind="profiles")
+    if not as_json:
+        print(f"Slicing {model.name} for {printer}…", file=sys.stderr)
+    try:
+        result = run_slice(cli, job)
+    except (SliceError, OSError) as exc:
+        return fail(f"Slicing failed: {exc}", EXIT_FAILED, as_json=as_json, kind="slice_failed")
+    if as_json:
+        print(json.dumps(slice_report(choice, result, model=model, cli=cli, library=library)))
+    else:
+        print_slice(choice, result)
+    return EXIT_OK
 
-        # Process
-        process = load_profile(f"{process_name}.json", "process", profiles_dir)
-        process = fix_process_profile(process)
-        process_path = os.path.join(tmpdir, "process.json")
-        with open(process_path, "w", encoding="utf-8") as f:
-            json.dump(process, f, indent=2)
 
-        # Filament
-        fil = load_profile(f"{filament_name}.json", "filament", profiles_dir)
-        fil = fix_filament_profile(fil)
-        fil_path = os.path.join(tmpdir, "filament.json")
-        with open(fil_path, "w", encoding="utf-8") as f:
-            json.dump(fil, f, indent=2)
+def printer_options(library, printer, nozzle):
+    """Qualities, layer heights and materials for one printer and nozzle."""
+    machine = find_machine(library, PRINTER_FAMILIES[printer], nozzle)
+    processes = compatible(library, "process", machine[0])
+    filaments = compatible(library, "filament", machine[0])
+    return {
+        "printer": printer,
+        "machine_profile": machine[0],
+        "qualities": {q: find_process(library, machine, q)[0] for q in QUALITIES},
+        "layer_heights_mm": [float(h) for h in layer_heights(processes)],
+        "materials": material_types(filaments),
+        "default_filament": find_filament(library, machine, None)[0],
+    }
 
-        # Determine number of extruders
-        nozzle_dia = machine.get("nozzle_diameter", ["0.4"])
-        num_extruders = len(nozzle_dia) if isinstance(nozzle_dia, list) else 1
-        fil_list = ";".join([fil_path] * num_extruders)
 
-        # Output path
-        if not output_path:
-            base = os.path.splitext(os.path.basename(stl_path))[0]
-            output_path = os.path.join(os.path.dirname(stl_path) or ".", f"{base}_sliced.3mf")
+def cmd_list(args):
+    as_json = args.json
+    cli, library, code = load_library(as_json=as_json)
+    if library is None:
+        return code
+    printers = [{"printer": key, "machine_family": family,
+                 "nozzles_mm": [float(n) for n in machines_by_nozzle(library, family)]}
+                for key, family in PRINTER_FAMILIES.items()]
+    printer, kind, problem = configured_printer(args.printer)
+    if kind == "unknown_printer":
+        return fail(problem, EXIT_CONFIG, as_json=as_json, kind=kind)
+    selected = None
+    if printer is not None:
+        try:
+            selected = printer_options(library, printer, args.nozzle)
+        except ResolveError as exc:
+            return fail(str(exc), EXIT_CONFIG, as_json=as_json, kind="no_profile")
+        except ProfileError as exc:
+            return fail(f"Bambu Studio's profiles are inconsistent: {exc}", EXIT_FAILED,
+                        as_json=as_json, kind="profiles")
+    if as_json:
+        print(json.dumps({"schema": 1, "profiles_dir": str(library.root),
+                          "profiles_version": library.version, "printers": printers,
+                          "qualities": list(QUALITIES), "selected": selected}))
+        return EXIT_OK
+    print(f"Bambu Studio profiles {library.version}: {library.root}")
+    print("Printers (--printer) and nozzles (--nozzle):")
+    for entry in printers:
+        nozzles = ", ".join(f"{n:g}" for n in entry["nozzles_mm"]) or "none in this Bambu Studio"
+        print(f"  {entry['printer']:8} {entry['machine_family']:22} {nozzles}")
+    if selected is None:
+        print("Add --printer MODEL to see its qualities and materials.")
+        return EXIT_OK
+    print(f"\n{selected['machine_profile']}:")
+    for quality, process in selected["qualities"].items():
+        print(f"  --quality {quality:8} → {process}")
+    print("  --layer-height " + ", ".join(f"{h:g}" for h in selected["layer_heights_mm"]))
+    print("  --material " + ", ".join(selected["materials"]))
+    print(f"  default filament: {selected['default_filament']}")
+    return EXIT_OK
 
-        # Build command
-        cmd = [slicer,
-               "--load-settings", f"{machine_path};{process_path}",
-               "--load-filaments", fil_list,
-               "--slice", "0",
-               "--export-3mf", output_path]
 
-        if orient:
-            cmd.extend(["--orient", "1"])
-        if arrange:
-            cmd.extend(["--arrange", "1"])
-
-        cmd.append(stl_path)
-
-        print(f"\n⚙️ Slicing...")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-        # Filter out harmless OpenGL errors
-        stderr_lines = [l for l in result.stderr.split("\n")
-                       if l.strip() and "gl_FragColor" not in l
-                       and "shader" not in l.lower()
-                       and "Unable to load" not in l
-                       and "Unable to compile" not in l
-                       and "can not get shader" not in l]
-
-        errors = [l for l in stderr_lines if "error" in l.lower() and "calc_exclude" not in l]
-
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-            size = os.path.getsize(output_path)
-            size_str = f"{size/1024/1024:.1f}MB" if size > 1024*1024 else f"{size/1024:.0f}KB"
-            print(f"\n✅ Sliced successfully!")
-            print(f"   📦 Output: {output_path} ({size_str})")
-
-            # Post-process 3MF: fix OrcaSlicer values that BS flags as outdated
-            try:
-                import zipfile
-                _fix_3mf_compat(output_path)
-            except Exception as e:
-                print(f"   ⚠️ Post-process warning: {e}")
-
-            # Quick 3MF validation
-            try:
-                import zipfile
-                with zipfile.ZipFile(output_path) as z:
-                    has_gcode = any("gcode" in n.lower() for n in z.namelist())
-                    print(f"   🔧 G-code: {'✅' if has_gcode else '❌ missing'}")
-            except Exception:
-                pass
-
-            return output_path
-        else:
-            print(f"\n❌ Slicing failed")
-            for line in errors:
-                print(f"   {line}")
-            if result.stdout.strip():
-                print(f"\nStdout: {result.stdout[-500:]}")
-            sys.exit(1)
-
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-def list_profiles():
-    """List available profiles."""
-    profiles_dir = find_profiles_dir()
-
-    print("🖨️ Supported Printers:")
-    for name, info in PRINTER_PROFILES.items():
-        machine = info["machine"]
-        nozzles = []
-        for n in ["0.2", "0.4", "0.6", "0.8"]:
-            if os.path.exists(os.path.join(profiles_dir, "machine", f"{machine} {n} nozzle.json")):
-                nozzles.append(n)
-        print(f"  {name:8s} — nozzles: {', '.join(nozzles) or 'default'}")
-
-    print(f"\n📐 Quality Presets:")
-    for name, layer in QUALITY_MAP.items():
-        print(f"  {name:10s} → {layer} layer height")
-
-    print(f"\n🧵 Filaments (sample):")
-    fils = glob.glob(os.path.join(profiles_dir, "filament", "Bambu PLA*.json"))
-    seen = set()
-    for f in sorted(fils)[:10]:
-        base = os.path.splitext(os.path.basename(f))[0]
-        # Extract filament name (before @)
-        name = base.split("@")[0].strip()
-        if name not in seen:
-            print(f"  {name}")
-            seen.add(name)
-
-def main():
-    parser = argparse.ArgumentParser(description="Bambu Lab CLI Slicer")
-    parser.add_argument("model", nargs="?", help="STL/OBJ file to slice")
-    parser.add_argument("--output", "-o", help="Output 3MF path")
-    parser.add_argument("--printer", default=None,
-                       help="Printer model (default: auto-detect from printer)")
-    parser.add_argument("--nozzle", default=None, help="Nozzle size (default: auto-detect)")
-    parser.add_argument("--no-detect", action="store_true",
-                       help="Skip printer auto-detection")
-    parser.add_argument("--quality", default="standard",
-                       choices=["draft", "standard", "fine", "extra"],
-                       help="Print quality (default: standard)")
-    parser.add_argument("--filament", default="Bambu PLA Basic",
-                       help="Filament name (default: Bambu PLA Basic)")
-    parser.add_argument("--orient", action="store_true", help="Auto-orient model")
-    parser.add_argument("--arrange", action="store_true", help="Auto-arrange on plate")
-    parser.add_argument("--list-profiles", action="store_true", help="List available profiles")
-
-    args = parser.parse_args()
-
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    flags = [arg.split("=", 1)[0] for arg in argv]
+    removed = next((REMOVED_FLAGS[flag] for flag in flags if flag in REMOVED_FLAGS), None)
+    if removed:
+        print(removed, file=sys.stderr)
+        return EXIT_CONFIG
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if args.list_profiles:
-        list_profiles()
-        return
-
+        return cmd_list(args)
     if not args.model:
-        parser.print_help()
-        sys.exit(1)
+        parser.error("give a model file to slice, or --list-profiles")
+    return cmd_slice(args)
 
-    # Auto-detect printer info
-    printer = args.printer
-    nozzle = args.nozzle
-    filament = args.filament
-
-    if not args.no_detect and (not printer or not nozzle):
-        print("🔍 Detecting printer info...")
-        info = detect_printer_info()
-        if info:
-            if not printer:
-                printer = info.get("model") or _cfg.get("model", "H2D")
-                print(f"   🖨️ Printer: {printer}")
-            if not nozzle:
-                nd = info.get("nozzle_diameter")
-                if nd:
-                    # Normalize: could be float, string, or list
-                    if isinstance(nd, list):
-                        nd = nd[0]
-                    nozzle = str(nd)
-                    print(f"   🔧 Nozzle: {nozzle}mm")
-            # Show AMS filaments
-            fils = info.get("filaments", [])
-            if fils:
-                print(f"   🧵 AMS ({len(fils)} slots):")
-                for f in fils:
-                    ftype = f.get("type", "")
-                    fname = f.get("name", "")
-                    color = f.get("color", "")
-                    if ftype or fname:
-                        print(f"      Slot {f.get('slot','?')}: {ftype} {fname} #{color}")
-        else:
-            print("   ⚠️ Could not reach printer, using config defaults")
-
-    printer = printer or _cfg.get("model", "H2D")
-    nozzle = nozzle or "0.4"
-
-    slice_model(
-        stl_path=args.model,
-        output_path=args.output,
-        printer_model=printer,
-        nozzle=nozzle,
-        quality=args.quality,
-        filament=filament,
-        orient=args.orient,
-        arrange=args.arrange,
-    )
 
 if __name__ == "__main__":
     use_utf8_stdio()
     try:
-        main()
+        sys.exit(main())
     except KeyboardInterrupt:
-        print("\n⏹️ Cancelled.")
         sys.exit(130)
-    except SystemExit:
-        raise
-    except Exception as e:
-        print(f"❌ Slice failed: {e}", file=sys.stderr)
-        sys.exit(1)
