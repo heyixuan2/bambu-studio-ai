@@ -17,7 +17,7 @@ def _run(args, expect_ok=True):
     """Run parametric.py with args, return CompletedProcess."""
     r = subprocess.run(
         [sys.executable, SCRIPT] + args,
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, encoding="utf-8", timeout=30,
     )
     if expect_ok:
         assert r.returncode == 0, f"Expected exit 0, got {r.returncode}\nstderr: {r.stderr}\nstdout: {r.stdout}"
@@ -170,14 +170,14 @@ class TestInvalidInput:
     def test_missing_subcommand(self):
         r = subprocess.run(
             [sys.executable, SCRIPT],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, encoding="utf-8", timeout=10,
         )
         assert r.returncode != 0
 
     def test_box_missing_args(self):
         r = subprocess.run(
             [sys.executable, SCRIPT, "box", "10"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, encoding="utf-8", timeout=10,
         )
         assert r.returncode != 0
 

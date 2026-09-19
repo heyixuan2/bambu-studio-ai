@@ -25,7 +25,7 @@ def _run(args, env_override=None, expect_ok=True):
         env.update(env_override)
     r = subprocess.run(
         [sys.executable, SCRIPT] + args,
-        capture_output=True, text=True, timeout=15, env=env,
+        capture_output=True, encoding="utf-8", timeout=15, env=env,
     )
     if expect_ok:
         assert r.returncode == 0, f"Exit {r.returncode}\nstderr: {r.stderr}\nstdout: {r.stdout}"

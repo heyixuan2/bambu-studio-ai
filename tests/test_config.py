@@ -25,7 +25,7 @@ def home(tmp_path, monkeypatch):
 
 def _configure(*args, stdin=None):
     return subprocess.run([sys.executable, os.path.join(SCRIPTS, "configure.py"), *args],
-                          input=stdin, capture_output=True, text=True, env=os.environ.copy())
+                          input=stdin, capture_output=True, encoding="utf-8", env=os.environ.copy())
 
 
 def test_home_dir_env_override(home):
@@ -83,7 +83,7 @@ def test_bambu_reads_connection_from_config(home):
         "import bambu, common; s = bambu.printer_settings(common.load_config(include_secrets=True)); "
         "print(s.ip, s.serial, s.access_code)"
     )
-    r = subprocess.run([sys.executable, "-c", code], cwd=SCRIPTS, capture_output=True, text=True,
+    r = subprocess.run([sys.executable, "-c", code], cwd=SCRIPTS, capture_output=True, encoding="utf-8",
                        env=os.environ.copy())
     assert r.stdout.strip() == "10.0.0.5 SERIAL1 abcd", r.stdout + r.stderr
 
@@ -93,5 +93,5 @@ def test_env_overrides_config(home, monkeypatch):
     monkeypatch.setenv("BAMBU_IP", "10.9.9.9")
     code = "import bambu, common; print(bambu.printer_settings(common.load_config(include_secrets=True)).ip)"
     r = subprocess.run([sys.executable, "-c", code],
-                       cwd=SCRIPTS, capture_output=True, text=True, env=os.environ.copy())
+                       cwd=SCRIPTS, capture_output=True, encoding="utf-8", env=os.environ.copy())
     assert r.stdout.strip() == "10.9.9.9"

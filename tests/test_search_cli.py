@@ -13,7 +13,7 @@ SCRIPT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "se
 def _run(args, expect_ok=True):
     r = subprocess.run(
         [sys.executable, SCRIPT] + args,
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, encoding="utf-8", timeout=30,
     )
     if expect_ok:
         assert r.returncode == 0, f"Exit {r.returncode}\nstderr: {r.stderr}\nstdout: {r.stdout}"

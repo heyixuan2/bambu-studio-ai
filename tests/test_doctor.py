@@ -14,7 +14,7 @@ class TestDoctor:
         """doctor.py should run and return 0 or 1 (never crash)."""
         r = subprocess.run(
             [sys.executable, SCRIPT],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, encoding="utf-8", timeout=30,
         )
         assert r.returncode in (0, 1), f"Unexpected exit code {r.returncode}\nstderr: {r.stderr}"
         assert "Dependency Doctor" in r.stdout
@@ -22,7 +22,7 @@ class TestDoctor:
     def test_checks_required_packages(self):
         r = subprocess.run(
             [sys.executable, SCRIPT],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, encoding="utf-8", timeout=30,
         )
         assert "Required packages:" in r.stdout
         assert "trimesh" in r.stdout
@@ -31,7 +31,7 @@ class TestDoctor:
     def test_checks_optional_packages(self):
         r = subprocess.run(
             [sys.executable, SCRIPT],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, encoding="utf-8", timeout=30,
         )
         assert "Optional packages:" in r.stdout
         assert "manifold3d" in r.stdout
@@ -39,7 +39,7 @@ class TestDoctor:
     def test_checks_tools_and_packages(self):
         r = subprocess.run(
             [sys.executable, SCRIPT],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, encoding="utf-8", timeout=30,
         )
         assert "Bambu Studio" in r.stdout
         assert "networkx" in r.stdout
