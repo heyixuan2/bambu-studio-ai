@@ -7,7 +7,9 @@ slice.py, monitor.py, and bambu.py.
 __version__ = "2.0.0"
 
 import os
+import glob
 import json
+import re
 import platform
 import shutil
 import subprocess
@@ -190,6 +192,14 @@ MAX_POLL_ITERATIONS = 120
 
 _SYSTEM = platform.system()
 
+
+def newest_first(paths):
+    """Sort install paths by the version numbers in them, newest first ("4.10" is newer than "4.9")."""
+    def version(path):
+        return [int(n) for n in re.findall(r"\d+", os.path.basename(os.path.dirname(path)))]
+    return sorted(paths, key=version, reverse=True)
+
+
 if _SYSTEM == "Darwin":
     BLENDER_PATHS = [
         "/Applications/Blender.app/Contents/MacOS/Blender",
@@ -204,8 +214,9 @@ elif _SYSTEM == "Linux":
     ]
 else:  # Windows
     _pf = os.environ.get("PROGRAMFILES", "C:\\Program Files")
+    # The installer puts each version in its own folder: "Blender Foundation\Blender 4.2".
     BLENDER_PATHS = [
-        os.path.join(_pf, "Blender Foundation", "Blender", "blender.exe"),
+        *newest_first(glob.glob(os.path.join(_pf, "Blender Foundation", "Blender*", "blender.exe"))),
         "blender",
     ]
 

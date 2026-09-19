@@ -20,7 +20,7 @@ it, and remain under that licence:
 These files hold figures read from Bambu Studio's profiles, its printer files and its filament
 colour table (`filaments_color_codes.json`): `assets/printers.json`, `assets/materials.json`,
 `assets/filaments.json` and the tables in `references/model-specs.md`. The scripts in
-`tests/datagen/` regenerate them from an installed Bambu Studio.
+`tests/datagen/` regenerate the material and filament files from an installed Bambu Studio.
 
 The skill contains no Bambu Studio code. `slice.py` and `preview.py` run the copy of Bambu Studio
 that the user installed, as a separate program.

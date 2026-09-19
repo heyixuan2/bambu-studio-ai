@@ -3,18 +3,19 @@
 **Goal:** be *the* agent skill people reach for when they want an AI-made or AI-designed object printed on a
 Bambu Lab printer, across every agent (Claude Code, Codex, Cursor, Gemini CLI, OpenClaw, …).
 
-Status: draft, 2026-09-19. Based on a line-by-line review of every file in the repo: six review slices
-(generation, analysis/CAD, colour, printer, tools, repository), a market study, and independent reproduction
-of the key bugs against the installed libraries, vendor APIs and Bambu Studio's source.
+Status: in progress. Planned 2026-09-19 from a line-by-line review of every file in the repo: six review
+slices (generation, analysis/CAD, colour, printer, tools, repository), a market study, and independent
+reproduction of the key bugs against the installed libraries, vendor APIs and Bambu Studio's source.
+**Progress as of 2026-09-20 is in [§6](#6-phases):** Phase 0 and most of Phase 1 are on `main`.
 
 ---
 
 ## 1. Summary
 
 The workflow is right and nobody else covers it end to end: search → generate or design → check → colour → preview →
-open in Bambu Studio → watch the print. The code under it is not. Most scripts were written before there was a skill
-standard, grew by accretion, and were never run against the real libraries or APIs they call. Several headline
-features do not work today, and some docs describe behaviour that does not exist.
+open in Bambu Studio → watch the print. The code under it was not. Most scripts were written before there was a skill
+standard, grew by accretion, and were never run against the real libraries or APIs they call. At the time of the
+audit several headline features did not work, and some docs described behaviour that did not exist.
 
 v3 has three parts:
 
@@ -33,7 +34,10 @@ v3 has three parts:
 | 2026-11-01 | Tripo V2 endpoints stop accepting requests | Tripo backend is dead unless migrated. Target Oct 18 |
 | 2026-11-11 | 拓竹 Skill 大赏 closes (Track 3, "让AI成为打印搭子") | Contest-ready v3.0.0 by Nov 7 |
 
-## 3. What the audit found
+## 3. What the audit found (2026-09-19)
+
+This table records the code **before** the rewrite. Everything in it is fixed on `main` as of 2026-09-20, except
+the items under "Still open" in [§6](#6-phases).
 
 ✔ = reproduced independently, beyond the reviewing agent.
 
@@ -90,28 +94,41 @@ config and secrets, Bambu Studio hand-off on all three OSes, read-only monitorin
 - **Distribution:** demo video (vertical, Chinese subtitles), ClawHub re-publish (stuck at v1.0.1), Claude plugin
   manifest, awesome-list and directory submissions.
 
-## 5. Target architecture
+## 5. Architecture (as built)
 
 See [CONVENTIONS.md §1](CONVENTIONS.md#1-layout). `SKILL.md` stays at the repo root; the library lives in
-`scripts/bambu_studio_ai/`; each `scripts/<command>.py` is a shim of ≤ 15 lines, so every command in `SKILL.md`
-keeps working by path with no install step.
+`scripts/bambu_studio_ai/` (ruff's full rule set and pyright strict); each `scripts/<command>.py` parses
+arguments and prints, so every command in `SKILL.md` keeps working by path with no install step.
 
-| Today | Becomes |
+| Command | Package |
 |---|---|
-| `generate.py` | `generation/providers/{meshy,tripo,fal}.py`, `generation/{task,download,postprocess}.py`, `cli/generate.py` |
-| `bambu.py` | `printer/{client,status,ams}.py`, `cli/printer.py` (`status`, `ams`, `info`, `open`) |
-| `monitor.py` | `monitor/{events,detectors,loop}.py`, `cli/monitor.py` |
-| `analyze.py` | `mesh/{io,units,checks,orient,repair,report}.py`, `cli/analyze.py` |
-| `parametric.py` | `cad/{runner,validate}.py`, `cad/templates/*.py`, `cli/cad.py` |
-| `colorize/` | `color/{texture,palette,segment,export_3mf}.py`, `cli/colorize.py` |
-| `search.py` | `search/{makerworld,printables,schema}.py`, `cli/search.py` |
-| `preview.py`, `slice.py` | `render/{blender,headless}.py`, `slicing/{bambu_studio,orca}.py` |
-| `common.py`, `configure.py`, `doctor.py` | `config.py`, `paths.py`, `hardware.py` (+ `assets/printers.json`, `assets/materials.json`, `assets/filaments.json`), `cli/{config,doctor}.py` |
+| `generate.py` | `generation/providers/{meshy,tripo,rodin}.py`, `generation/{task,http,download,ledger,glb,scale,pipeline}.py` |
+| `bambu.py` (read-only) | `printer/{client,report}.py` |
+| `monitor.py` (alert-only) | `monitor/events.py` |
+| `analyze.py` | `mesh/{load,units,checks,thickness,rays,orient,repair,topology,score,report}.py` |
+| `colorize` | `color/{load,sampling,palette,segment,bambu_3mf,obj,filaments,preview,pipeline}.py` |
+| `search.py` | `search/{makerworld,printables,core,schema,transport}.py` |
+| `preview.py` | `render/{blender,blender_scene,bambu_studio,software,compose,views,pipeline}.py` |
+| `slice.py` | `slicing/{discovery,profiles,resolve,runner,estimate}.py` |
+| (shared) | `hardware.py` + `assets/printers.json`, `assets/materials.json`, `assets/filaments.json` |
+| `parametric.py` | not yet: waits for the code-CAD runner (Phase 2) |
 
-Hardware and filament data come from Bambu Studio's own profile files by a script, and `references/model-specs.md`
-is generated from the same data, so code and docs can't drift.
+Material and filament data are regenerated from Bambu Studio's own profile files by `tests/datagen/`,
+`printers.json` is checked against them by a test, and `references/model-specs.md` is generated from the same
+data, so code and docs can't drift.
 
 ## 6. Phases
+
+### Progress, 2026-09-20
+
+| Phase | Done on `main` | Still open |
+|---|---|---|
+| 0 · every claim true | All 11 items. Orca support was dropped rather than kept as an opt-in | – |
+| 1 · package | Package and repo rules, `hardware` + generated data, Meshy / Tripo V3 / Rodin providers with recorded-response tests, `printer` + `monitor`, `mesh`, search adapters | fal.ai provider (no key yet); live runs with real Meshy and Tripo keys; `evals/` and the dry-run gate; config and paths still in the legacy `common.py`; `doctor --json` |
+| 2 · contest release | Colour pipeline without Blender, writing a painted Bambu Studio project (opened in the app and sliced with colour changes on 02.07.01.62); slice estimate with time and grams | Code-CAD runner and templates (`parametric.py` is the last file over 400 lines); palette read straight from the AMS (today the agent passes `bambu.py ams` colours with `--colors`); filament cost; demo video; distribution |
+| 3 · after the contest | Pulled forward: ray-cast wall thickness, per-triangle paint 3MF, HMS codes in monitor alerts | Orientation by support cost, rubric score, printer adapters, more search sites |
+
+The plan below is kept as written on 2026-09-19.
 
 ### Phase 0 · v2.1.0 "every claim true" · Sep 20–27
 
@@ -180,9 +197,9 @@ interface so non-Bambu printers can follow; Thingiverse and MyMiniFactory search
 
 | Risk | Mitigation / decision needed |
 |---|---|
-| Per-triangle paint 3MF | Import verified 2026-09-19 on Bambu Studio 2.7.1: a Bambu *project* 3MF (paint codes + `filament_colour` for N filaments) renders each face in its filament's colour; a plain 3MF falls back to one filament. Still to verify: a headless slice that actually changes filament (the audit's CLI slice stayed on filament 1). Until then the GLB hand-off is the documented path |
+| Per-triangle paint 3MF | Resolved 2026-09-20 on Bambu Studio 02.07.01.62: the project 3MF opens in the app with every filament listed and each face in its filament's colour, and `slice.py` slices it with colour changes. `colorize` writes it by default; the GLB hand-off stays documented as the alternative |
 | MakerWorld search uses an undocumented endpoint; its terms forbid automated access | Decided: on by default, read-only, one request per user query, never downloads, disclosed in `references/security.md`; Printables runs alongside so search survives if the endpoint moves |
-| Provider behaviour can't be verified without keys | Tripo and Meshy keys available for live tests; fal.ai covered by recorded responses until a key is available |
+| Provider behaviour can't be verified without keys | Recorded responses cover Meshy, Tripo V3 and Rodin. Live runs with the Tripo and Meshy keys are pending; fal.ai waits for a key |
 | build123d/OCP wheel is ~65 MB | Optional extra; manifold3d baseline always works |
 | Bambu firmware or policy changes break local read access | Read-only MQTT with the access code is what Home Assistant uses; low risk. Monitor stays optional |
 | One maintainer, seven weeks | Phase 0 and the Tripo migration are non-negotiable; Phase 2 items are ordered so any can slip to v3.1 |
