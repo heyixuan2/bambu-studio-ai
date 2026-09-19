@@ -1,33 +1,44 @@
 # Print Monitoring
 
-Monitoring needs **LAN mode** (MQTT on port 8883, camera over RTSP on port 322 via ffmpeg).
-Always ask before starting it, and ask separately before enabling `--auto-pause`.
+`monitor.py` watches a print and tells the user what matters. It is **read-only**: it reads the
+printer's status over the local network (printer IP, serial and access code, see
+[setup.md](setup.md#2-printer-status-optional)) and never pauses or changes the print. The
+printer stays in its normal mode, so the user can pause or cancel from the printer screen or the
+Bambu Handy app at any time.
+
+Always ask before starting the monitor.
 
 ## What `monitor.py` does
 
-- Polls printer status every `--interval` seconds (default 120; 300 is plenty for most prints).
-- Takes a camera snapshot each cycle: `<output dir>/snapshots/snap_<time>.jpg`.
-- Prints one line per event, line-buffered, so a background reader sees it immediately:
+- Checks the printer every `--interval` seconds (default 120; 300 is plenty for most prints).
+- Prints one line per event, flushed immediately, so a background reader sees it at once:
   ```
-  📢 NOTIFY: Print Progress — 📊 Progress: 42% | Remaining: 1h 10m | 🔥 Nozzle: 220°C | 🛏️ Bed: 60°C
-  📢 NOTIFY: Print Alert 🚨 — ⚠️ Progress stalled: 42% ... [snapshot: /path/snap_….jpg]
-  📢 NOTIFY: Print Complete ✅ — Print finished!
+  📢 NOTIFY: Watching print — cat_figurine · 12% · layer 20/136 · 1 h 40 min left
+  📢 NOTIFY: Print progress — cat_figurine · 42% · layer 57/136 · 1 h 11 min left
+  📢 NOTIFY: Print paused — Paused on the printer (filament runout, a detected problem, or by hand). …
+  📢 NOTIFY: Print finished — cat_figurine is done.
   ```
-- Also shows a desktop notification (macOS, and Linux with `notify-send`), and appends to
-  `snapshots/monitor-log.json`. State lives in `snapshots/monitor-state.json`, so `--once` runs
-  carry on where the last one stopped.
-- Exits when the print finishes, or after 5 consecutive failed status checks.
+  With `--json`, each event is one JSON object per line instead:
+  `{"kind": "finished", "severity": "info", "title": "Print finished", "message": "…"}`.
+- Shows a desktop notification for everything except routine progress (macOS, and Linux with
+  `notify-send`), and appends every event to `<output dir>/monitor/events.jsonl`.
+- Keeps its state in `~/.bambu-studio-ai/monitor-state.json`, so scheduled `--once` runs carry on
+  where the last one stopped.
+- Stops when the print ends. If the printer can't be reached it retries, and gives up after 10
+  failed checks in a row.
 
-| Event | When | Severity |
+| Event (`kind`) | When | Severity |
 |---|---|---|
-| Print started | Printing detected (with `--wait-start`) | info |
-| Progress report | Every 30 min | info |
-| Progress stalled | No progress change for 10+ min | warning |
-| Unexpected pause | Printer paused, not by the monitor | warning |
-| Temperature anomaly | Nozzle above the printer's rated max (300 °C; 350 °C on H2C/H2D), bed above 120 °C | critical |
-| Print complete | Printer went idle after printing | info |
+| `started` | A print is running (or starts, with `--wait-start`) | info |
+| `progress` | Every 30 min while printing | info |
+| `paused` | The printer paused (runout, detected problem, or by hand) | warning |
+| `alert` — printer error | The printer reports an error code | critical |
+| `alert` — HMS warning | A new HMS code appears (each code once) | warning |
+| `alert` — may be stuck | No new layer and no change in time left for 20 min while printing | warning |
+| `alert` — too hot | Nozzle or bed more than 10 °C above the printer's rating | critical |
+| `finished` / `failed` / `stopped` | The job ended: done, failed, or cancelled | info / critical / warning |
 
-With `--auto-pause`, critical alerts pause the print automatically.
+Calibration before the first layer can take a while; that is not reported as stuck.
 
 ## Choose a strategy that fits your environment
 
@@ -35,22 +46,22 @@ With `--auto-pause`, critical alerts pause the print automatically.
 later:
 
 ```
-python3 scripts/monitor.py --wait-start 30 --interval 300 [--auto-pause]
+python3 scripts/monitor.py --wait-start 30 --interval 300
 ```
 
 `--wait-start 30` handles the usual case where the model was just opened in Bambu Studio and the
-user hasn't pressed Print yet. The monitor waits up to 30 minutes for a print to start, then
-monitors it. Relay each `📢 NOTIFY` line to the user with the latest snapshot. For alerts,
-include the snapshot and what you recommend (pause, keep watching, cancel).
+user hasn't pressed Print yet: the monitor waits up to 30 minutes for a print to start, then
+watches it. Relay each `📢 NOTIFY` line to the user. For a warning or critical event, say what
+you'd suggest (check the printer, pause from Bambu Handy, keep watching) and let the user decide.
 
 **B. Scheduled checks.** If your agent can run recurring tasks but not keep a process alive,
 schedule `python3 scripts/monitor.py --once` every 5–10 minutes. It keeps state between runs
-(milestones, stall timer), so it reports the same way.
+(what was already announced, the stall timer), so it reports the same way.
 
 **C. On demand.** If neither is available, tell the user you can't watch continuously, then:
-- check when asked: `python3 scripts/bambu.py progress` and `python3 scripts/bambu.py snapshot`
+- check when asked: `python3 scripts/bambu.py status`
 - or suggest they run `python3 scripts/monitor.py --interval 300` in their own terminal. It
-  shows desktop notifications, and `monitor.py --status` summarizes the log later.
+  shows desktop notifications, and `monitor.py --status` lists recent events later.
 
 ## Status message format
 
@@ -58,18 +69,20 @@ When relaying progress to the user:
 
 ```
 🖨️ Print update: {file}
-📊 {percent}% · layer {current}/{total} · {remaining} left
-🔥 Nozzle {temp}°C · 🛏️ Bed {temp}°C
-📸 [latest snapshot]
+{percent}% · layer {current}/{total} · {remaining} left
+Nozzle {temp}/{target} °C · Bed {temp}/{target} °C
 ```
 
-If you can look at images, glance at the snapshot too. Visible spaghetti, a part knocked off the
-bed or a layer shift are worth an immediate alert even if the numbers look fine. Recommend a
-pause and let the user decide, unless they enabled auto-pause.
+## Printer error and HMS codes
 
-## Camera notes
+`bambu.py status` shows the printer's error code (8 hex digits, e.g. `0300400C`) and HMS codes
+(e.g. `0300_0100_0002_0007`). The printer screen and the Bambu Handy app show the full message
+for each code; Bambu's wiki (wiki.bambulab.com) has an HMS page per code. Quote the code to the
+user rather than guessing its meaning.
 
-- Only one client can use the camera stream at a time. Close camera views in Bambu Studio or
-  Handy if snapshots time out.
-- A sleeping printer doesn't stream. Waking it (tap the screen) helps.
-- Snapshots aren't available in cloud mode.
+## What monitoring can't do
+
+- **Camera snapshots.** The camera stream needs the printer's LAN-only settings, which this skill
+  doesn't ask users to enable. Suggest the Bambu Handy app for a live view.
+- **Pausing automatically.** Pausing from third-party software needs LAN Only + Developer Mode.
+  The monitor alerts; the user pauses from the printer or Bambu Handy.

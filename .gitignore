@@ -40,3 +40,6 @@ skills-lock.json
 # Certificates (v1.x location; v2 keeps them in ~/.bambu-studio-ai/)
 *.pem
 .cursor/
+
+# Claude Code agent worktrees (local only)
+.claude/worktrees/

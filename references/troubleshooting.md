@@ -1,29 +1,19 @@
 # Troubleshooting
 
-Start with `python3 scripts/doctor.py`. It checks packages, Blender, Bambu Studio, ffmpeg,
-OrcaSlicer, API compatibility and where the config is being read from.
+Start with `python3 scripts/doctor.py`. It checks packages, Blender, Bambu Studio and where the
+config is being read from.
 
 ## Setup and connection
 
 | Problem | Fix |
 |---|---|
-| `Missing LAN connection settings` | `configure.py show`, then set whatever is missing (see [setup](setup.md)) |
-| `Printer not reachable at …` | Printer on and awake? LAN mode on? Same network as this computer? Correct IP (it can change after a router restart)? |
-| SSL handshake warnings on LAN | Normal: the printer uses self-signed certificates. Handled automatically |
-| `API method not found` / attribute errors | `pip install --upgrade bambulabs-api` (needs 2.6.6+) |
-| Cloud asks for a verification code | Ask the user for the emailed code, then re-run with `BAMBU_VERIFY_CODE=<code>`. Or switch to LAN mode |
+| `Printer not configured: missing …` | `configure.py show`, then set whatever is missing (see [setup](setup.md#2-printer-status-optional)) |
+| `no report from … within 20 s` | Printer on? Same network as this computer? Correct IP (it can change after a router restart; check Settings → Network)? Correct serial number? |
+| `printer refused the connection: Not authorized` | Wrong LAN access code. Read it again on the printer (Settings → Network); it changes if the user refreshed it |
 | Commands run in a sandbox can't reach the printer | The agent's sandbox may block local network access. Ask the user to allow it, or to run the command themselves |
+| `bambu.py print` / `pause` / `snapshot` … "was removed" | Printer control was removed in v2.1 (it needs LAN Only + Developer Mode). Open the file in Bambu Studio and print from there; pause from the printer or Bambu Handy |
 | Config ignored after updating the skill | v1.x kept config inside the skill folder. Run `configure.py migrate` |
 | `ModuleNotFoundError` | The script ran with a Python that doesn't have `requirements.txt` installed. Use that interpreter, or install into it |
-
-## Camera
-
-| Problem | Fix |
-|---|---|
-| Snapshot timeout | Camera already in use (Bambu Studio / Handy)? Printer asleep? Wrong IP? |
-| `401` / unauthorized | Wrong access code. Check it on the printer (Settings → Device) |
-| `ffmpeg not installed` | macOS `brew install ffmpeg` · Linux `apt install ffmpeg` · Windows `winget install ffmpeg` |
-| Cloud mode | Snapshots are LAN only |
 
 ## Models and generation
 
