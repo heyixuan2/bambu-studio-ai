@@ -126,6 +126,13 @@ def test_no_matches_is_not_a_failure(sites):
     assert not report.all_failed
 
 
+def test_popular_models_for_an_ignored_query_do_not_outrank_real_matches(sites):
+    sites.printables = (200, load("printables_query_ignored.json"))  # DUMMY 13: 221,981 downloads
+    report = search("花瓶")
+    assert {r.site for r in report.results} == {"makerworld"}
+    assert report.failed_sites == ()
+
+
 def test_a_site_that_hangs_is_given_up_on_after_the_timeout(sites, monkeypatch):
     release = threading.Event()
 

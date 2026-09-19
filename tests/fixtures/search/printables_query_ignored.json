@@ -1,0 +1,114 @@
+{
+ "_recorded": "2026-09-19 POST https://api.printables.com/graphql/ searchPrints2(query='花瓶', limit=5, ordering=popular): the query is ignored and the most popular models come back",
+ "data": {
+  "searchPrints2": {
+   "items": [
+    {
+     "id": "593185",
+     "name": "DUMMY 13 Printable Jointed Figure (BETA FILES)",
+     "slug": "dummy-13-printable-jointed-figure-beta-files",
+     "nsfw": false,
+     "likesCount": 23548,
+     "downloadCount": 221981,
+     "makesCount": 2153,
+     "datePublished": "2024-09-13T04:28:35.130448+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution",
+      "abbreviation": "CC-BY"
+     },
+     "user": {
+      "publicUsername": "soozafone",
+      "handle": "soozafone"
+     },
+     "image": {
+      "filePath": "media/prints/593185/images/4864098_747f5ba4-62e1-40f8-92de-64668b8e2ba5_9314dd72-b7f7-4052-92de-341a2c3d2aa0/landscape.jpg"
+     }
+    },
+    {
+     "id": "65399",
+     "name": "12-hole playable Ocarina",
+     "slug": "12-hole-playable-ocarina",
+     "nsfw": false,
+     "likesCount": 14296,
+     "downloadCount": 76553,
+     "makesCount": 888,
+     "datePublished": "2022-12-22T19:29:52.651923+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Mikolas Zuza",
+      "handle": "MikolasZuza"
+     },
+     "image": {
+      "filePath": "media/prints/65399/images/720779_ea528fd1-c1f7-494f-92b1-8d8e5b7a86bf/nahledovka.jpg"
+     }
+    },
+    {
+     "id": "78695",
+     "name": "Mega Brick Skeleton (10:1 scale)",
+     "slug": "mega-brick-skeleton-101-scale",
+     "nsfw": false,
+     "likesCount": 10485,
+     "downloadCount": 26849,
+     "makesCount": 566,
+     "datePublished": "2024-10-01T16:43:53.418179+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Julia Ebert",
+      "handle": "JuliaEbert"
+     },
+     "image": {
+      "filePath": "media/prints/78695/images/847222_f5421640-f9ad-452b-8214-4f89ff358b0c/complete-skeleton.jpg"
+     }
+    },
+    {
+     "id": "28937",
+     "name": "Cryptex (5, 6, 7, 8 or 10 letter wheels)",
+     "slug": "cryptex-5-6-7-8-or-10-letter-wheels",
+     "nsfw": false,
+     "likesCount": 8722,
+     "downloadCount": 25518,
+     "makesCount": 528,
+     "datePublished": "2024-02-22T10:18:40.917515+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Cees",
+      "handle": "Cees"
+     },
+     "image": {
+      "filePath": "media/prints/28937/images/5956410_8e1ffaf2-5ffb-415d-ba39-8f2d740a38c8_2934bc48-efce-40b0-8135-8625d844a6a9/renaissance-black-gold-bone-black-5.jpg"
+     }
+    },
+    {
+     "id": "887071",
+     "name": "NV-AA1-12 Airflow Amplifier",
+     "slug": "nv-aa1-12-airflow-amplifier",
+     "nsfw": false,
+     "likesCount": 5564,
+     "downloadCount": 25897,
+     "makesCount": 177,
+     "datePublished": "2025-06-02T15:51:07.454616+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Noctua_at",
+      "handle": "Noctua"
+     },
+     "image": {
+      "filePath": "media/prints/887071/images/6794885_121e54e2-e3f8-4117-9a1a-c0533a938fcd_478ee812-0f9f-4280-8c81-e8ff668e76b8/noctua_nv_aa1_12_5_1.jpg"
+     }
+    }
+   ]
+  }
+ }
+}

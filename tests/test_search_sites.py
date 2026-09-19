@@ -136,6 +136,14 @@ def test_printables_no_matches_is_an_empty_list_not_a_failure():
     assert printables.parse_response(load("printables_empty.json")) == []
 
 
+def test_printables_answer_to_a_query_it_ignored_is_no_match(sites):
+    # Recorded: for 花瓶 ("vase") Printables returned its most popular models.
+    sites.printables = (200, load("printables_query_ignored.json"))
+    assert printables.search_printables("花瓶", limit=5, sort="downloads", timeout=10) == []
+    kept = printables.search_printables("playable ocarina", limit=5, sort="downloads", timeout=10)
+    assert len(kept) == 5  # one title mentions the query, so the answer is trusted
+
+
 def test_printables_licence_falls_back_to_its_full_name():
     document = printables_fixture()
     item = document["data"]["searchPrints2"]["items"][0]

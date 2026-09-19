@@ -63,7 +63,19 @@ def search_printables(
         "variables": {"query": query, "limit": limit, "ordering": ORDERING[sort]},
     }
     document = transport.post_json(ENDPOINT, payload=payload, timeout=timeout)
-    return parse_response(document)[:limit]
+    results = parse_response(document)[:limit]
+    # Printables drops words its index can't match (e.g. the two-character Chinese
+    # word 花瓶, "vase") and then returns its whole catalogue, most popular first
+    # (seen 2026-09-19). Those would outrank every real match, so if no result even
+    # mentions the query, treat it as no match.
+    return results if mentions_query(query, results) else []
+
+
+def mentions_query(query: str, results: list[ModelResult]) -> bool:
+    """Whether any result's title or page URL contains a word of ``query``."""
+    words = query.casefold().split()
+    pages = [f"{result.title} {result.url}".casefold() for result in results]
+    return any(word in page for word in words for page in pages)
 
 
 def parse_response(document: object) -> list[ModelResult]:
