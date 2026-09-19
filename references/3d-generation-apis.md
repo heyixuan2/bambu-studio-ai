@@ -1,37 +1,39 @@
-# AI 3D Generation API Reference
+# AI 3D generation APIs
 
-## Meshy (docs.meshy.ai)
-- Text-to-3D: `POST /openapi/v2/text-to-3d`
-- Image-to-3D: `POST /openapi/v1/image-to-3d`
-- Auth: `Bearer {api_key}`
-- Formats: STL, 3MF, OBJ, FBX, GLB, USDZ, BLEND
-- Pricing: Free tier → $20/mo Pro
+Checked 2026-09-19 against each vendor's docs (links below) and unauthenticated route probes
+(401 = route exists, 404 = it doesn't). Nothing here was called with a real key. Prices change;
+re-check the linked pages before quoting them to a user.
 
-## Tripo3D (platform.tripo3d.ai)
-- Text-to-3D: `POST /v2/openapi/task` type=text_to_model
-- Image-to-3D: `POST /v2/openapi/task` type=image_to_model
-- Auth: `Bearer {api_key}`
-- Python SDK: `pip install tripo3d`
-- Pricing: Free tier → $10/mo
+`generate.py` talks to these through `scripts/bambu_studio_ai/generation/providers/`.
 
-## Printpal (printpal.io/api/documentation)
-- Generate: `POST /api/generate`
-- Status: `GET /api/generate/{uid}/status`
-- Download: `GET /api/generate/{uid}/download`
-- Auth: `X-API-Key: {key}`
-- Optimized for 3D printing (printable geometry)
+| | Meshy | Tripo | Hyper3D Rodin |
+|---|---|---|---|
+| Docs | [docs.meshy.ai](https://docs.meshy.ai/llms.txt) | [developers.tripo3d.ai](https://developers.tripo3d.ai/llms.txt) (API v3) | [docs.hyper3d.ai](https://docs.hyper3d.ai/en/api-specification/rodin-gen2-5) |
+| Auth | `Authorization: Bearer msy_…` | `Authorization: Bearer …` | `Authorization: Bearer …` |
+| Text → 3D | `POST /openapi/v2/text-to-3d` `mode=preview` (untextured), then `mode=refine` with `preview_task_id` (texture) | `POST /v3/generation/text-to-model` | `POST /api/v2/rodin` (multipart form) |
+| Image → 3D | `POST /openapi/v1/image-to-3d`, `image_url` = public URL or `data:` URI (no upload endpoint; PNG/JPEG only) | `POST /v3/files` (multipart) → `file_token`, then `/v3/generation/image-to-model` with `input` = token or URL | same endpoint, 1–5 `images` files |
+| Uses `--prompt` for images | No (only `texture_prompt`, which replaces the photo as the texture guide; not sent) | No | Yes (optional) |
+| Status | `GET …/{id}` (text and image have separate routes) | `GET /v3/tasks/{id}` | `POST /api/v2/status` with `jobs.subscription_key` |
+| Vendor statuses → ours | PENDING→queued, IN_PROGRESS→running, SUCCEEDED, FAILED, CANCELED→cancelled | queued, running, success→succeeded, failed, cancelled, banned→rejected, expired, unknown (v2 docs)→failed | per job: Waiting→queued, Generating→running, Done (all)→succeeded, Failed (any)→failed; `NO_SUCH_TASK`→expired |
+| Result | `model_urls`: glb, fbx, obj+mtl, usdz, stl; 3mf only if requested in `target_formats`. Kept 3 days | `output.model_url` (GLB). Signed links expire within minutes | `POST /api/v2/download` with top-level `uuid` → `[{name, url}]` (model, textures, preview) |
+| Server-side STL/3MF | STL always listed; 3MF via `target_formats` or `POST /openapi/v1/convert` (1 credit) | `POST /v3/models/convert` `format=STL`/`3MF` (5 credits) | `geometry_file_format=stl` at submit (no 3MF) |
+| Errors | HTTP status + `{"message"}`; failed tasks carry `task_error` | `{"code", "message", "suggestion"}`, also inside HTTP 200 | HTTP 201 with `{"error", "message"}` for rejections |
+| Default in generate.py | `ai_model=latest` (Meshy 7.1 on 2026-09-18) | `model=v3.1-20260211` | `tier=Gen-2.5-Medium` (or config `rodin_tier`) |
+| Price (2026-09-19) | Preview 20 cr (+5 at 2k/4k geometry), refine 10 cr (15 at 8k), image 20 / 30 textured; API needs a paid plan since 2025-03-20, Pro from $20/mo ([pricing](https://docs.meshy.ai/api/pricing)) | $1 = 100 cr: text 10 / 20 textured, image 20 / 30, convert 5 (10 with options) ([pricing](https://developers.tripo3d.ai/en/pricing)) | 0.5 credits per Gen-2.5 task (+0.5 Extreme-High); needs a paid Rodin plan with API access ([docs](https://docs.hyper3d.ai/en/api-specification/rodin-gen2-5), [pricing](https://hyper3d.ai/pricing)) |
 
-## 3D AI Studio (docs.3daistudio.com/API)
-- Generate: `POST /v1/generate`
-- Auth: `Bearer {api_key}`
-- Early access (request API key)
+## Things to know
 
-## Hyper3D Rodin (developer.hyper3d.ai)
-- Text/Image-to-3D: `POST /api/v2/rodin` (multipart/form-data)
-- Status: `POST /api/v2/status` (subscription_key JWT polling)
-- Download: `POST /api/v2/download` (task_uuid → signed URLs)
-- Auth: `Bearer {api_key}`
-- Tiers: Regular, Gen-2 (set via `BAMBU_RODIN_TIER` or config `rodin_tier`)
-- Formats: GLB (PBR), Quad mesh mode
-- Note: Task ID is composite `uuid::subscription_key` to support status polling
-- Pricing: Business subscription required
+- **Tripo API v2 stops accepting requests on 2026-11-01 00:00 UTC+8** (notice on
+  [platform.tripo3d.ai](https://platform.tripo3d.ai)). v3 moved the base URL to
+  `https://openapi.tripo3d.ai/v3`, dropped the `type` field and unified inputs as `input`
+  ([migration guide](https://developers.tripo3d.ai/en/docs/migration-v2-to-v3)). Tripo's v3 gateway
+  answers 401 for every path without a key, so v3 routes are confirmed by the docs only.
+- **Meshy text-to-3D is two paid steps.** The preview has no texture; `generate.py` runs the refine
+  only when a coloured GLB is wanted (not for `--no-texture`, STL, 3MF or OBJ).
+- **Rodin needs `tier` on every request.** Without it Rodin falls back to the legacy Gen-1 `Regular` tier.
+- **Model sizes are arbitrary.** None of the three returns millimetres by default; pass
+  `--height MM`. Bambu Studio 2.7 reads GLB coordinates as millimetres with Z up and does not
+  convert glTF's Y-up axis (checked in its source and with `bambu-studio --export-stl`), so a
+  generated model can import lying on its back.
+- **Not supported:** Printpal and 3D AI Studio (removed: the old code called routes that don't
+  exist). fal.ai is planned as the next provider.
