@@ -17,7 +17,7 @@ import numpy as np
 
 # Add parent (scripts/) to path so `from common import ...` works
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common import find_blender, SKILL_DIR as _skill_dir
+from common import find_blender
 
 from .color_science import srgb_to_lab, classify_pixels, FAMILY_NAMES
 from .selection import (
@@ -35,8 +35,12 @@ from .bambu_map import load_bambu_palette, map_colors_to_filaments, write_bambu_
 
 def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
              colors=None, min_pct=0.001, no_merge=False, island_size=1000,
-             smooth=5, method="hybrid", bambu_map=False, geometry_protect=True):
+             smooth=5, method="hybrid", bambu_map=False, geometry_protect=True,
+             bambu_finishes=None):
     """Convert GLB to multi-color vertex-color OBJ.
+
+    With bambu_map, also suggest the closest Bambu Lab PLA filament for each colour;
+    bambu_finishes limits the suggestions to those finishes (default: opaque, matte).
 
     v4 pipeline:
       1. Extract texture (pygltflib, no Blender)
@@ -68,7 +72,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
     # ── Manual colors mode ──
     if colors:
         return _colorize_manual(
-            input_path, output_path, colors, blender, height, subdivide, bambu_map)
+            input_path, output_path, colors, blender, height, subdivide, bambu_map, bambu_finishes)
 
     # ── Step 1: Extract texture ──
     print(f"📷 Step 1: Extract texture")
@@ -206,7 +210,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
             hex_c = f"#{rgb_int[0]:02X}{rgb_int[1]:02X}{rgb_int[2]:02X}"
             print(f"   {i+1}. {hex_c} ({sc['family']}, {sc['percentage']:.1f}%)")
         if bambu_map:
-            _do_bambu_map(selected, output_path)
+            _do_bambu_map(selected, output_path, bambu_finishes)
         print(f"\n📋 Next: Import OBJ into Bambu Studio → map vertex colors to AMS filaments")
         return output_path
     else:
@@ -214,7 +218,8 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
         return None
 
 
-def _colorize_manual(input_path, output_path, colors, blender, height, subdivide, bambu_map):
+def _colorize_manual(input_path, output_path, colors, blender, height, subdivide, bambu_map,
+                     bambu_finishes=None):
     """Handle manual color mode (user provides hex colors)."""
     import re
 
@@ -271,14 +276,14 @@ def _colorize_manual(input_path, output_path, colors, blender, height, subdivide
         size_kb = os.path.getsize(output_path) // 1024
         print(f"\n✅ Output: {output_path} ({size_kb} KB)")
         if bambu_map:
-            _do_bambu_map(manual_selected, output_path)
+            _do_bambu_map(manual_selected, output_path, bambu_finishes)
         return output_path
     return None
 
 
-def _do_bambu_map(selected, output_path):
+def _do_bambu_map(selected, output_path, finishes=None):
     """Run Bambu filament mapping and print results."""
-    palette = load_bambu_palette(_skill_dir)
+    palette = load_bambu_palette(finishes) if finishes else load_bambu_palette()
     if palette:
         mappings = map_colors_to_filaments(selected, palette)
         map_path = write_bambu_map(mappings, output_path)
@@ -287,4 +292,5 @@ def _do_bambu_map(selected, output_path):
             print(f"      {m['hex']} → {m['best']['line']} "
                   f"{m['best']['name']} (ΔE {m['best']['delta_e']})")
     else:
-        print("   ⚠️ bambu_filament_colors.json not found, skip Bambu mapping")
+        print(f"   ⚠️ No Bambu PLA colours with finish {', '.join(sorted(finishes or []))}; "
+              "skipping Bambu mapping")

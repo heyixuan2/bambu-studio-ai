@@ -7,6 +7,7 @@ Usage:
   python3 scripts/colorize model.glb --height 80 --max_colors 4
   python3 scripts/colorize model.glb --colors "#FFFF00,#000000,#FF0000,#FFFFFF" --height 80
   python3 scripts/colorize model.glb --height 80 --bambu-map
+  python3 scripts/colorize model.glb --height 80 --bambu-map --bambu-finish opaque,matte,silk
   python3 scripts/colorize model.glb --height 80 --no-geometry-protect
 """
 
@@ -17,8 +18,22 @@ import argparse
 # Ensure scripts/ is in path for `from common import ...`
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from bambu_studio_ai.filaments import filament_colors
 from colorize import colorize
 from common import use_utf8_stdio
+
+
+def _finishes(parser, value):
+    """--bambu-finish as a set of finish names ('all' means every finish in the table)."""
+    known = {c.finish for c in filament_colors()}
+    if value.strip().lower() == "all":
+        return known
+    wanted = {f.strip().lower() for f in value.split(",") if f.strip()}
+    unknown = wanted - known
+    if unknown or not wanted:
+        parser.error(f"--bambu-finish: unknown finish {', '.join(sorted(unknown)) or '(none)'}; "
+                     f"choose from {', '.join(sorted(known))} or 'all'")
+    return wanted
 
 
 def main():
@@ -50,6 +65,10 @@ def main():
                         help="Majority vote smoothing passes (0=disabled)")
     parser.add_argument("--bambu-map", action="store_true",
                         help="Output _color_map.txt with suggested Bambu filaments")
+    parser.add_argument("--bambu-finish", default="opaque,matte",
+                        help="Filament finishes --bambu-map may suggest, comma-separated "
+                             "(opaque, matte, silk, translucent, glow, sparkle, metal, marble, "
+                             "wood, ...) or 'all' (default: opaque,matte)")
     parser.add_argument("--no-geometry-protect", action="store_true",
                         help="Disable curvature-based protection for eyes/buttons")
 
@@ -70,6 +89,7 @@ def main():
         smooth=getattr(args, "smooth", 5),
         method=getattr(args, "method", "hybrid"),
         bambu_map=getattr(args, "bambu_map", False),
+        bambu_finishes=_finishes(parser, args.bambu_finish),
         geometry_protect=not getattr(args, "no_geometry_protect", False),
     )
     if result is None:

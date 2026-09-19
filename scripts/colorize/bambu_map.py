@@ -1,40 +1,37 @@
 """Bambu Lab filament color mapping: match detected colors to real filaments."""
 
 import os
-import json
 
 import numpy as np
+
+from bambu_studio_ai.filaments import PLAIN_FINISHES, filament_colors
 
 from .color_science import srgb_to_lab
 
 
-def load_bambu_palette(skill_dir):
-    """Load Bambu Lab filament palette from references/bambu_filament_colors.json.
-    Returns list of dicts: {line, name, hex, rgb, lab}.
+def load_bambu_palette(finishes=PLAIN_FINISHES, materials=("PLA",)):
+    """Bambu Lab filament colours to match against, from assets/filaments.json.
+
+    Only single-colour spools of the given materials and finishes compete. The default,
+    opaque and matte PLA, keeps silk, translucent and glow filaments out: they look
+    different from the flat colour they match, so they are offered only when asked for.
+    Support materials are never offered.
+    Returns list of dicts: {line, name, hex, finish, rgb, lab}.
     """
-    path = os.path.join(skill_dir, "references", "bambu_filament_colors.json")
-    if not os.path.exists(path):
-        return []
-    with open(path) as f:
-        data = json.load(f)
     palette = []
-    for line_name, colors in data.get("filaments", {}).items():
-        for color_name, hex_val in colors.items():
-            hex_val = hex_val.strip().lstrip("#")
-            if len(hex_val) != 6:
-                continue
-            r = int(hex_val[0:2], 16) / 255.0
-            g = int(hex_val[2:4], 16) / 255.0
-            b = int(hex_val[4:6], 16) / 255.0
-            rgb = np.array([[r, g, b]])
-            lab = srgb_to_lab(rgb)[0]
-            palette.append({
-                "line": line_name,
-                "name": color_name,
-                "hex": f"#{hex_val.upper()}",
-                "rgb": np.array([r, g, b]),
-                "lab": lab,
-            })
+    for color in filament_colors():
+        if (color.support or color.pattern != "solid"
+                or color.material not in materials or color.finish not in finishes):
+            continue
+        rgb = np.array([int(color.hex[i:i + 2], 16) / 255.0 for i in (1, 3, 5)])
+        palette.append({
+            "line": color.line,
+            "name": color.name,
+            "hex": color.hex,
+            "finish": color.finish,
+            "rgb": rgb,
+            "lab": srgb_to_lab(rgb[np.newaxis, :])[0],
+        })
     return palette
 
 
