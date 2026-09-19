@@ -10,8 +10,8 @@ description: >-
   filament, slicing or print progress, even if they don't say "Bambu".
 license: MIT
 compatibility: >-
-  Python 3.10+ with requirements.txt installed. Optional: Bambu Studio (review, slicing),
-  Blender 4+ (nicer previews). Printer status needs the printer's IP, serial and LAN access code
+  Python 3.10+ with requirements.txt installed. Optional: Bambu Studio (review, slicing,
+  estimates), Blender 4+ (nicer previews). Printer status needs the printer's IP, serial and LAN access code
   on the same network; AI generation needs a provider API key. macOS, Linux, Windows.
 metadata:
   author: TieGaier
@@ -44,8 +44,9 @@ to run at each step and where the user needs to be in the loop.
   (`python3 -m pip install -r <skill-folder>/requirements.txt`, or into a venv / with `uv pip`).
 - Every script has `--help`. Scripts print progress and end with the paths of the files they
   wrote, so take file names from their output rather than guessing.
-- AI generation with `--wait` takes 1–5 minutes; a Blender turntable render takes 30–60 s. Run
-  these in the background if your environment supports it, and tell the user what's happening.
+- AI generation with `--wait` takes 1–5 minutes; a turntable render takes 10–30 s (the first
+  Blender GPU render on a machine adds about 2 minutes once). Run these in the background if your
+  environment supports it, and tell the user what's happening.
 - Printer settings live in `~/.bambu-studio-ai/` (see [setup](references/setup.md)). Only
   printer commands need them. Searching, generating, analyzing and previewing all work without
   a configured printer, so don't block those tasks on setup.
@@ -129,9 +130,15 @@ give the link and ask the user to download it. Mind the licence if they plan to 
 python3 scripts/generate.py text "cute cat figurine" --wait --height 60
 ```
 
-The prompt is rewritten for printability automatically (`--raw` skips this), and the result is
-scaled to `--height` mm. The first time, tell the user that AI models are drafts to review, not
-finished parts. Prompt tips: [references/3d-prompt-guide.md](references/3d-prompt-guide.md).
+The prompt is sent exactly as you write it, so write it well: subject first, then shape, style and
+details ([references/3d-prompt-guide.md](references/3d-prompt-guide.md)). The result is a textured
+GLB, turned upright for Bambu Studio and scaled so its height is `--height` mm. Providers: `meshy`
+(default), `tripo`, `rodin` (`--provider`). The first time, tell the user that AI models are drafts
+to review, not finished parts.
+
+If `--wait` runs out of time the task keeps running: the output (`next_command`, or
+`generate.py download <task id>`) resumes it without paying again. `--json` gives
+`output_file`, `extents_mm` and `has_texture`.
 
 **Image-to-3D**
 
@@ -139,9 +146,9 @@ finished parts. Prompt tips: [references/3d-prompt-guide.md](references/3d-promp
 python3 scripts/generate.py image photo.jpg --wait --height 80
 ```
 
-Prompt enhancement is automatic (`--raw` turns it off), and so is background removal if the
-optional `rembg` package is installed (`--no-bg-remove` turns it off). It works best with one
-centered object on a plain background. Don't ask for colors, because they come from the image.
+The image (PNG or JPEG, a local file or an http(s) URL) is sent to the provider. It works best
+with one centered object on a plain background. `--prompt` adds guidance, but only Rodin uses it
+for images. Don't ask for colors, because they come from the image.
 
 **Parametric**: collect exact dimensions, screw sizes (an M3 screw needs a 3.2 mm clearance
 hole) and fit (clearance or press fit).
@@ -171,24 +178,26 @@ python3 scripts/analyze.py model.3mf --orient --repair --height 60 --material PL
 The build-volume and material checks use the configured printer, falling back to A1. When no
 printer is configured but the user named one, pass `--printer "A1 Mini"` (any of the 13 models, e.g. `A2L`, `H2D Pro`).
 
-This runs an 11-point check (walls, overhangs, floating parts, orientation, build volume,
-material and printer compatibility, …), repairs and orients the mesh, and detects the units. It
-may write several files (`_oriented`, `_scaled`, `_repaired`, …). Its last line,
-`➡️ Use this file for the next steps: …`, names the one to continue with.
+This runs seven checks (mesh, build volume, floating parts, overhangs, wall thickness, bed
+contact, material) and gives a score out of 10, capped at 4 when the mesh can't be made
+watertight, a part floats or the model doesn't fit. It assumes millimetres unless a 3MF declares
+its unit or the model is under 0.5 units across (read as metres), and says which it assumed;
+`--unit` overrides that. Each step that changes the model writes a new file (`_scaled`,
+`_repaired`, `_oriented`, chained), and the last line, `➡️ Use this file: …` (`output_file` in
+`--json`), names the one to continue with.
 
-Pass `--height` and `--orient` for AI-generated and downloaded models: they arrive at random
-sizes and orientations. Leave both off for parametric parts. Their dimensions are already
-exact, and they were designed with the print orientation built in (largest flat face down,
-teardrop side holes pointing up). Auto-orient only optimises for stability and can flip such a
-part upside down while keeping the same footprint, so the mistake is easy to miss.
+Pass `--height` and `--orient` for downloaded models, which arrive at random sizes and
+orientations. AI models from `generate.py` are already upright and sized if you passed `--height`
+there. Leave `--orient` off for parametric parts: they were designed with the print orientation
+built in (largest flat face down, teardrop side holes pointing up). Auto-orient keeps any part
+that already rests on a large flat base.
 
-The overhang figure is area-weighted and material-aware, and "Supports: needed" is a hint,
-not a verdict. For parts you designed flat on the plate, tell the user supports are not
-needed.
+Overhangs are area-weighted against a 45° rule, and "supports likely needed" is a hint, not a
+verdict. For parts you designed flat on the plate, tell the user supports are not needed.
 
-Report the score, the repairs, any warnings and recommended settings, for example:
-"Score 8/10 · repaired 58K non-manifold edges · walls 1.5 mm ✅ · overhangs 3% ✅ · suggest 0.20 mm
-layers, 15% infill, PLA at 210 °C."
+Report the score, what was repaired, any warnings and the suggested settings, for example:
+"Score 9/10 · filled 3 small holes · thinnest wall 1.2 mm · overhangs 3 % · suggest 0.20 mm
+layers, 15 % infill, PLA."
 
 AI meshes often report dozens of "bodies". This is usually non-manifold topology rather than
 loose pieces, so look at the preview before using `--keep-main` or regenerating.
@@ -196,18 +205,19 @@ loose pieces, so look at the preview before using `--keep-main` or regenerating.
 ### 4. Preview
 
 ```
-python3 scripts/preview.py model_scaled.3mf --views turntable --height 60   # 360° GIF
-python3 scripts/preview.py model_scaled.3mf                                 # single PNG, faster
+python3 scripts/preview.py model_oriented.3mf --views turntable --height 60   # 360° GIF
+python3 scripts/preview.py model_oriented.3mf                                 # single PNG, faster
 ```
 
-This needs Blender 4+. `--height` warns you if the model isn't the intended size. Show the
-preview to the user (see [Showing results](#showing-results-to-the-user)). Without Blender, say
-so and go straight to Bambu Studio, which has its own 3D view.
+Use the file `analyze.py` named. Preview always works: it renders with Blender when it's
+installed (nicest), otherwise with Bambu Studio's thumbnail or a built-in renderer (`renderer`
+in `--json` says which). `--height` warns you if the model isn't the intended size. Show the
+preview to the user (see [Showing results](#showing-results-to-the-user)).
 
 ### 5. Hand off to Bambu Studio
 
 ```
-python3 scripts/bambu.py open model_scaled.3mf
+python3 scripts/bambu.py open model_oriented.3mf
 ```
 
 This works on macOS, Windows and Linux. Then ask the user to review and slice:
@@ -222,7 +232,7 @@ If the user asks how long it will take or how much filament it needs before open
 slice it headless with Bambu Studio's own engine and profiles (needs Bambu Studio installed):
 
 ```
-python3 scripts/slice.py model_scaled.3mf --printer P1S --material PETG [--quality draft|standard|fine] [--json]
+python3 scripts/slice.py model_oriented.3mf --printer P1S --material PETG [--quality draft|standard|fine] [--json]
 ```
 
 It prints the printer's estimate ("≈ 1 h 12 min incl. start sequence · 23.4 g PETG") and writes a

@@ -19,14 +19,15 @@ command line and its printer profiles) and where the config is being read from.
 
 | Problem | Fix |
 |---|---|
-| Generation fails or times out | Try again, try another provider, or make the prompt more specific (see [3d-prompt-guide](3d-prompt-guide.md)) |
-| `401` from provider | Wrong or expired API key: `configure.py secret 3d_api_key` |
-| Model far too small or large | Pass `--height` to generate, analyze and preview alike. Analyze auto-detects meters, cm and inches |
-| Holes, non-manifold edges, flipped normals | Expected for AI meshes. `analyze.py --repair` fixes most of it. Install `pymeshlab` for heavier repair |
-| "68 bodies" reported | Usually harmless topology. Check the preview, and use `analyze.py --repair --keep-main` only if pieces are visibly loose |
-| Floating fragments visible in the preview | `analyze.py --repair --keep-main`, or `generate.py … --auto-retry 2` |
-| Background removal hurt an image-to-3D result | Re-run with `--no-bg-remove` (needs `pip install rembg` to use it at all) |
-| Preview fails | Needs Blender 4+. Check `doctor.py`. Without Blender, skip to `bambu.py open` |
+| Generation fails | The error names the cause (credits, content filter, bad image). Try again, try another provider (`--provider tripo`), or make the prompt more specific (see [3d-prompt-guide](3d-prompt-guide.md)) |
+| Generation "still running" after `--wait` | Normal for busy providers. Run the printed `next_command` (`generate.py download <task id>`) later; it resumes without paying again |
+| `401` from provider | Wrong or expired API key: `configure.py secret <provider>_api_key` (`3d_api_key` is the fallback) |
+| Model far too small or large | Pass `--height` to generate, analyze and preview alike. Analyze only converts units on clear evidence (a 3MF's declared unit, `--unit`, or a model under 0.5 units read as metres) and otherwise reports what it assumed |
+| AI model lying on its side in Bambu Studio | Models from `generate.py` are turned upright automatically. For a GLB from elsewhere, run `analyze.py --orient` |
+| Holes, non-manifold edges, flipped normals | Expected for AI meshes. `analyze.py` fixes small defects by default and `--repair` does more. Install `pymeshlab` for heavier repair |
+| "68 bodies" reported | Usually harmless topology. Check the preview, and use `analyze.py --keep-main` only if pieces are visibly loose; it refuses when no body clearly dominates |
+| Floating fragments visible in the preview | `analyze.py --keep-main`, or generate again with a clearer prompt |
+| Preview is slow the first time | The first Blender GPU render on a machine compiles its kernels once (about 2 minutes). Use `--cpu`, or `--renderer software` for a quick check |
 
 ## Bambu Studio
 

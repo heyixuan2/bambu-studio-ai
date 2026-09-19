@@ -136,8 +136,8 @@ part in the wrong place.
 
 **Print orientation belongs in the spec.** Design the part the way it will sit on the plate
 (largest flat face at z = 0), and don't pass `--orient` to `analyze.py` afterwards. Auto-orient
-only looks at stability and can flip a part whose features have a required direction, such as
-teardrop-shaped side holes.
+keeps a part that already rests on a large flat base, but it doesn't know about features with a
+required direction, such as teardrop-shaped side holes.
 
 **Beyond the built-in helpers.** `bracket`, `plate-with-holes` and `enclosure` cover the common
 cases. Anything else (pipe clamps, hooks, clips, standoffs) is an `extrude` of a 2D outline plus

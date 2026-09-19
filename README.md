@@ -110,7 +110,7 @@ Everyday objects: **search** MakerWorld and Printables first (in about a second,
 <td width="50%" valign="top">
 
 ### Checked Before It's Printed
-Every model, downloaded or generated, passes an **11-point check** before you see it: scale, wall thickness, overhangs, floating fragments, orientation, build volume, and whether the material suits your printer. Then it's **repaired automatically**. Textured models become **AMS-ready multi-color** files with matched Bambu filaments.
+Every model, downloaded or generated, goes through **seven measured checks** before you see it: mesh integrity, build volume, floating parts, overhangs, wall thickness, bed contact, and whether the material suits your printer. Small defects are **repaired automatically**, and you get a score with the rubric behind it. Textured models become **AMS-ready multi-color** files with matched Bambu filaments.
 
 </td>
 </tr>
@@ -178,11 +178,11 @@ them.
 | Capability | Tool | Details |
 |---|---|---|
 | Model search | `search.py` | MakerWorld and Printables in parallel, with downloads, likes and licence |
-| AI generation | `generate.py` | Meshy, Tripo, Hyper3D Rodin and more, scaled to the height you ask for |
+| AI generation | `generate.py` | Meshy, Tripo, Hyper3D Rodin. Textured GLB for Bambu Studio 2.7+, stood upright and scaled to the height you ask for; resumable tasks |
 | Parametric CAD | `parametric.py` | Brackets, plates with holes, enclosures, arbitrary CSG from JSON. Always watertight, exact to 0.01 mm |
-| Printability | `analyze.py` | 11-point check, tiered repair, auto-orientation, unit detection |
+| Printability | `analyze.py` | Seven checks with a published score, tiered repair, auto-orientation, reported unit assumptions |
 | Multi-color | `colorize` | Texture → up to 8 AMS colors, nearest Bambu filament by CIELAB ΔE |
-| Preview | `preview.py` | Blender renders and 360° turntable GIFs, size verification |
+| Preview | `preview.py` | PNG and 360° turntable GIF via Blender, Bambu Studio or a built-in renderer; size check |
 | Printer | `bambu.py` | Status, progress and AMS filaments (read-only), open in Bambu Studio |
 | Monitoring | `monitor.py` | Waits for the print to start, progress reports, pause / error / HMS / stall alerts |
 | Setup | `configure.py`, `doctor.py` | Settings and secrets without editing JSON, dependency diagnostics |
@@ -293,9 +293,9 @@ Every tool is a normal CLI with `--help`:
 ```bash
 python3 scripts/search.py "vase" --limit 3
 python3 scripts/parametric.py enclosure --width 60 --depth 40 --height 30 --wall 2 --lid -o box.stl
-python3 scripts/analyze.py box.stl --orient --repair --material PETG
-python3 scripts/preview.py box_oriented.stl --views turntable
-python3 scripts/bambu.py open box_oriented.stl
+python3 scripts/analyze.py box.stl --repair --material PETG    # prints the file to use next
+python3 scripts/preview.py box.stl --views turntable
+python3 scripts/bambu.py open box.stl
 python3 scripts/monitor.py --wait-start 30 --interval 300
 ```
 

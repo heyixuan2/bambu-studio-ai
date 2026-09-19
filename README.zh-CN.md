@@ -98,8 +98,8 @@ AI     检测到打印开始。每 30 分钟给你一次进度，卡住或温度
 （约 1 秒出结果，带下载量），因为经过验证的设计比 AI 生成的靠谱。功能件用参数化 CAD，尺寸和螺丝孔
 间隙都是真实毫米。手办、角色、照片才交给 AI 文生 3D / 图生 3D，支持 Meshy、Tripo、Rodin。
 
-**打印之前先检查。** 每个模型，不管是下载的还是生成的，都先过 11 项检查：尺寸、壁厚、
-悬垂、悬空碎片、摆放方向、成型体积、材料是否适合你的机型，然后自动修复。带贴图的模型
+**打印之前先检查。** 每个模型，不管是下载的还是生成的，都先过 7 项实测检查：网格完整性、
+成型体积、悬空零件、悬垂、壁厚、底面接触、材料是否适合你的机型，小问题自动修复，并给出带评分细则的分数。带贴图的模型
 可以转成 AMS 多色文件，并匹配最接近的拓竹耗材颜色。
 
 **你始终在环。** 先给你看渲染图，再在 Bambu Studio 里由你检查、切片、亲手点「打印」。AI 可以
@@ -157,11 +157,11 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 | 能力 | 工具 | 说明 |
 |---|---|---|
 | 模型搜索 | `search.py` | MakerWorld 与 Printables 并行搜索，带下载量、点赞数和许可协议 |
-| AI 生成 | `generate.py` | Meshy、Tripo、Hyper3D Rodin 等，按目标高度缩放 |
+| AI 生成 | `generate.py` | Meshy、Tripo、Hyper3D Rodin；输出带贴图的 GLB（Bambu Studio 2.7+ 可直接导入），自动摆正并按目标高度缩放，任务可断点续取 |
 | 参数化 CAD | `parametric.py` | 支架、带孔底板、外壳、任意 CSG 组合；保证水密，精度 0.01 mm |
-| 可打印性 | `analyze.py` | 11 项检查、分级自动修复、自动摆放、单位识别 |
+| 可打印性 | `analyze.py` | 7 项检查并公开评分细则、分级自动修复、自动摆放、说明单位假设 |
 | 多色 | `colorize` | 贴图 → 最多 8 色 AMS，按 CIELAB ΔE 匹配拓竹耗材 |
-| 预览 | `preview.py` | Blender 渲染与 360° 转盘 GIF，核对尺寸 |
+| 预览 | `preview.py` | PNG 与 360° 转台 GIF，可用 Blender、Bambu Studio 或内置渲染器；核对尺寸 |
 | 打印机 | `bambu.py` | 状态、进度、AMS 耗材（只读），打开 Bambu Studio |
 | 监控 | `monitor.py` | 等待打印开始、进度播报、暂停 / 故障 / HMS / 卡住提醒 |
 | 设置 | `configure.py`、`doctor.py` | 不用手改 JSON；依赖诊断 |
@@ -251,9 +251,9 @@ Copilot、OpenCode、Cline、Amp。更新用 `npx skills update bambu-studio-ai`
 ```bash
 python3 scripts/search.py "花瓶" --limit 3
 python3 scripts/parametric.py enclosure --width 60 --depth 40 --height 30 --wall 2 --lid -o box.stl
-python3 scripts/analyze.py box.stl --orient --repair --material PETG
-python3 scripts/preview.py box_oriented.stl --views turntable
-python3 scripts/bambu.py open box_oriented.stl
+python3 scripts/analyze.py box.stl --repair --material PETG    # 最后一行会告诉你下一步用哪个文件
+python3 scripts/preview.py box.stl --views turntable
+python3 scripts/bambu.py open box.stl
 python3 scripts/monitor.py --wait-start 30 --interval 300
 ```
 
