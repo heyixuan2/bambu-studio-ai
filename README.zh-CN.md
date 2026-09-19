@@ -177,10 +177,10 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 
 | 工具 | 解锁 | 安装 |
 |---|---|---|
-| [Bambu Studio](https://bambulab.com/zh/download/studio) | 检查、切片、打印 | 官网安装包 |
+| [Bambu Studio](https://bambulab.com/zh/download/studio) | 检查、切片、打印；预估打印时间和耗材 | 官网安装包 |
 | [Blender 4+](https://www.blender.org/download/) | 渲染预览、360° 转台动图、多色处理 | 官网安装包 / `brew install --cask blender` |
 | AI 服务商密钥 | 文生 3D、图生 3D | Meshy、Tripo 或 Rodin（[设置说明](references/setup.md#3-ai-generation-optional)） |
-| OrcaSlicer、`rembg`、`pymeshlab` | 命令行切片、照片去背景、深度修复 | 见 `doctor.py` 输出 |
+| `rembg`、`pymeshlab` | 照片去背景、深度修复 | 见 `doctor.py` 输出 |
 
 ---
 

@@ -218,6 +218,16 @@ This works on macOS, Windows and Linux. Then ask the user to review and slice:
 
 Wait for their answer. If they want changes, go back to the relevant step.
 
+If the user asks how long it will take or how much filament it needs before opening Bambu Studio,
+slice it headless with Bambu Studio's own engine and profiles (needs Bambu Studio installed):
+
+```
+python3 scripts/slice.py model_scaled.3mf --printer P1S --material PETG [--quality draft|standard|fine] [--json]
+```
+
+It prints the printer's estimate ("≈ 1 h 12 min incl. start sequence · 23.4 g PETG") and writes a
+sliced 3MF. It's an estimate for planning; the user still reviews and prints from Bambu Studio.
+
 ### 6. Print
 
 The user starts the print from Bambu Studio (or Bambu Handy). Offer to watch for it starting

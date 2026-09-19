@@ -214,10 +214,10 @@ Optional tools unlock more:
 
 | Tool | Unlocks | Install |
 |---|---|---|
-| [Bambu Studio](https://bambulab.com/en/download/studio) | Reviewing, slicing and printing | macOS `brew install --cask bambu-studio` · Windows/Linux installer, AppImage or Flatpak |
+| [Bambu Studio](https://bambulab.com/en/download/studio) | Reviewing, slicing and printing; print-time and filament estimates | macOS `brew install --cask bambu-studio` · Windows/Linux installer, AppImage or Flatpak |
 | [Blender 4+](https://www.blender.org/download/) | Preview renders, turntable GIFs, multi-color | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
 | An AI provider key | Text-to-3D and image-to-3D | Meshy, Tripo or Rodin ([setup](references/setup.md#3-ai-generation-optional)) |
-| OrcaSlicer, `rembg`, `pymeshlab` | CLI slicing, photo background removal, heavy mesh repair | See `doctor.py` |
+| `rembg`, `pymeshlab` | Photo background removal, heavy mesh repair | See `doctor.py` |
 
 <br>
 

@@ -66,7 +66,7 @@ example configs) lives in the repo root tree, because everything in it ships.
   module scope. Modules expose functions; `main()` does the work.
 - **No subprocess calls to sibling scripts.** `monitor.py` shelling out to `bambu.py status` is
   the anti-pattern. Import the function.
-- **Optional dependencies are optional.** Blender, ffmpeg, OrcaSlicer, rembg, pymeshlab, an AI
+- **Optional dependencies are optional.** Blender, Bambu Studio, rembg, pymeshlab, an AI
   provider key: their absence degrades one feature with a clear message and never breaks another.
 - **Every external call has a timeout.** HTTP, MQTT connect, subprocesses, Blender.
 - **No swallowed exceptions.** `except Exception: pass` is banned (ruff `S110`/`BLE001`). Catch
