@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "about": "Bambu Lab printers the skill knows. Volumes and temperature limits come from Bambu Studio's own files (machine profiles for printable area/height, Resources/printers/*.json for rated nozzle, bed and chamber temperatures); AMS limits from Bambu's multi-AMS connection guide; status from Bambu's end-of-life announcements. Volumes are what the slicer accepts, with no safety margin: use hardware.usable_volume() to subtract one. `max_slots` counts AMS slots only; the external spool holder adds one more feed (one per nozzle on two-nozzle printers).",
+  "about": "Bambu Lab printers the skill knows. Volumes and temperature limits come from Bambu Studio's own files (machine profiles for printable area/height, Resources/printers/*.json for rated nozzle, bed and chamber temperatures); AMS limits from Bambu's multi-AMS connection guide; status from Bambu's end-of-life announcements. Volumes are what the slicer accepts, with no safety margin: use hardware.usable_volume() to subtract one. `max_slots` counts AMS slots only; the external spool holder adds one more feed (one per nozzle on two-nozzle printers). `extruders` are in Bambu Studio's extruder order; names come from its physical_extruder_map and the tool_head_display_names in Resources/printers (first extruder = left on the H2 series, main on the X2D).",
   "bambu_studio": {
     "app_version": "02.07.01.62",
     "profiles_version": "02.07.00.08",
