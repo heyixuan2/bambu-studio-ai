@@ -79,7 +79,7 @@ def _read(name):
     path = user_file(name)
     if os.path.exists(path):
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, ValueError) as e:
             print(f"⚠️ Ignoring malformed {path}: {e}")

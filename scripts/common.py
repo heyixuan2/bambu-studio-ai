@@ -113,7 +113,7 @@ def load_config(include_secrets=False):
     for path in files:
         if os.path.exists(path):
             try:
-                with open(path) as f:
+                with open(path, encoding="utf-8") as f:
                     cfg.update(json.load(f))
             except (json.JSONDecodeError, ValueError) as e:
                 # stderr, so a broken config can't corrupt a command's --json output

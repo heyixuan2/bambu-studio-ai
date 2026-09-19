@@ -150,7 +150,7 @@ class TestCSG:
             ]
         }
         spec_file = str(tmp_path / "spec.json")
-        with open(spec_file, "w") as f:
+        with open(spec_file, "w", encoding="utf-8") as f:
             json.dump(spec, f)
         out = str(tmp_path / "csg.stl")
         r = _run(["csg", spec_file, "-o", out])
@@ -159,7 +159,7 @@ class TestCSG:
 
     def test_empty_spec_fails(self, tmp_path):
         spec_file = str(tmp_path / "empty.json")
-        with open(spec_file, "w") as f:
+        with open(spec_file, "w", encoding="utf-8") as f:
             json.dump({"ops": []}, f)
         out = str(tmp_path / "empty.stl")
         r = _run(["csg", spec_file, "-o", out], expect_ok=False)

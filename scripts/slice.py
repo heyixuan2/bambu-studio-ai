@@ -57,7 +57,7 @@ def load_profile(name, subdir, profiles_dir):
     if not os.path.exists(path):
         raise FileNotFoundError(f"Profile not found: {path}")
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Resolve parent inheritance
@@ -379,21 +379,21 @@ def slice_model(stl_path, output_path=None, printer_model="H2D", nozzle="0.4",
         machine = load_profile(f"{machine_name}.json", "machine", profiles_dir)
         machine = fix_machine_profile(machine, machine_name=machine_name)
         machine_path = os.path.join(tmpdir, "machine.json")
-        with open(machine_path, "w") as f:
+        with open(machine_path, "w", encoding="utf-8") as f:
             json.dump(machine, f, indent=2)
 
         # Process
         process = load_profile(f"{process_name}.json", "process", profiles_dir)
         process = fix_process_profile(process)
         process_path = os.path.join(tmpdir, "process.json")
-        with open(process_path, "w") as f:
+        with open(process_path, "w", encoding="utf-8") as f:
             json.dump(process, f, indent=2)
 
         # Filament
         fil = load_profile(f"{filament_name}.json", "filament", profiles_dir)
         fil = fix_filament_profile(fil)
         fil_path = os.path.join(tmpdir, "filament.json")
-        with open(fil_path, "w") as f:
+        with open(fil_path, "w", encoding="utf-8") as f:
             json.dump(fil, f, indent=2)
 
         # Determine number of extruders

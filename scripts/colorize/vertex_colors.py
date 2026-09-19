@@ -173,7 +173,7 @@ print(f"Done: {{size_mb:.1f}}MB")
 '''
 
     script_file = os.path.join(tempfile.gettempdir(), "bambu_vertex_color.py")
-    with open(script_file, "w") as f:
+    with open(script_file, "w", encoding='utf-8') as f:
         f.write(script)
 
     print(f"   Blender: subdivide={subdivide}, vertex colors...")
@@ -209,7 +209,7 @@ def snap_vertex_colors(obj_path, selected_colors):
     for rgb in sel_rgb:
         color_strings.append("%.6f %.6f %.6f" % (rgb[0], rgb[1], rgb[2]))
 
-    with open(obj_path) as f:
+    with open(obj_path, encoding='utf-8') as f:
         lines = f.readlines()
 
     v_indices = []
@@ -244,7 +244,7 @@ def snap_vertex_colors(obj_path, selected_colors):
         lines[vi] = "v %s %s\n" % (v_xyz_strs[j], color_strings[cidx])
         snapped += 1
 
-    with open(obj_path, 'w') as f:
+    with open(obj_path, 'w', encoding='utf-8') as f:
         f.writelines(lines)
 
     unique_colors = len(set(nearest_idx))

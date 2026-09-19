@@ -18,7 +18,7 @@ def _make_test_obj(path, n_vertices=100, n_colors=3):
         rgb = np.clip(targets[cidx] + drift, 0, 1)
         lines.append(f"v {i*0.1:.4f} 0.0000 0.0000 {rgb[0]:.4f} {rgb[1]:.4f} {rgb[2]:.4f}\n")
     lines.append("f 1 2 3\n")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.writelines(lines)
     return targets
 
@@ -26,7 +26,7 @@ def _make_test_obj(path, n_vertices=100, n_colors=3):
 class TestSnapVertexColors:
     def test_snap_produces_exact_colors(self):
         from colorize.vertex_colors import snap_vertex_colors
-        with tempfile.NamedTemporaryFile(suffix=".obj", mode="w", delete=False) as f:
+        with tempfile.NamedTemporaryFile(encoding="utf-8", suffix=".obj", mode="w", delete=False) as f:
             path = f.name
         try:
             targets = _make_test_obj(path, n_vertices=90, n_colors=3)
@@ -38,7 +38,7 @@ class TestSnapVertexColors:
 
             # Read back and count unique color strings
             unique_colors = set()
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("v "):
                         parts = line.split()
@@ -53,7 +53,7 @@ class TestSnapVertexColors:
 
     def test_snap_handles_empty_obj(self):
         from colorize.vertex_colors import snap_vertex_colors
-        with tempfile.NamedTemporaryFile(suffix=".obj", mode="w", delete=False) as f:
+        with tempfile.NamedTemporaryFile(encoding="utf-8", suffix=".obj", mode="w", delete=False) as f:
             f.write("# empty OBJ\nf 1 2 3\n")
             path = f.name
         try:

@@ -119,7 +119,7 @@ def cmd_sphere(args):
 def cmd_extrude(args):
     """Extrude a 2D polygon (JSON array of [x,y] points) into 3D."""
     if args.polygon_file:
-        with open(args.polygon_file) as f:
+        with open(args.polygon_file, encoding="utf-8") as f:
             points = json.load(f)
     else:
         points = json.loads(args.polygon)
@@ -277,7 +277,7 @@ def _build_primitive(op: dict) -> m3d.Manifold:
 
 def cmd_csg(args):
     """Build a model from a JSON CSG spec file."""
-    with open(args.spec_file) as f:
+    with open(args.spec_file, encoding="utf-8") as f:
         spec = json.load(f)
 
     ops = spec.get("ops", spec.get("operations", []))

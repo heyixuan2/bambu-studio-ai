@@ -80,7 +80,7 @@ for img in bpy.data.images:
         break
 '''
     script_file = os.path.join(tempfile.gettempdir(), "bambu_extract_tex.py")
-    with open(script_file, "w") as f:
+    with open(script_file, "w", encoding="utf-8") as f:
         f.write(script)
 
     try:

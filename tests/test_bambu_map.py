@@ -46,7 +46,7 @@ def test_color_map_file_names_the_suggestion(tmp_path):
     mappings = map_colors_to_filaments(_selected("#FF6A13"), load_bambu_palette())
     path = write_bambu_map(mappings, str(tmp_path / "model_multicolor.obj"))
     assert path == str(tmp_path / "model_multicolor_color_map.txt")
-    assert "PLA Basic / Orange #FF6A13" in (tmp_path / "model_multicolor_color_map.txt").read_text()
+    assert "PLA Basic / Orange #FF6A13" in (tmp_path / "model_multicolor_color_map.txt").read_text(encoding="utf-8")
 
 
 def test_unknown_finish_is_a_usage_error():

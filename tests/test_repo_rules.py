@@ -44,3 +44,21 @@ def test_legacy_allowlist_only_shrinks():
         elif lines < limit:
             stale.append(f"{rel}: now {lines} lines, lower its limit from {limit} to {lines}")
     assert not stale, "\n".join(stale)
+
+
+def test_text_files_are_opened_as_utf8():
+    """open() without encoding uses the ANSI code page on Windows and breaks on the first '→'.
+
+    Ruff's unspecified-encoding rule is still a preview rule, so it runs here rather than in
+    the main lint config.
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    ruff = shutil.which("ruff") or str(Path(sys.executable).with_name("ruff"))
+    result = subprocess.run(
+        [ruff, "check", "--preview", "--select", "PLW1514", "--output-format", "concise", "scripts", "tests"],
+        cwd=ROOT, capture_output=True, encoding="utf-8", timeout=60,
+    )
+    assert result.returncode == 0, "Pass encoding='utf-8' to these calls:\n" + result.stdout

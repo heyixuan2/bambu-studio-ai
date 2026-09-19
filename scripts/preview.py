@@ -360,7 +360,7 @@ print("TURNTABLE_FRAMES: " + _turntable_dir)
         script = script.replace('print("RENDER_OK")', TURNTABLE_SCRIPT)
 
     script_file = os.path.join(tempfile.gettempdir(), "bambu_preview.py")
-    with open(script_file, "w") as f:
+    with open(script_file, "w", encoding="utf-8") as f:
         f.write(script)
 
     print(f"📸 Rendering preview ({views})...")

@@ -89,6 +89,6 @@ def write_bambu_map(mappings, output_path):
             alts = ", ".join(f"{a['line']} {a['name']}" for a in m["alternatives"])
             lines.append(f"  → Alternatives: {alts}")
         lines.append("")
-    with open(map_path, "w") as f:
+    with open(map_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
     return map_path
