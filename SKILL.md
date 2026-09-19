@@ -1,8 +1,7 @@
 ---
 name: bambu-studio-ai
 description: >-
-  End-to-end 3D printing for Bambu Lab printers. Finds models online (MakerWorld, Printables,
-  Thingiverse), generates them with AI (text-to-3D, image-to-3D) or as exact-dimension parametric
+  End-to-end 3D printing for Bambu Lab printers. Finds models online (MakerWorld, Printables), generates them with AI (text-to-3D, image-to-3D) or as exact-dimension parametric
   CAD, checks and repairs printability, converts textures to AMS multi-color, renders previews,
   opens them in Bambu Studio for the user to print, and reads printer status, AMS filaments and
   print progress. Use this whenever the user wants to 3D print something, design or model an
@@ -118,9 +117,11 @@ existing designs, which are usually better tested, or generate a custom one with
 python3 scripts/search.py "phone stand" --limit 5
 ```
 
-This searches MakerWorld, Printables, Thingiverse and Thangs. Show the user each result's name,
-source and link, then let them pick. Model sites often need a login to download, so if you
-can't fetch the file, give the link and ask the user to download it.
+This searches MakerWorld and Printables in about a second. `--limit` is the total number of
+results, sorted by downloads (`--sort likes|newest|relevance` to change that; `--json` for
+structured output). Show the user each result's title, site, author, downloads, licence and link,
+then let them pick. Model sites often need a login to download, so if you can't fetch the file,
+give the link and ask the user to download it. Mind the licence if they plan to sell prints.
 
 **AI text-to-3D**: needs a provider and API key (see [setup](references/setup.md#3-ai-generation-optional)).
 
