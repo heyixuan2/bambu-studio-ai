@@ -149,7 +149,7 @@ def make_glb(path, extents=(20.0, 20.0, 10.0), *, textured=True, root_scale=None
             {"bufferView": 1, "componentType": 5123, "count": 36, "type": "SCALAR"},
         ],
         "meshes": [{"primitives": [primitive]}],
-        "nodes": [{"mesh": 0, "name": "world"}],
+        "nodes": [{"mesh": 0, "name": "model"}],  # not "world": trimesh reserves that name for its root
         "scenes": [{"nodes": [0]}],
         "scene": 0,
     }
