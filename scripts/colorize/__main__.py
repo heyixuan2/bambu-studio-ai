@@ -18,6 +18,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from colorize import colorize
+from common import use_utf8_stdio
 
 
 def main():
@@ -76,4 +77,5 @@ def main():
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     main()

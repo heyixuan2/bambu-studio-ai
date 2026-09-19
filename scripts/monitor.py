@@ -24,6 +24,7 @@ import os, sys, time, argparse, subprocess, json
 from datetime import datetime, timedelta
 
 # ─── Config ───
+from common import use_utf8_stdio
 from common import load_config, get_config, output_dir, desktop_notify, HIGH_TEMP_PRINTERS
 _cfg = load_config(include_secrets=True)
 
@@ -434,6 +435,7 @@ def main():
         monitor_loop(args.interval, args.auto_pause, wait_start_min=args.wait_start)
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

@@ -16,6 +16,7 @@ import math
 import os
 import sys
 
+from common import use_utf8_stdio
 from common import (
     SKILL_DIR, BUILD_VOLUMES, MATERIALS, ENCLOSED_PRINTERS, HIGH_TEMP_PRINTERS,
     MAX_FACES_NO_SIMPLIFY, load_config, safe_split_mesh,
@@ -851,6 +852,7 @@ def main():
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

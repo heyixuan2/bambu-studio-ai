@@ -18,6 +18,7 @@ Usage:
 import os, sys, json, subprocess, argparse, shutil, tempfile, glob, re
 
 # ─── Paths ───
+from common import use_utf8_stdio
 from common import (
     SKILL_DIR as _skill_dir, load_config,
     find_orcaslicer, find_bambu_studio_profiles,
@@ -570,6 +571,7 @@ def main():
     )
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

@@ -11,6 +11,7 @@ import json
 import platform
 import shutil
 import subprocess
+import sys
 import threading
 
 # ─── Paths ──────────────────────────────────────────────────────────
@@ -75,6 +76,17 @@ def write_private_json(path, data):
         pass
 
 
+def use_utf8_stdio():
+    """Write UTF-8 to stdout/stderr on every platform.
+
+    On Windows, a piped stdout (which is how agents run these scripts) defaults to
+    the ANSI code page and raises UnicodeEncodeError on the first emoji.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 # ─── Config Loading ─────────────────────────────────────────────────
 
 # Env var → config/secrets key. Env vars always win over files.
@@ -106,7 +118,8 @@ def load_config(include_secrets=False):
                 with open(path) as f:
                     cfg.update(json.load(f))
             except (json.JSONDecodeError, ValueError) as e:
-                print(f"⚠️ Malformed {os.path.basename(path)}: {e}")
+                # stderr, so a broken config can't corrupt a command's --json output
+                print(f"⚠️ Malformed {os.path.basename(path)}: {e}", file=sys.stderr)
     return cfg
 
 

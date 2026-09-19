@@ -15,6 +15,7 @@ Usage:
 
 import os, sys, subprocess, argparse, tempfile, json
 
+from common import use_utf8_stdio
 from common import find_blender
 
 
@@ -443,6 +444,7 @@ def main():
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

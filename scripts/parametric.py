@@ -21,6 +21,7 @@ import os
 import sys
 import math
 import numpy as np
+from common import use_utf8_stdio
 
 try:
     import manifold3d as m3d
@@ -440,6 +441,7 @@ def main():
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

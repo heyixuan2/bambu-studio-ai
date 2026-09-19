@@ -33,6 +33,7 @@ except ImportError:
 
 MODE = os.environ.get("BAMBU_MODE", "").lower()
 
+from common import use_utf8_stdio
 from common import (
     load_config as _load_config_base, TOKEN_TTL_SECONDS, run_with_timeout,
     ENV_TO_CONFIG, user_file, output_dir, write_private_json, desktop_notify, open_in_bambu_studio,
@@ -1058,6 +1059,7 @@ def main():
         cmd_speed(args.mode)
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

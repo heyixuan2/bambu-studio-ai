@@ -13,6 +13,7 @@ Requires: pip install ddgs
 """
 
 import argparse, json, os, re, sys
+from common import use_utf8_stdio
 
 SOURCES = {
     "makerworld": {
@@ -139,6 +140,7 @@ def main():
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:

@@ -9,6 +9,7 @@ Usage: python3 scripts/doctor.py
 import sys, os, importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import use_utf8_stdio
 from common import (
     find_blender, find_orcaslicer, find_bambu_studio, BLENDER_PATHS, ORCASLICER_PATHS,
     SKILL_DIR, home_dir, user_file, output_dir, __version__,
@@ -209,4 +210,5 @@ def main():
     return 0 if all_ok else 1
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     sys.exit(main())

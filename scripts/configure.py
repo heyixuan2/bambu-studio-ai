@@ -21,6 +21,7 @@ import os
 import shutil
 import sys
 
+from common import use_utf8_stdio
 from common import (
     SKILL_DIR, BUILD_VOLUMES, ENV_TO_CONFIG, home_dir, user_file, write_private_json,
 )
@@ -258,4 +259,5 @@ def main():
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     sys.exit(main())

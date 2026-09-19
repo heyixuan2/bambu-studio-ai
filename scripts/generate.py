@@ -64,6 +64,7 @@ def _convert_model(input_path, target_format):
 
 # ─── Config ──────────────────────────────────────────────────────────
 
+from common import use_utf8_stdio
 from common import BUILD_VOLUMES, load_config, output_dir, MAX_POLL_ITERATIONS
 
 _cfg = load_config(include_secrets=True)
@@ -1210,6 +1211,7 @@ def main():
         cmd_download(args.task_id, args.format, height=getattr(args, "height", 0))
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     try:
         main()
     except KeyboardInterrupt:
