@@ -6,42 +6,51 @@ by a CI gate or checked in code review; a rule that can't be checked doesn't bel
 ## 1. Layout
 
 ```
-bambu-studio-ai/
-├── SKILL.md                 Agent playbook (≤ 300 lines). No implementation detail.
-├── references/              Loaded on demand by agents. Facts, procedures, formats.
-├── scripts/                 Thin, runnable-by-path entry points only (≤ 30 lines each).
-├── src/bambu_studio_ai/     The library. All logic lives here. Importable, typed, tested.
-│   ├── cli/                 argparse wiring per command; no business logic
-│   ├── generation/          providers/, prompt.py, download.py
-│   ├── mesh/                analyze.py, repair.py, orient.py, units.py, io.py
-│   ├── cad/                 parametric primitives, CSG, (later) code-CAD bridge
-│   ├── color/               texture → palette → segmentation → export (3MF / OBJ)
-│   ├── render/              previews (Blender backend + headless fallback)
-│   ├── printer/             bambu LAN (MQTT/FTPS/RTSP), bambu cloud, models registry
-│   ├── monitor/             print monitoring state machine
-│   ├── search/              per-site adapters → common schema
-│   ├── config.py            paths, settings, secrets (single source of truth)
-│   └── _version.py
-├── tests/                   pytest; unit + golden-file + CLI contract tests
-├── evals/                   agent-behaviour evals (prompts + assertions), run in CI
-└── docs/                    human docs (this file, ROADMAP, ADRs). Not shipped in the skill.
+bambu-studio-ai/                 ← the repo root IS the skill (SKILL.md must stay here)
+├── SKILL.md                     Agent playbook (≤ 300 lines). No implementation detail.
+├── references/                  Loaded on demand by agents. Facts, procedures, formats.
+├── assets/                      Data files agents/scripts read (printers.json, filament palette).
+├── scripts/
+│   ├── bambu_studio_ai/         The library. All logic lives here. Importable, typed, tested.
+│   │   ├── cli/                 argparse wiring per command; no business logic
+│   │   ├── generation/          providers/, download.py, postprocess.py
+│   │   ├── mesh/                analyze.py, repair.py, orient.py, units.py, io.py
+│   │   ├── cad/                 parametric helpers, CSG, code-CAD runner (build123d / manifold3d)
+│   │   ├── color/               texture → palette → segmentation → export
+│   │   ├── render/              previews (Blender backend + headless fallback)
+│   │   ├── printer/             Bambu LAN read-only client, printer/AMS registry
+│   │   ├── monitor/             print monitoring state machine
+│   │   ├── search/              per-site adapters → common schema
+│   │   ├── config.py            paths, settings, secrets (single source of truth)
+│   │   └── _version.py
+│   └── analyze.py, generate.py, …   Thin shims (≤ 15 lines): one sys.path insert, call main()
+├── tests/                       pytest; unit + golden-file + CLI contract tests
+├── evals/                       agent-behaviour evals (prompts + assertions), run in CI
+└── docs/                        human docs (this file, ROADMAP, CHANGELOG, assets for README)
 ```
 
-Why `src/` + shims: agents run scripts by path from the skill folder with no install step, so
-`scripts/` must keep working with a bare `python3`. Everything else about the code (imports,
-types, tests, packaging) wants a real package. Each shim adds `src/` to `sys.path` in one line
-and calls `main()`. Nothing else in the repo touches `sys.path`.
+Why the package lives inside `scripts/`: agents run `python3 <skill>/scripts/analyze.py` by path with
+no install step, and `npx skills add` copies the folder that contains `SKILL.md`. So the importable
+code must ship next to the shims, and `SKILL.md` must stay at the repo root (a nested `SKILL.md`
+breaks `git clone … ~/.claude/skills/bambu-studio-ai` and the Claude.ai zip upload). `pip install .`
+still works for contributors (`pyproject` points `package-dir` at `scripts/`) and gives a `bsa`
+console script. Each shim adds its own directory to `sys.path` in one line and calls `main()`.
+Nothing else in the repo touches `sys.path`. Nothing that isn't needed at run time (dev notes,
+example configs) lives in the repo root tree, because everything in it ships.
 
 ## 2. Python
 
 - **Version:** 3.10+ (set by `bambulabs-api`). `from __future__ import annotations` in every module.
 - **Formatting:** `ruff format`, line length 100. No manual alignment.
 - **Linting:** `ruff check` with the full rule set in `pyproject.toml` (`E, W, F, I, N, UP, B, S,
-  C4, SIM, RUF, ANN, D`), not the four error-only rules used today. New violations fail CI.
-- **Types:** every public function and method is fully annotated. `pyright --strict` on `src/`.
+  C4, SIM, RUF, ANN, D`), not the four error-only rules used today. Enforced on
+  `scripts/bambu_studio_ai/` from day one; legacy scripts stay on the old rules until they are
+  migrated (an explicit allowlist that only shrinks).
+- **Types:** every public function and method is fully annotated. `pyright --strict` on `scripts/bambu_studio_ai/`.
   `Any` needs a comment saying why.
-- **File size:** no source file over **400 lines** (`src/`, `scripts/`, `tests/`). A file that grows
-  past it is two responsibilities sharing a name; split it. Enforced by `tests/test_repo_rules.py`.
+- **File size:** no source file over **400 lines** (`scripts/`, `tests/`). A file that grows past it
+  is two responsibilities sharing a name; split it. Enforced by `tests/test_repo_rules.py`, with a
+  legacy allowlist that only shrinks.
 - **Docstrings:** one-line summary on every public module, class and function; Google style for
   anything with parameters an agent or contributor needs to understand. Don't restate the signature.
 - **Naming:** PEP 8 throughout. Modules and functions `snake_case`, classes `CapWords`, constants
@@ -102,7 +111,7 @@ and calls `main()`. Nothing else in the repo touches `sys.path`.
   *why this way*. Nothing is documented twice.
 - Every command line in the docs is checked against `--help` by a test. Every relative link is
   checked by a test. (Both exist today; keep them green.)
-- Version lives in exactly one place (`src/bambu_studio_ai/_version.py`) and is propagated by a
+- Version lives in exactly one place (`scripts/bambu_studio_ai/_version.py`) and is propagated by a
   script; the test suite asserts they match.
 
 ## 7. Git
