@@ -19,7 +19,7 @@
 
 <br>
 
-**Works with the agent you already use**
+**Works with the Agent You Already Use**
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-060E1B?style=for-the-badge&logo=claude&logoColor=white)](#get-started)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-060E1B?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjIuMjgyIDkuODIxYTUuOTg1IDUuOTg1IDAgMCAwLS41MTYtNC45MSA2LjA0NiA2LjA0NiAwIDAgMC02LjUxLTIuOUE2LjA2NSA2LjA2NSAwIDAgMCAxMS43MDggMGE2LjA2IDYuMDYgMCAwIDAtNS43OSA0LjIgNS45ODggNS45ODggMCAwIDAtNC4wMDUgMi45MDIgNi4wNTMgNi4wNTMgMCAwIDAgLjc0OCA3LjA5NyA1Ljk4IDUuOTggMCAwIDAgLjUxIDQuOTExIDYuMDUxIDYuMDUxIDAgMCAwIDYuNTE1IDIuOUE1Ljk4NSA1Ljk4NSAwIDAgMCAxMy4yNiAyNGE2LjA1NiA2LjA1NiAwIDAgMCA1Ljc3Mi00LjIwNiA1Ljk5IDUuOTkgMCAwIDAgMy45OTctMi45IDYuMDU2IDYuMDU2IDAgMCAwLS43NDctNy4wNzN6TTEzLjI2IDIyLjQzYTQuNDc2IDQuNDc2IDAgMCAxLTIuODc2LTEuMDRsLjE0MS0uMDgxIDQuNzc5LTIuNzU4YS43OTUuNzk1IDAgMCAwIC4zOTItLjY4MXYtNi43MzdsMi4wMiAxLjE2OGEuMDcxLjA3MSAwIDAgMSAuMDM4LjA1MnY1LjU4M2E0LjUwNCA0LjUwNCAwIDAgMS00LjQ5NCA0LjQ5NHpNMy42IDE4LjMwNGE0LjQ3IDQuNDcgMCAwIDEtLjUzNS0zLjAxNGwuMTQyLjA4NSA0Ljc4MyAyLjc1OWEuNzcxLjc3MSAwIDAgMCAuNzggMGw1Ljg0My0zLjM2OXYyLjMzMmEuMDguMDggMCAwIDEtLjAzMy4wNjJMOS43NCAxOS45NWE0LjUgNC41IDAgMCAxLTYuMTQtMS42NDZ6TTIuMzQgNy44OTZhNC40ODUgNC40ODUgMCAwIDEgMi4zNjYtMS45NzNWMTEuNmEuNzY2Ljc2NiAwIDAgMCAuMzg4LjY3Nmw1LjgxNSAzLjM1NS0yLjAyIDEuMTY4YS4wNzYuMDc2IDAgMCAxLS4wNzEgMGwtNC44My0yLjc4NkE0LjUwNCA0LjUwNCAwIDAgMSAyLjM0IDcuODcyem0xNi41OTcgMy44NTVsLTUuODMzLTMuMzg3TDE1LjExOSA3LjJhLjA3Ni4wNzYgMCAwIDEgLjA3MSAwbDQuODMgMi43OTFhNC40OTQgNC40OTQgMCAwIDEtLjY3NiA4LjEwNXYtNS42NzhhLjc5Ljc5IDAgMCAwLS40MDctLjY2N3ptMi4wMS0zLjAyM2wtLjE0MS0uMDg1LTQuNzc0LTIuNzgyYS43NzYuNzc2IDAgMCAwLS43NzYgMEw5LjQwOSA5LjIzVjYuODk3YS4wNjYuMDY2IDAgMCAxIC4wMjgtLjA2MWw0LjgzLTIuNzg3YTQuNSA0LjUgMCAwIDEgNi42OCA0LjY2em0tMTIuNjQgNC4xMzVsLTIuMDItMS4xNjRhLjA4LjA4IDAgMCAxLS4wMzgtLjA1N1Y2LjA3NWE0LjUgNC41IDAgMCAxIDcuMzc1LTMuNDUzbC0uMTQyLjA4TDguNzA0IDUuNDZhLjc5NS43OTUgMCAwIDAtLjM5My42ODF6bTEuMDk3LTIuMzY1bDIuNjAyLTEuNSAyLjYwNyAxLjV2Mi45OTlsLTIuNTk3IDEuNS0yLjYwNy0xLjV6Ii8+PC9zdmc+)](#get-started)
@@ -59,7 +59,7 @@ The yellow figure on the poster is a real print, produced end-to-end by this ski
 
 <br>
 
-## What a session looks like
+## What a Session Looks Like
 
 <table>
 <tr>
@@ -97,19 +97,19 @@ Agent  Print detected. I'll report progress every
 
 <br>
 
-## Why it's different
+## Why It's Different
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### The right method for each object
+### The Right Method for Each Object
 Everyday objects: **search** MakerWorld, Printables, Thingiverse and Thangs first, because tested designs beat generated ones. Functional parts: **parametric CAD** with real millimetres and real screw clearances. Figurines, characters and photos: **AI text-to-3D and image-to-3D** across five providers.
 
 </td>
 <td width="50%" valign="top">
 
-### Checked before it's printed
+### Checked Before It's Printed
 Every model, downloaded or generated, passes an **11-point check** before you see it: scale, wall thickness, overhangs, floating fragments, orientation, build volume, and whether the material suits your printer. Then it's **repaired automatically**. Textured models become **AMS-ready multi-color** files with matched Bambu filaments.
 
 </td>
@@ -117,13 +117,13 @@ Every model, downloaded or generated, passes an **11-point check** before you se
 <tr>
 <td width="50%" valign="top">
 
-### You're always in the loop
+### You're Always in the Loop
 You see a **render first**, then review and slice in **Bambu Studio**. The agent **never starts a print without an explicit yes**, and it asks before enabling auto-pause.
 
 </td>
 <td width="50%" valign="top">
 
-### Your agent, your printer, your keys
+### Your Agent, Your Printer, Your Keys
 Works with the agent you already use and talks to your printer over **your own network**. API keys live in a **local file only you can read**. No accounts, no relay servers, no telemetry.
 
 </td>
@@ -132,16 +132,16 @@ Works with the agent you already use and talks to your printer over **your own n
 
 <br>
 
-## Get started
+## Get Started
 
-**1 · Add the skill.** It detects the agents you have installed and puts the skill where each one
+**1 · Add the Skill.** It detects the agents you have installed and puts the skill where each one
 looks. Add `-g` for all projects, or see the [manual install](#install-details).
 
 ```bash
 npx skills add heyixuan2/bambu-studio-ai
 ```
 
-**2 · Install the Python dependencies.** Skill installers copy files but don't install packages.
+**2 · Install the Python Dependencies.** Skill installers copy files but don't install packages.
 `doctor.py` then shows what's installed and what's optional.
 
 ```bash
@@ -150,14 +150,14 @@ python3 -m pip install -r requirements.txt
 python3 scripts/doctor.py
 ```
 
-**3 · Ask for something.** Search, generation, CAD and analysis work right away. For printer
+**3 · Ask for Something.** Search, generation, CAD and analysis work right away. For printer
 control, say *"set up my Bambu printer"* and the agent walks you through it in about two minutes.
 
 <br>
 
-## Things you can ask
+## Things You Can Ask
 
-| Make something | Check or fix a model | Print and watch |
+| Make Something | Check or Fix a Model | Print and Watch |
 |---|---|---|
 | *"Print me a cute cat figurine, about 6 cm tall"* | *"Why won't this STL slice properly?"* | *"What filament is loaded in my AMS?"* |
 | *"Design a 60×40×30 mm electronics box with a lid"* | *"Scale this to 12 cm and check it fits my A1 Mini"* | *"Is my print done?"* |
@@ -166,7 +166,7 @@ control, say *"set up my Bambu printer"* and the agent walks you through it in a
 
 <br>
 
-## How it works
+## How It Works
 
 <p align="center"><img src="docs/assets/how-it-works.svg" width="100%" alt="How it works: get a model (search, parametric CAD or AI), make it printable (check and repair, optional AMS multi-colour, preview), then print (you review and slice in Bambu Studio, you press Print, the agent monitors read-only)"></p>
 
@@ -189,7 +189,7 @@ them.
 
 <br>
 
-## Printers and requirements
+## Printers and Requirements
 
 <div align="center">
 
@@ -220,7 +220,7 @@ Optional tools unlock more:
 
 <br>
 
-## Privacy and safety
+## Privacy and Safety
 
 - **Local first.** Printer communication runs over your own network. Nothing goes through a relay.
 - **Your secrets stay put.** Access codes and API keys are stored in `~/.bambu-studio-ai/.secrets.json`
@@ -231,7 +231,7 @@ Optional tools unlock more:
 
 <br>
 
-## Install details
+## Install Details
 
 <details>
 <summary><b>Manual install (git clone) and per-agent paths</b></summary>
@@ -309,31 +309,13 @@ python3 scripts/monitor.py --wait-start 30 --interval 300
 - Settings moved from the skill folder to `~/.bambu-studio-ai/`. Old files are still read, and
   `python3 scripts/configure.py migrate` moves them.
 - Outputs moved from `<skill>/output/` to `./bambu-output/`.
-- Python 3.10+ is required (`bambulabs-api` 2.x needs it).
+- Python 3.10+ is required.
 
 </details>
 
 <br>
 
-## Contributing
-
-```bash
-pip install -r requirements-dev.txt
-python3 -m pytest -q        # includes SKILL.md spec and link checks
-python3 -m ruff check .
-```
-
-Help is especially welcome with more generation providers, better mesh repair, recognizing failed
-prints from camera snapshots, and testing on Windows and Linux. Conventions are in
-[docs/CONVENTIONS.md](docs/CONVENTIONS.md).
-
-<a href="https://github.com/heyixuan2/bambu-studio-ai/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=heyixuan2/bambu-studio-ai" alt="Contributors">
-</a>
-
-<br>
-
-## Version history
+## Version History
 
 | Version | Highlights |
 |---|---|

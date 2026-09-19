@@ -94,18 +94,19 @@ AI     检测到打印开始。每 30 分钟给你一次进度，卡住或温度
 
 ## 它和别的工具有什么不同
 
-**按对象选方法。** 日常小物件（手机支架、挂钩、理线夹）先搜 MakerWorld、Printables、
-Thingiverse、Thangs，因为经过验证的设计比 AI 生成的靠谱。功能件用参数化 CAD，尺寸和螺丝孔
-间隙都是真实毫米。手办、角色、照片才交给 AI 文生 3D / 图生 3D，支持五家服务商。
+**按对象选方法。** 日常小物件（手机支架、挂钩、理线夹）先搜 MakerWorld 和 Printables
+（约 1 秒出结果，带下载量），因为经过验证的设计比 AI 生成的靠谱。功能件用参数化 CAD，尺寸和螺丝孔
+间隙都是真实毫米。手办、角色、照片才交给 AI 文生 3D / 图生 3D，支持 Meshy、Tripo、Rodin。
 
 **打印之前先检查。** 每个模型，不管是下载的还是生成的，都先过 11 项检查：尺寸、壁厚、
 悬垂、悬空碎片、摆放方向、成型体积、材料是否适合你的机型，然后自动修复。带贴图的模型
 可以转成 AMS 多色文件，并匹配最接近的拓竹耗材颜色。
 
-**你始终在环。** 先给你看渲染图，再在 Bambu Studio 里由你检查、切片。AI 不会在你没有明确
-点头之前开始打印，开启自动暂停之前也会先问你。
+**你始终在环。** 先给你看渲染图，再在 Bambu Studio 里由你检查、切片、亲手点「打印」。AI 可以
+帮你盯着打印进度，但它没有能力开始、暂停或修改任何一次打印。
 
-**你的 AI、你的打印机、你的密钥。** 用你已经在用的 AI 助手，密钥只存在本地一个只有你能读的
+**你的 AI、你的打印机、你的密钥。** 用你已经在用的 AI 助手，通过你自己的网络只读打印机状态，
+打印机保持正常模式，拓竹 Handy 和云打印照常可用。密钥只存在本地一个只有你能读的
 文件里。没有账号、没有中转服务器、没有遥测。
 
 ---
@@ -129,7 +130,7 @@ python3 -m pip install -r requirements.txt
 python3 scripts/doctor.py               # 检查装了什么、缺什么
 ```
 
-**3. 直接开口。** 搜模型、AI 生成、参数化建模、可打印性分析马上就能用。要连打印机的话，
+**3. 直接开口。** 搜模型、AI 生成、参数化建模、可打印性分析马上就能用。要查看打印机状态的话，
 跟 AI 说「帮我设置拓竹打印机」，它会一步步带你做。
 
 ---
@@ -140,8 +141,8 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 |---|---|---|
 | 「给我打一只 6 cm 高的小猫手办」 | 「这个 STL 为什么切片不了？」 | 「AMS 里现在装的什么耗材？」 |
 | 「设计一个 60×40×30 mm 带盖的电子盒」 | 「缩放到 12 cm，看看 A1 Mini 放不放得下」 | 「打完了吗？」 |
-| 「把这张照片变成彩色 3D 打印件，8 cm 高」 | 「把这个模型做成 4 色给 AMS Lite 用」 | 「帮我盯着这次打印，出问题就暂停」 |
-| 「在 MakerWorld 上找个好用的理线器」 | 「这个用 ABS 在 P1S 上打没问题吧？」 | 「暂停一下，喷嘴现在多少度？」 |
+| 「把这张照片变成彩色 3D 打印件，8 cm 高」 | 「把这个模型做成 4 色给 AMS Lite 用」 | 「帮我盯着这次打印，有问题告诉我」 |
+| 「在 MakerWorld 上找个好用的理线器」 | 「这个用 ABS 在 P1S 上打没问题吧？」 | 「还要多久？喷嘴现在多少度？」 |
 
 ---
 
@@ -155,42 +156,41 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 
 | 能力 | 工具 | 说明 |
 |---|---|---|
-| 模型搜索 | `search.py` | MakerWorld、Printables、Thingiverse、Thangs，自动去重 |
-| AI 生成 | `generate.py` | Meshy、Tripo3D、Printpal、3D AI Studio、Hyper3D Rodin；面向打印优化提示词，按目标高度精确缩放，失败自动重试 |
+| 模型搜索 | `search.py` | MakerWorld 与 Printables 并行搜索，带下载量、点赞数和许可协议 |
+| AI 生成 | `generate.py` | Meshy、Tripo、Hyper3D Rodin；输出带贴图的 GLB（Bambu Studio 2.7+ 可直接导入），按目标高度精确缩放，任务可断点续取 |
 | 参数化 CAD | `parametric.py` | 支架、带孔底板、外壳、任意 CSG 组合；保证水密，精度 0.01 mm |
 | 可打印性 | `analyze.py` | 11 项检查、分级自动修复、自动摆放、单位识别 |
 | 多色 | `colorize` | 贴图 → 最多 8 色 AMS，按 CIELAB ΔE 匹配拓竹耗材 |
 | 预览 | `preview.py` | Blender 渲染与 360° 转盘 GIF，核对尺寸 |
-| 打印机 | `bambu.py` | 状态、AMS、打开 Bambu Studio 等 |
-| 监控 | `monitor.py` | 等待打印开始、进度播报、卡住 / 温度异常提醒 |
+| 打印机 | `bambu.py` | 状态、进度、AMS 耗材（只读），打开 Bambu Studio |
+| 监控 | `monitor.py` | 等待打印开始、进度播报、暂停 / 故障 / HMS / 卡住提醒 |
 | 设置 | `configure.py`、`doctor.py` | 不用手改 JSON；依赖诊断 |
 
 ---
 
 ## 支持的机型与环境
 
-**全部现售拓竹机型：** A1 Mini · A1 · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D。
+**Bambu Studio 自带配置中的全部 13 款机型：** A1 Mini · A1 · A2L · P1P · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D · H2D Pro。
 成型体积、温度上限、材料兼容性都内置了（[参数表](references/model-specs.md)）。
 
 **运行环境：** macOS、Linux、Windows，Python 3.10+。以下都是可选的，装了就多一项能力：
 
 | 工具 | 解锁 | 安装 |
 |---|---|---|
-| [Bambu Studio](https://bambulab.com/zh/download/studio) | 打开模型检查、切片 | 官网安装包 |
-| [Blender 4+](https://www.blender.org/download/) | 渲染预览、多色处理 | 官网安装包 / `brew install --cask blender` |
-| ffmpeg | 摄像头快照（需开发者模式） | `brew install ffmpeg` · `apt install ffmpeg` · `winget install ffmpeg` |
-| AI 服务商密钥 | 文生 3D、图生 3D | Meshy、Tripo3D 等有免费额度（[设置说明](references/setup.md#ai-generation)） |
-| OrcaSlicer、`rembg`、`pymeshlab` | 命令行切片、照片去背景、深度修复 | 见 `doctor.py` 输出 |
+| [Bambu Studio](https://bambulab.com/zh/download/studio) | 检查、切片、打印；预估打印时间和耗材 | 官网安装包 |
+| [Blender 4+](https://www.blender.org/download/) | 更精美的渲染预览和 360° 转台动图 | 官网安装包 / `brew install --cask blender` |
+| AI 服务商密钥 | 文生 3D、图生 3D | Meshy、Tripo 或 Rodin（[设置说明](references/setup.md#3-ai-generation-optional)） |
+| `rembg`、`pymeshlab` | 照片去背景、深度修复 | 见 `doctor.py` 输出 |
 
 ---
 
 ## 隐私与安全
 
-- **本地优先。** 与打印机的通信走你自己的家庭网络，不经过任何第三方服务器。
+- **本地优先。** 打印机状态通过你自己的家庭网络读取，不经过任何第三方服务器。
 - **密钥不出门。** 访问码和 API key 存在 `~/.bambu-studio-ai/.secrets.json`（权限 600），
   只会发给它所属的那家服务。
-- **不会偷偷开始打印。** `bambu.py print` 没有 `--confirmed` 就拒绝执行，而 SKILL.md 规定
-  AI 只能在你明确同意后才加这个参数。
+- **不会偷偷开始打印。** 这个 skill 里没有任何能开始、暂停或修改打印的代码。打印由你在 Bambu Studio
+  里点击开始；打印机保持正常模式，拓竹 Handy 照常可用。
 - 所有会联网的端点都列在 [references/security.md](references/security.md)。
 
 ---
@@ -229,7 +229,7 @@ Copilot、OpenCode、Cline、Amp。更新用 `npx skills update bambu-studio-ai`
 <summary><b>Claude.ai / Claude 桌面版（上传）</b></summary>
 
 把文件夹压缩后在 设置 → Capabilities → Skills 上传。搜索、生成、CAD、分析都能用；
-连打印机需要和打印机在同一网络的电脑，请用本地助手（Claude Code、Codex 等）。
+读取打印机状态需要和打印机在同一网络的电脑，请用本地助手（Claude Code、Codex 等）。
 
 </details>
 
@@ -238,8 +238,8 @@ Copilot、OpenCode、Cline、Amp。更新用 `npx skills update bambu-studio-ai`
 
 | 内容 | 位置 | 覆盖方式 |
 |---|---|---|
-| 设置、密钥、证书 | `~/.bambu-studio-ai/` | `BAMBU_STUDIO_AI_HOME` |
-| 生成的模型、预览图、快照、日志 | 当前目录下的 `./bambu-output/` | `BAMBU_OUTPUT_DIR` |
+| 设置、密钥、监控状态 | `~/.bambu-studio-ai/` | `BAMBU_STUDIO_AI_HOME` |
+| 生成的模型、预览图、监控日志 | 当前目录下的 `./bambu-output/` | `BAMBU_OUTPUT_DIR` |
 
 </details>
 
@@ -267,21 +267,11 @@ python3 scripts/monitor.py --wait-start 30 --interval 300
 - 设置从 skill 目录移到了 `~/.bambu-studio-ai/`。旧文件仍会被读取，
   运行 `python3 scripts/configure.py migrate` 可以一键迁移。
 - 输出目录从 `<skill>/output/` 改为 `./bambu-output/`。
-- 需要 Python 3.10+（`bambulabs-api` 2.x 的要求）。
+- 需要 Python 3.10+。
 
 </details>
 
 ---
-
-## 参与贡献
-
-```bash
-python3 -m pip install -r requirements-dev.txt
-python3 -m pytest -q        # 含 SKILL.md 规范与链接检查
-python3 -m ruff check .
-```
-
-特别欢迎：更多生成服务商、更好的网格修复、从摄像头画面识别打印失败、Windows / Linux 测试。
 
 ## 版本历史
 
