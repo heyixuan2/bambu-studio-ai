@@ -38,7 +38,9 @@ markers = [
 [tool.pyright]
 include = ["scripts/bambu_studio_ai"]
 strict = ["scripts/bambu_studio_ai"]
-pythonVersion = "3.10"
+# No pythonVersion: pyright follows the interpreter it runs with, so third-party stubs (numpy 2.5
+# uses Python 3.12's collections.abc.Buffer) resolve. 3.10 compatibility is covered by ruff's
+# target-version and the 3.10 test job.
 venvPath = "."
 venv = ".venv"
 extraPaths = ["scripts"]

@@ -50,7 +50,7 @@ jobs:
         run: python -m ruff check .
 
       - name: Type-check the library
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.python-version == '3.13'
         run: python -m pyright
 
       # Live-network tests are deselected by default (see pyproject.toml).

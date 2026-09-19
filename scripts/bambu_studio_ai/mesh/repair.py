@@ -15,6 +15,7 @@ from typing import Any, cast
 
 import numpy as np
 import trimesh
+from numpy.typing import NDArray
 
 from bambu_studio_ai.mesh import _backend
 from bambu_studio_ai.mesh.topology import MeshDiagnosis, body_labels, diagnose
@@ -118,7 +119,9 @@ def keep_largest_body(mesh: trimesh.Trimesh) -> tuple[trimesh.Trimesh, KeepMainR
     count, labels = body_labels(mesh)
     if count <= 1:
         return mesh, KeepMainResult(count, 0, 100.0, "single body; nothing to remove")
-    areas = np.bincount(labels, weights=mesh.area_faces, minlength=count)
+    face_areas: NDArray[np.float64] = np.asarray(mesh.area_faces, dtype=np.float64)
+    # asarray: numpy 2.4's stubs type a weighted bincount as intp, 2.5's as float64
+    areas = np.asarray(np.bincount(labels, weights=face_areas, minlength=count), dtype=np.float64)
     largest = int(np.argmax(areas))
     share = float(areas[largest] / areas.sum()) if areas.sum() > 0 else 0.0
     if share <= DOMINANT_BODY_SHARE:
