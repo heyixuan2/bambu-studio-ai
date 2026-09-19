@@ -22,41 +22,38 @@ TEXT = {
     "en": {
         "tag": "AGENT SKILL · BAMBU STUDIO AI",
         "subtitle": "Tell your AI agent what you need. It designs it, checks it, and prints it on your Bambu Lab.",
-        "request": "Your request",
-        "branches": ["everyday object", "exact part", "figurine / photo"],
+        "request": "Your Request",
         "stages": [["GET A", "MODEL"], ["MAKE IT", "PRINTABLE"], ["PRINT"]],
+        # (icon, title, subtitle, tag in the top-right corner)
         "cards": [
-            [("search", "Search models", "MakerWorld & Printables"),
-             ("caliper", "Parametric CAD", "exact mm, real screw holes"),
-             ("spark", "AI text / photo → 3D", "figurines and characters")],
-            [("shield", "Check & repair", "scale, overhangs, fit"),
-             ("spools", "Multi-colour", "texture → AMS filaments"),
-             ("eye", "Preview render", "see it before slicing")],
-            [("layers", "Bambu Studio", "you review and slice"),
-             ("play", "You press Print", "the agent can't start one"),
-             ("pulse", "Monitor", "progress + alerts, read-only")],
+            [("search", "Search Models", "MakerWorld · Printables", "EVERYDAY OBJECT"),
+             ("caliper", "Parametric CAD", "exact mm, screw holes", "EXACT PART"),
+             ("spark", "AI Generation", "text or photo → 3D", "FIGURINE / PHOTO")],
+            [("shield", "Check & Repair", "scale, overhangs, fit", ""),
+             ("spools", "Multi-Color", "texture → AMS colors", "OPTIONAL"),
+             ("eye", "Preview Render", "see it before slicing", "")],
+            [("layers", "Bambu Studio", "you review and slice", ""),
+             ("play", "You Press Print", "never the agent", ""),
+             ("pulse", "Monitor", "progress + alerts", "READ-ONLY")],
         ],
-        "optional": "optional",
         "footer": "Made for the Bambu Lab community · by TieGaier",
     },
     "zh": {
         "tag": "AGENT SKILL · 拓竹 AI 打印助手",
         "subtitle": "跟你的 AI 说一句话，它来建模、检查、打印到你的拓竹。",
         "request": "你的需求",
-        "branches": ["日常物件", "精密件", "手办 / 照片"],
         "stages": [["获取模型"], ["变得可打印"], ["打印"]],
         "cards": [
-            [("search", "搜索模型", "MakerWorld 与 Printables"),
-             ("caliper", "参数化 CAD", "精确到毫米，真实螺丝孔"),
-             ("spark", "AI 文生 / 图生 3D", "手办、角色、照片")],
-            [("shield", "检查与修复", "尺寸、悬垂、能否放下"),
-             ("spools", "AMS 多色", "贴图 → AMS 耗材"),
-             ("eye", "渲染预览", "切片之前先看一眼")],
-            [("layers", "Bambu Studio", "你来检查、切片"),
-             ("play", "你点「打印」", "AI 无法替你开始打印"),
-             ("pulse", "进度监控", "进度与提醒，只读")],
+            [("search", "搜索模型", "MakerWorld · Printables", "日常物件"),
+             ("caliper", "参数化 CAD", "精确到毫米、螺丝孔", "精密件"),
+             ("spark", "AI 生成", "文字或照片 → 3D", "手办 · 照片")],
+            [("shield", "检查与修复", "尺寸、悬垂、能否放下", ""),
+             ("spools", "AMS 多色", "贴图 → AMS 配色", "可选"),
+             ("eye", "渲染预览", "切片之前先看一眼", "")],
+            [("layers", "Bambu Studio", "你来检查、切片", ""),
+             ("play", "你点「打印」", "只由你来开始", ""),
+             ("pulse", "进度监控", "进度与提醒", "只读")],
         ],
-        "optional": "可选",
         "footer": "为拓竹社区而做 · by TieGaier",
     },
 }
@@ -105,7 +102,7 @@ def header(lang: str) -> str:
     <linearGradient id="sweep" x1="0" x2="1">
       <stop offset="0" stop-color="{GREEN}" stop-opacity="0"/><stop offset=".5" stop-color="{GREEN}"/><stop offset="1" stop-color="{GREEN}" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="frame"><rect width="1200" height="300" rx="22"/></clipPath>
+    <clipPath id="frame"><rect width="1200" height="300" rx="24"/></clipPath>
   </defs>
   <g clip-path="url(#frame)">
   <rect width="1200" height="300" fill="url(#bg)"/>
@@ -157,7 +154,7 @@ def footer(lang: str) -> str:
     <linearGradient id="sweep" x1="0" x2="1">
       <stop offset="0" stop-color="{GREEN}" stop-opacity="0"/><stop offset=".5" stop-color="{GREEN}"/><stop offset="1" stop-color="{GREEN}" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="frame"><rect width="1200" height="110" rx="22"/></clipPath>
+    <clipPath id="frame"><rect width="1200" height="110" rx="24"/></clipPath>
   </defs>
   <g clip-path="url(#frame)">
   <rect width="1200" height="110" fill="url(#bg)"/>
@@ -176,110 +173,155 @@ def footer(lang: str) -> str:
 '''
 
 
-CARD_W, CARD_H, GAP, LEFT = 246, 84, 18, 170
-ROW_Y = [150, 322, 494]  # tops of the three card rows
+# Flow diagram layout (viewBox units). One grid: 40 px outer padding, a 120 px stage rail,
+# a 24 px gutter, then three 232 px cards with 20 px gaps. Rows are 88 px tall with 64 px
+# between them for the connectors.
+W, PAD, RAIL_W, GUTTER = 960, 40, 120, 24
+CARD_W, CARD_H, GAP = 232, 88, 20
+CARDS_X = PAD + RAIL_W + GUTTER                 # 184; the third card ends at 920 = W - PAD
+PILL_Y, PILL_H = PAD, 40
+ROW_Y = (128, 280, 432)
+FLOW_H = ROW_Y[2] + CARD_H + PAD                # 560
+LINE, SIGNAL, CARD_STROKE = "#1D5534", GREEN, "#1A402A"
 
 
 def _card_x(i: int) -> int:
-    return LEFT + i * (CARD_W + GAP)
+    return CARDS_X + i * (CARD_W + GAP)
 
 
-def _card(i: int, row: int, icon: str, title: str, sub: str, *, dashed: bool = False, badge: str = "") -> str:
-    x, y = _card_x(i), ROW_Y[row]
-    dash = ' stroke-dasharray="5 5"' if dashed else ""
-    tag = (f'<text x="{x + CARD_W - 14}" y="{y + 22}" text-anchor="end" font-family="{MONO}" font-size="11" '
-           f'letter-spacing="1.5" fill="#5E8C6E">{escape(badge.upper())}</text>') if badge else ""
-    return f'''  <g>
-    <rect x="{x}" y="{y}" width="{CARD_W}" height="{CARD_H}" rx="12" fill="#0A1A10" stroke="#1F6B3D"{dash}/>
-    <rect x="{x + 16}" y="{y}" width="46" height="3" rx="1.5" fill="{GREEN}"/>
-    <g transform="translate({x + 18} {y + 30})" fill="none" stroke="{GREEN}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{ICONS[icon]}</g>
-    <text x="{x + 54}" y="{y + 40}" font-family="{FONT}" font-size="16" font-weight="700" fill="#FFFFFF">{escape(title)}</text>
-    <text x="{x + 54}" y="{y + 61}" font-family="{FONT}" font-size="12.5" fill="#8CB89A">{escape(sub)}</text>
-    {tag}
-  </g>
-'''
+def _cx(i: int) -> int:
+    return _card_x(i) + CARD_W // 2
 
 
-def _flow(d: str, *, arrow: bool = True) -> str:
-    """A connector: a faint base line plus green dashes that flow along it."""
+def _path(points: list[tuple[float, float]], radius: float = 12) -> str:
+    """An orthogonal polyline through ``points`` with rounded bends."""
+    d = f"M{points[0][0]:g} {points[0][1]:g}"
+    for (ax, ay), (px, py), (bx, by) in zip(points, points[1:], points[2:]):
+        ux, uy = (px - ax, py - ay)
+        vx, vy = (bx - px, by - py)
+        lu, lv = max(abs(ux), abs(uy)), max(abs(vx), abs(vy))
+        r = min(radius, lu / 2, lv / 2)
+        d += f" L{px - ux / lu * r:g} {py - uy / lu * r:g} Q{px:g} {py:g} {px + vx / lv * r:g} {py + vy / lv * r:g}"
+    return d + f" L{points[-1][0]:g} {points[-1][1]:g}"
+
+
+def _connector(points: list[tuple[float, float]], *, arrow: bool = True) -> str:
+    """A thin line with a short bright signal travelling along it."""
+    d = _path(points)
     marker = ' marker-end="url(#arrow)"' if arrow else ""
-    return (f'  <path d="{d}" fill="none" stroke="{GREEN}" stroke-opacity=".28" stroke-width="2"{marker}/>\n'
-            f'  <path d="{d}" fill="none" stroke="{GREEN}" stroke-width="2" stroke-dasharray="6 12">'
-            f'<animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>\n')
+    return (f'  <path d="{d}" fill="none" stroke="{LINE}" stroke-width="1.5"{marker}/>\n'
+            f'  <path d="{d}" fill="none" stroke="{SIGNAL}" stroke-width="1.6" stroke-linecap="round" '
+            f'stroke-dasharray="3 27" opacity=".85"><animate attributeName="stroke-dashoffset" from="30" '
+            f'to="0" dur="1.5s" repeatCount="indefinite"/></path>\n')
+
+
+def _card(i: int, row: int, icon: str, title: str, sub: str, tag: str, *, accent: bool = False) -> str:
+    x, y = _card_x(i), ROW_Y[row]
+    stroke = f'stroke="{GREEN}" stroke-width="1.2"' if accent else f'stroke="{CARD_STROKE}"'
+    glow = (f'    <rect x="{x - 4}" y="{y - 4}" width="{CARD_W + 8}" height="{CARD_H + 8}" rx="17" fill="none" '
+            f'stroke="{GREEN}" stroke-opacity=".18" stroke-width="4"/>\n') if accent else ""
+    tag_svg = (f'\n    <text x="{x + CARD_W - 14}" y="{y + 21}" text-anchor="end" font-family="{MONO}" '
+               f'font-size="9.5" letter-spacing="1.2" fill="#4E8A63">{escape(tag)}</text>') if tag else ""
+    return f"""  <g>
+{glow}    <rect x="{x}" y="{y}" width="{CARD_W}" height="{CARD_H}" rx="14" fill="url(#card)" {stroke}/>
+    <rect x="{x + 16}" y="{y + 26}" width="36" height="36" rx="10" fill="#0F2819" stroke="#1C4A2E" stroke-width=".8"/>
+    <g transform="translate({x + 25} {y + 35}) scale(.75)" fill="none" stroke="{GREEN}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{ICONS[icon]}</g>
+    <text x="{x + 66}" y="{y + 42}" font-family="{FONT}" font-size="15.5" font-weight="700" fill="#FFFFFF">{escape(title)}</text>
+    <text x="{x + 66}" y="{y + 62}" font-family="{FONT}" font-size="12.5" fill="#7FA58C">{escape(sub)}</text>{tag_svg}
+  </g>
+"""
+
+
+def _rail(t: dict[str, object]) -> str:
+    """Stage markers: a numbered badge on the left padding line, its name beside it."""
+    stages = t["stages"]
+    assert isinstance(stages, list)
+    r = 17
+    badge_x = PAD + r
+    mids = [y + CARD_H // 2 for y in ROW_Y]
+    out = ""
+    for a, b in zip(mids, mids[1:]):  # dotted spine between badges, never behind text
+        out += (f'  <path d="M{badge_x} {a + r + 8} V{b - r - 8}" stroke="{LINE}" stroke-width="1.5" '
+                f'stroke-dasharray="1 6" stroke-linecap="round"/>\n')
+    for row, lines in enumerate(stages):
+        assert isinstance(lines, list)
+        cy = mids[row]
+        out += (f'  <circle cx="{badge_x}" cy="{cy}" r="{r}" fill="#07130C" stroke="{GREEN}" stroke-width="1.2"/>\n'
+                f'  <text x="{badge_x}" y="{cy + 5}" text-anchor="middle" font-family="{MONO}" font-size="14" '
+                f'font-weight="700" fill="{GREEN}">{row + 1:02d}</text>\n')
+        first = cy + 4 - (len(lines) - 1) * 7
+        for k, line in enumerate(lines):
+            out += (f'  <text x="{badge_x + r + 12}" y="{first + k * 14}" font-family="{MONO}" font-size="10" '
+                    f'letter-spacing="1.2" fill="#6E9C7E">{escape(str(line))}</text>\n')
+    return out
 
 
 def flow(lang: str) -> str:
     """Three stages: get a model, make it printable, print."""
     t = TEXT[lang]
-    cx = [_card_x(i) + CARD_W // 2 for i in range(3)]
-    mid_y = [y + CARD_H // 2 for y in ROW_Y]
-    bottom = [y + CARD_H for y in ROW_Y]
-    parts: list[str] = []
+    top, bottom = ROW_Y, [y + CARD_H for y in ROW_Y]
+    mid = [y + CARD_H // 2 for y in ROW_Y]
+    split_y, bus1, bus2 = PILL_Y + PILL_H + 22, bottom[0] + 32, bottom[1] + 32
+    c0, c1, c2 = _cx(0), _cx(1), _cx(2)
+    parts: list[str] = [_rail(t)]
 
-    # Request pill and its three branches
-    top = cx[1]
-    parts.append(f'  <rect x="{top - 90}" y="36" width="180" height="42" rx="21" fill="{GREEN}"/>\n'
-                 f'  <text x="{top}" y="63" text-anchor="middle" font-family="{FONT}" font-size="17" font-weight="700" '
-                 f'fill="#02140A">{escape(t["request"])}</text>\n')
-    for i in range(3):
-        parts.append(_flow(f"M{top} 78 C{top} 112 {cx[i]} 104 {cx[i]} {ROW_Y[0] - 4}"))
-    for i, label in enumerate(t["branches"]):
-        lx = (top + cx[i]) / 2 if i != 1 else top
-        parts.append(f'  <rect x="{lx - 62}" y="100" width="124" height="22" rx="11" fill="#030C07" stroke="#1F6B3D"/>\n'
-                     f'  <text x="{lx}" y="115.5" text-anchor="middle" font-family="{FONT}" font-size="12.5" '
-                     f'fill="#B7D8C1">{escape(label)}</text>\n')
+    # Request → the three ways to get a model
+    parts.append(_connector([(c1, PILL_Y + PILL_H), (c1, top[0] - 3)]))
+    for cx in (c0, c2):
+        parts.append(_connector([(c1, PILL_Y + PILL_H), (c1, split_y), (cx, split_y), (cx, top[0] - 3)]))
+    # Any of them → Check & Repair
+    parts.append(_connector([(c0, bottom[0]), (c0, top[1] - 3)]))
+    parts.append(_connector([(c1, bottom[0]), (c1, bus1), (c0, bus1), (c0, bus1 + 14)], arrow=False))
+    parts.append(_connector([(c2, bottom[0]), (c2, bus1), (c1 - 12, bus1)], arrow=False))
+    # Along each row, and from Preview down to Bambu Studio
+    for row in (1, 2):
+        for i in range(2):
+            parts.append(_connector([(_card_x(i) + CARD_W, mid[row]), (_card_x(i + 1) - 3, mid[row])]))
+    parts.append(_connector([(c2, bottom[1]), (c2, bus2), (c0, bus2), (c0, top[2] - 3)]))
 
-    # Stage 1 → bus → stage 2 (left to right) → bus → stage 3 (left to right)
-    bus1 = bottom[0] + 30
-    for i in range(3):
-        parts.append(_flow(f"M{cx[i]} {bottom[0]} V{bus1}", arrow=False))
-    parts.append(_flow(f"M{cx[2]} {bus1} H{cx[0]} V{ROW_Y[1] - 4}"))
-    for i in range(2):
-        parts.append(_flow(f"M{_card_x(i) + CARD_W} {mid_y[1]} H{_card_x(i + 1) - 4}"))
-    bus2 = bottom[1] + 30
-    parts.append(_flow(f"M{cx[2]} {bottom[1]} V{bus2} H{cx[0]} V{ROW_Y[2] - 4}"))
-    for i in range(2):
-        parts.append(_flow(f"M{_card_x(i) + CARD_W} {mid_y[2]} H{_card_x(i + 1) - 4}"))
+    # A pulse that runs the main route behind the cards
+    route = _path([(c1, PILL_Y + PILL_H), (c1, bus1), (c0, bus1), (c0, mid[1]), (c2, mid[1]),
+                   (c2, bus2), (c0, bus2), (c0, mid[2]), (c2, mid[2])])
+    for radius, alpha in ((9, ".22"), (3.5, "1")):  # invisible unless animation runs
+        parts.append(f'  <circle r="{radius}" fill="{GREEN}" opacity="0"><animate attributeName="opacity" '
+                     f'values="{alpha}" dur="8s" repeatCount="indefinite"/><animateMotion dur="8s" '
+                     f'repeatCount="indefinite" path="{route}"/></circle>\n')
 
-    # Stage rail on the left: big number, stage name, and a line tying the rail together
-    parts.append(f'  <path d="M58 {ROW_Y[0] + 10} V{ROW_Y[2] + CARD_H - 10}" stroke="{GREEN}" stroke-opacity=".25" '
-                 f'stroke-width="2" stroke-dasharray="2 6"/>\n')
-    for row, lines in enumerate(t["stages"]):
-        y = ROW_Y[row] + 34
-        parts.append(f'  <circle cx="58" cy="{y - 10}" r="21" fill="#030C07" stroke="{GREEN}" stroke-width="1.5"/>\n'
-                     f'  <text x="58" y="{y - 3}" text-anchor="middle" font-family="{MONO}" font-size="19" font-weight="700" '
-                     f'fill="{GREEN}">{row + 1:02d}</text>\n')
-        for k, line in enumerate(lines):
-            parts.append(f'  <text x="90" y="{y - 12 + k * 16}" font-family="{MONO}" font-size="11" letter-spacing="1" '
-                         f'fill="#8CB89A">{escape(line)}</text>\n')
+    # Request pill
+    pill_w = 172
+    parts.append(f'  <rect x="{c1 - pill_w / 2 - 5}" y="{PILL_Y - 5}" width="{pill_w + 10}" height="{PILL_H + 10}" '
+                 f'rx="{(PILL_H + 10) / 2}" fill="{GREEN}" opacity=".16"/>\n'
+                 f'  <rect x="{c1 - pill_w / 2}" y="{PILL_Y}" width="{pill_w}" height="{PILL_H}" rx="{PILL_H / 2}" '
+                 f'fill="{GREEN}"/>\n'
+                 f'  <text x="{c1}" y="{PILL_Y + 25.5}" text-anchor="middle" font-family="{FONT}" font-size="15" '
+                 f'font-weight="700" fill="#03140A">{escape(str(t["request"]))}</text>\n')
 
-    # A pulse that travels the main route, request → print → monitor
-    route = (f"M{top} 78 V{bus1} H{cx[0]} V{mid_y[1]} H{cx[2]} "
-             f"V{bus2} H{cx[0]} V{mid_y[2]} H{cx[2]}")
-    for radius, alpha in ((5, ".9"), (12, ".18")):  # invisible unless animation runs
-        parts.append(f'  <circle r="{radius}" fill="{GREEN}" opacity="0">'
-                     f'<animate attributeName="opacity" values="{alpha}" dur="7s" repeatCount="indefinite"/>'
-                     f'<animateMotion dur="7s" repeatCount="indefinite" path="{route}"/></circle>\n')
+    cards = t["cards"]
+    assert isinstance(cards, list)
+    for row, row_cards in enumerate(cards):
+        for i, (icon, title, sub, tag) in enumerate(row_cards):
+            parts.append(_card(i, row, icon, title, sub, tag, accent=(row, i) == (2, 1)))
 
-    for row, cards in enumerate(t["cards"]):
-        for i, (icon, title, sub) in enumerate(cards):
-            optional = row == 1 and i == 1
-            parts.append(_card(i, row, icon, title, sub, dashed=optional, badge=t["optional"] if optional else ""))
-
-    height = ROW_Y[2] + CARD_H + 44
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 {height}" width="960" height="{height}" '
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {FLOW_H}" width="{W}" height="{FLOW_H}" '
             f'role="img" aria-label="How Bambu Lab AI works">\n'
             f'  <defs>\n'
-            f'    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00200F"/>'
-            f'<stop offset=".6" stop-color="#030C07"/><stop offset="1" stop-color="#000"/></linearGradient>\n'
+            f'    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#001C0D"/>'
+            f'<stop offset=".6" stop-color="#030B06"/><stop offset="1" stop-color="#000"/></linearGradient>\n'
+            f'    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0D1D14"/>'
+            f'<stop offset="1" stop-color="#08140D"/></linearGradient>\n'
             f'    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">'
-            f'<path d="M24 0H0V24" fill="none" stroke="{GREEN}" stroke-opacity=".06"/></pattern>\n'
-            f'    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">'
-            f'<path d="M0 0L10 5L0 10z" fill="{GREEN}"/></marker>\n'
+            f'<path d="M24 0H0V24" fill="none" stroke="{GREEN}" stroke-opacity=".05"/></pattern>\n'
+            f'    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="9" markerHeight="9" '
+            f'markerUnits="userSpaceOnUse" orient="auto"><path d="M1.5 1.5L8.5 5L1.5 8.5" fill="none" '
+            f'stroke="{GREEN}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>\n'
+            f'    <clipPath id="frame"><rect width="{W}" height="{FLOW_H}" rx="20"/></clipPath>\n'
             f'  </defs>\n'
-            f'  <rect width="960" height="{height}" rx="20" fill="url(#bg)"/>\n'
-            f'  <rect width="960" height="{height}" rx="20" fill="url(#grid)"/>\n'
-            + "".join(parts) + "</svg>\n")
+            f'  <g clip-path="url(#frame)">\n'
+            f'  <rect width="{W}" height="{FLOW_H}" fill="url(#bg)"/>\n'
+            f'  <rect width="{W}" height="{FLOW_H}" fill="url(#grid)"/>\n'
+            + "".join(parts)
+            + f'  </g>\n  <rect x=".5" y=".5" width="{W - 1}" height="{FLOW_H - 1}" rx="19.5" fill="none" '
+            f'stroke="#12301F"/>\n</svg>\n')
 
 
 def main() -> None:

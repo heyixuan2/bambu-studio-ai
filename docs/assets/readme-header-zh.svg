@@ -25,7 +25,7 @@
     <linearGradient id="sweep" x1="0" x2="1">
       <stop offset="0" stop-color="#00AE42" stop-opacity="0"/><stop offset=".5" stop-color="#00AE42"/><stop offset="1" stop-color="#00AE42" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="frame"><rect width="1200" height="300" rx="22"/></clipPath>
+    <clipPath id="frame"><rect width="1200" height="300" rx="24"/></clipPath>
   </defs>
   <g clip-path="url(#frame)">
   <rect width="1200" height="300" fill="url(#bg)"/>
