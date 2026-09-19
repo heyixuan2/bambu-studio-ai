@@ -184,9 +184,6 @@ def __getattr__(name):
 
 MAX_FACES_NO_SIMPLIFY = 500_000
 MAX_POLL_ITERATIONS = 120
-MERGE_DOUBLES_DIST = 0.0001
-ACHROMATIC_BLOCK_DIST = 1e12
-ASSIGN_CHUNK_SIZE = 500_000
 
 
 # ─── Platform-Aware Tool Paths ────────────────────────────────────

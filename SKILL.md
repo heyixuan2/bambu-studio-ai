@@ -165,9 +165,11 @@ let them adjust before you continue. Tolerance tables and the CSG JSON format ar
 [references/manifold-examples.md](references/manifold-examples.md).
 
 **Multi-color**: generate as above, since the textured GLB carries the colors, then follow
-[references/multicolor.md](references/multicolor.md). It covers colorizing, the color report
-and a Bambu Studio import quirk. Don't ask the user to choose colors upfront, because they are
-detected from the texture.
+[references/multicolor.md](references/multicolor.md). `colorize` turns the textured model into a
+Bambu Studio project with every triangle painted and the filaments listed (up to 8, default 4),
+plus the nearest Bambu filament for each colour. It covers the color report and when to import the
+GLB into Bambu Studio directly instead. Don't ask the user to choose colors upfront, because they
+are detected from the texture.
 
 ### 3. Analyze and repair
 
@@ -309,7 +311,6 @@ python3 scripts/bambu.py status
 | Regenerating because analysis reports 60+ bodies | Check the preview first; it's usually harmless topology |
 | Telling the user the print started because they said "looks good" | They start it in Bambu Studio; check `bambu.py status` before saying it's running |
 | Running scripts from inside the skill folder | Run them from the user's directory so outputs land there |
-| Re-running colorize when Bambu Studio shows only one color | It's an import quirk, see [multicolor](references/multicolor.md#importing-into-bambu-studio) |
 
 ## Reference files
 

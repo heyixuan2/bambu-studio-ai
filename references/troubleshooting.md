@@ -34,7 +34,7 @@ command line and its printer profiles) and where the config is being read from.
 | Problem | Fix |
 |---|---|
 | `Bambu Studio not found` | Install it from bambulab.com/en/download/studio. On Linux, AppImage or Flatpak (`com.bambulab.BambuStudio`) are detected; otherwise open the file manually |
-| Multi-color OBJ imports as one color | See [multicolor: importing](multicolor.md#importing-into-bambu-studio). Don't re-run colorize |
+| Colorize stops with "colours lost" | Use the `--colors` list in the message, raise `--max-colors`, or import the GLB into Bambu Studio 2.7+ directly (see [multicolor](multicolor.md)) |
 
 ## Slicing (`slice.py`)
 
@@ -58,7 +58,7 @@ untested.
 | Feature | Status |
 |---|---|
 | Single-color pipeline | Stable |
-| Multi-color (colorize) | Pipeline stable. Bambu Studio's vertex-color import sometimes misses colors |
+| Multi-color (colorize) | Writes a painted Bambu Studio project; verified by headless slicing with filament changes. Opening it in the Bambu Studio app is not yet tested on every printer |
 | Parametric modeling | Geometric and functional parts only, single-color STL |
 | CLI slicing | Bambu Studio command line with its own profiles; one filament per slice. Needs Bambu Studio installed |
 | Auto-print | Works with Developer Mode (signed MQTT + FTPS upload). Disconnects Bambu Studio cloud and Handy |

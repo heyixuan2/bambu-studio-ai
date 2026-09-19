@@ -25,16 +25,13 @@ REQUIRED = {
     "numpy": {"min": "1.24", "import": "numpy"},
     "Pillow": {"min": "9.0", "import": "PIL"},
     "scipy": {"min": "1.10", "import": "scipy"},
-    "pygltflib": {"min": "0", "import": "pygltflib"},
     "networkx": {"min": "3.2", "import": "networkx"},
     "lxml": {"min": "4.9", "import": "lxml"},
 }
 
 OPTIONAL = {
-    "scikit-learn": {"import": "sklearn", "purpose": "Better colorize k-means clustering"},
     "paho-mqtt": {"import": "paho.mqtt", "purpose": "Printer status (bambu.py status, monitor.py)"},
     "manifold3d": {"import": "manifold3d", "purpose": "Parametric modeling (functional parts)"},
-    "rembg": {"import": "rembg", "purpose": "Image-to-3D background removal"},
     "pymeshlab": {"import": "pymeshlab", "purpose": "Advanced mesh repair"},
 }
 
@@ -119,7 +116,7 @@ def main():
         print(f"  ✅ {ver}")
         print(f"     Path: {path}")
     else:
-        print("  ⚠️ Not found (needed for preview.py and colorize) — https://www.blender.org/download/")
+        print("  ℹ️ Not found (optional: nicer preview.py renders) — https://www.blender.org/download/")
 
     print(f"\nConfig ({home_dir()}):")
     legacy_in_use = False

@@ -181,7 +181,7 @@ them.
 | AI generation | `generate.py` | Meshy, Tripo, Hyper3D Rodin. Textured GLB for Bambu Studio 2.7+, stood upright and scaled to the height you ask for; resumable tasks |
 | Parametric CAD | `parametric.py` | Brackets, plates with holes, enclosures, arbitrary CSG from JSON. Always watertight, exact to 0.01 mm |
 | Printability | `analyze.py` | Seven checks with a published score, tiered repair, auto-orientation, reported unit assumptions |
-| Multi-color | `colorize` | Texture → up to 8 AMS colors, nearest Bambu filament by CIELAB ΔE |
+| Multi-color | `colorize` | Texture → painted Bambu Studio project, up to 8 AMS colors, nearest Bambu filament by CIEDE2000 |
 | Preview | `preview.py` | PNG and 360° turntable GIF via Blender, Bambu Studio or a built-in renderer; size check |
 | Printer | `bambu.py` | Status, progress and AMS filaments (read-only), open in Bambu Studio |
 | Monitoring | `monitor.py` | Waits for the print to start, progress reports, pause / error / HMS / stall alerts |
@@ -215,9 +215,9 @@ Optional tools unlock more:
 | Tool | Unlocks | Install |
 |---|---|---|
 | [Bambu Studio](https://bambulab.com/en/download/studio) | Reviewing, slicing and printing; print-time and filament estimates | macOS `brew install --cask bambu-studio` · Windows/Linux installer, AppImage or Flatpak |
-| [Blender 4+](https://www.blender.org/download/) | Preview renders, turntable GIFs, multi-color | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
+| [Blender 4+](https://www.blender.org/download/) | Nicer preview renders and turntable GIFs | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
 | An AI provider key | Text-to-3D and image-to-3D | Meshy, Tripo or Rodin ([setup](references/setup.md#3-ai-generation-optional)) |
-| `rembg`, `pymeshlab` | Photo background removal, heavy mesh repair | See `doctor.py` |
+| `pymeshlab` | Heavier mesh repair | `pip install pymeshlab` |
 
 <br>
 
