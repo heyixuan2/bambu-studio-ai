@@ -49,6 +49,10 @@ jobs:
       - name: Lint
         run: python -m ruff check .
 
+      - name: Type-check the library
+        if: runner.os == 'Linux'
+        run: python -m pyright
+
       # Live-network tests are deselected by default (see pyproject.toml).
       - name: Test
         run: python -m pytest -q
