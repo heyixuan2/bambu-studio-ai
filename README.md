@@ -1,43 +1,168 @@
+<div align="center">
+
 # Bambu Studio AI
 
-**An agent skill that takes Bambu Lab 3D printing from idea to finished print.**
+### Tell your AI agent what you need. It designs it, checks it, and gets it printed on your Bambu Lab.
 
-Works with any agent that supports the open [Agent Skills](https://agentskills.io) `SKILL.md`
-standard: Claude Code, OpenAI Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Windsurf,
-Cline, Goose, Amp, Kiro, Roo Code, OpenClaw and more.
+An open-source skill for **Claude Code, OpenAI Codex, Cursor, Gemini CLI, GitHub Copilot** and any
+other agent that reads [`SKILL.md`](https://agentskills.io). It finds or creates the model, makes
+sure it will actually print, hands it to Bambu Studio for your review, then watches the print.
+You stay in control the whole way.
 
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-SKILL.md-8A2BE2)](https://agentskills.io)
 [![CI](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.0.0-blue)](#version-history)
 
-```
-"Print me a cute cat figurine, about 6 cm tall"
-   → search / AI-generate → analyze & repair → multi-color → preview
-   → you review & slice in Bambu Studio → print → monitor with camera snapshots
+</div>
+
+```text
+You    I need a wall bracket for a 32 mm pipe with two M4 screw holes. PETG, on my A1.
+
+Agent  That's a precision part, so I'll model it to exact dimensions rather than use AI.
+       → 32.3 mm clamp bore (0.3 mm clearance) · 4 mm walls · two 4.2 mm M4 clearance holes
+       → printability 9/10 · fits the A1 plate · recommended: 0.2 mm layers, 40% infill, 240 °C
+       [preview.png]
+       It's open in Bambu Studio. Slice it and tell me if it looks right.
+
+You    Looks good. Starting the print now.
+
+Agent  Print detected. I'll send progress with a camera snapshot every 30 minutes, and warn
+       you right away if it stalls or a temperature goes out of range.
 ```
 
 ---
 
-## Install
+## Why it's different
 
-### 1. Add the skill to your agent
+**🧭 The right method for each object.** Everyday objects: search MakerWorld, Printables,
+Thingiverse and Thangs first, because tested designs beat generated ones. Functional parts:
+parametric CAD with real millimetres and real screw clearances. Figurines, characters and
+photos: AI text-to-3D and image-to-3D across five providers.
 
-The quickest way is the [`skills` CLI](https://github.com/vercel-labs/skills). It detects which
-agents you have installed and puts the skill in the right place:
+**🔍 Checked before it's printed.** Every model, downloaded or generated, goes through an
+11-point check before you see it: scale, wall thickness, overhangs, floating fragments,
+orientation, build volume, and whether the material suits your printer. Then it's repaired
+automatically. Textured models become AMS-ready multi-color files with matched Bambu filaments.
+
+**🙋 You're always in the loop.** You see a render first, then review and slice in Bambu Studio.
+The agent never starts a print without an explicit yes, and it asks before enabling auto-pause.
+
+**🔌 Your agent, your printer, your keys.** It works with the agent you already use and talks to
+your printer over your own network. API keys live in a local file only you can read. There are
+no accounts, no relay servers and no telemetry.
+
+---
+
+## Get started
+
+**1. Add the skill to your agent**
 
 ```bash
-npx skills add heyixuan2/bambu-studio-ai          # this project only
-npx skills add heyixuan2/bambu-studio-ai -g       # all projects (your user account)
-npx skills add heyixuan2/bambu-studio-ai -g -a claude-code -a codex   # specific agents
+npx skills add heyixuan2/bambu-studio-ai
 ```
 
-Update later with `npx skills update bambu-studio-ai`.
+This detects the agents you have installed and puts the skill in the right place. Add `-g` to
+install it for all projects. [Manual install and per-agent paths ↓](#install-details)
+
+**2. Install the Python dependencies** (skill installers copy files but don't install packages)
+
+```bash
+cd <skill folder>                        # e.g. ~/.claude/skills/bambu-studio-ai
+python3 -m pip install -r requirements.txt
+python3 scripts/doctor.py                # tells you what's installed and what's optional
+```
+
+**3. Ask for something.** Model search, AI generation, CAD and analysis work right away. For
+printer control, say *"set up my Bambu printer"* and the agent walks you through LAN mode, which
+takes about two minutes.
+
+---
+
+## Things you can ask
+
+| Make something | Check or fix a model | Print and watch |
+|---|---|---|
+| *"Print me a cute cat figurine, about 6 cm tall"* | *"Why won't this STL slice properly?"* | *"What filament is loaded in my AMS?"* |
+| *"Design a 60×40×30 mm electronics box with a lid"* | *"Scale this to 12 cm and check it fits my A1 Mini"* | *"Is my print done? Show me the camera"* |
+| *"Turn this photo into a 3D print, in full color"* | *"Make this model 4 colors for my AMS Lite"* | *"Watch this print and pause it if it goes wrong"* |
+| *"Find me a good cable organizer on MakerWorld"* | *"Is this OK to print in ABS on a P1S?"* | *"Pause it. What's the nozzle temperature?"* |
+
+---
+
+## How it works
+
+```mermaid
+flowchart LR
+    R([Your request]) --> S{What is it?}
+    S -->|everyday object| A[Search model sites]
+    S -->|exact part| B[Parametric CAD]
+    S -->|figurine / photo| C[AI text or image to 3D]
+    A --> D[Analyze + repair]
+    B --> D
+    C --> D
+    D --> E[Multi-color for AMS]
+    D --> F[Preview render]
+    E --> F
+    F --> G[You review and slice in Bambu Studio]
+    G -->|your go-ahead| H[Print]
+    H --> I[Monitor + camera snapshots]
+```
+
+The skill is a set of plain Python tools plus a `SKILL.md` playbook that tells the agent when to use
+each one and where to stop and ask you. Agents load it only when a 3D-printing task comes up, and
+read the detailed references (setup, multi-color, monitoring, troubleshooting) only when a step needs
+them.
+
+| Capability | Tool | Details |
+|---|---|---|
+| Model search | `search.py` | MakerWorld, Printables, Thingiverse, Thangs, deduplicated |
+| AI generation | `generate.py` | Meshy, Tripo3D, Printpal, 3D AI Studio, Hyper3D Rodin. Print-aware prompts, scaling to exact height, retries |
+| Parametric CAD | `parametric.py` | Brackets, plates with holes, enclosures, arbitrary CSG from JSON. Always watertight, exact to 0.01 mm |
+| Printability | `analyze.py` | 11-point check, tiered repair, auto-orientation, unit detection |
+| Multi-color | `colorize` | Texture → up to 8 AMS colors, nearest Bambu filament by CIELAB ΔE |
+| Preview | `preview.py` | Blender renders and 360° turntable GIFs, size verification |
+| Printer control | `bambu.py` | Status, AMS, camera, pause/resume/cancel, speed, light, G-code, upload, print. LAN or cloud |
+| Monitoring | `monitor.py` | Waits for the print to start, progress reports, stall/temperature alerts, optional auto-pause |
+| Setup | `configure.py`, `doctor.py` | Settings and secrets without editing JSON, dependency diagnostics |
+
+---
+
+## Printers and requirements
+
+**All current Bambu Lab printers:** A1 Mini · A1 · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D.
+Build volumes, temperature limits and material compatibility are built in ([specs](references/model-specs.md)).
+
+**Runs on** macOS, Linux and Windows with Python 3.10+. The following are optional and unlock
+more features:
+
+| Tool | Unlocks | Install |
+|---|---|---|
+| [Bambu Studio](https://bambulab.com/en/download/studio) | Opening models for review and slicing | macOS `brew install --cask bambu-studio` · Windows/Linux installer, AppImage or Flatpak |
+| [Blender 4+](https://www.blender.org/download/) | Preview renders, multi-color | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
+| ffmpeg | Camera snapshots | `brew install ffmpeg` · `apt install ffmpeg` · `winget install ffmpeg` |
+| An AI provider key | Text-to-3D and image-to-3D | Meshy, Tripo3D, Printpal, 3D AI Studio or Rodin ([setup](references/setup.md#ai-generation)) |
+| OrcaSlicer, `rembg`, `pymeshlab` | CLI slicing, photo background removal, heavy mesh repair | See `doctor.py` |
+
+---
+
+## Privacy and safety
+
+- **Local first.** Printer control runs over your LAN (MQTT/FTPS/RTSP). Cloud mode is optional.
+- **Your secrets stay put.** Access codes and API keys are stored in `~/.bambu-studio-ai/.secrets.json`
+  (chmod 600) and never shipped, logged or sent anywhere except the service they belong to.
+- **Nothing prints by surprise.** `bambu.py print` refuses to run without `--confirmed`, and the
+  playbook tells agents to pass it only after your explicit go-ahead.
+- Every network endpoint is listed in [references/security.md](references/security.md).
+
+---
+
+## Install details
 
 <details>
-<summary><b>Manual install (git clone)</b></summary>
+<summary><b>Manual install (git clone) and per-agent paths</b></summary>
 
-Clone into your agent's skills folder. The folder **must** be named `bambu-studio-ai`.
+Clone into your agent's skills folder. The folder must be named `bambu-studio-ai`.
 
 ```bash
 git clone https://github.com/heyixuan2/bambu-studio-ai.git ~/.claude/skills/bambu-studio-ai
@@ -56,187 +181,86 @@ git clone https://github.com/heyixuan2/bambu-studio-ai.git ~/.claude/skills/bamb
 | Goose | `~/.config/goose/skills/` | `.goose/skills/` |
 | OpenClaw | `~/.openclaw/skills/` | `skills/` |
 
-`.agents/skills/` is shared by most agents, so one project-level clone there covers Codex,
-Cursor, Gemini CLI, Copilot, OpenCode, Cline and Amp at once.
+`.agents/skills/` is shared by most agents, so one project-level clone there covers Codex, Cursor,
+Gemini CLI, Copilot, OpenCode, Cline and Amp at once. Update with `npx skills update bambu-studio-ai`
+or `git pull`. Your settings live outside the skill folder, so updates never touch them.
 
 </details>
 
 <details>
 <summary><b>Claude.ai / Claude Desktop (upload)</b></summary>
 
-Zip the folder and upload it under Settings → Capabilities → Skills. Search, generation,
-parametric modeling and analysis work there. Printer control needs a machine on the same
-network as your printer, so use a local agent (Claude Code, Codex, …) for that.
+Zip the folder and upload it under Settings → Capabilities → Skills. Search, generation, CAD and
+analysis work there. Printer control needs a machine on the same network as the printer, so use a
+local agent (Claude Code, Codex, …) for that.
 
 </details>
 
-### 2. Install the Python dependencies
-
-Agent skill installers copy files but don't install packages, so install them once:
-
-```bash
-cd ~/.claude/skills/bambu-studio-ai          # wherever the skill ended up
-python3 -m pip install -r requirements.txt   # or: uv pip install -r requirements.txt
-python3 scripts/doctor.py                    # checks everything
-```
-
-Optional tools, which `doctor.py` tells you about:
-
-| Tool | Used for | Install |
-|---|---|---|
-| [Bambu Studio](https://bambulab.com/en/download/studio) | Reviewing and slicing models | macOS `brew install --cask bambu-studio` · Windows/Linux: installer, AppImage or Flatpak |
-| [Blender 4+](https://www.blender.org/download/) | Preview renders, multi-color pipeline | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
-| ffmpeg | Camera snapshots | `brew install ffmpeg` · `apt install ffmpeg` · `winget install ffmpeg` |
-| OrcaSlicer | Optional CLI slicing | [github.com/SoftFever/OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) |
-| `rembg`, `pymeshlab` | Photo background removal, heavy mesh repair | `pip install rembg pymeshlab` |
-
-### 3. Connect your printer
-
-Ask your agent to *"set up my Bambu printer"*. It walks you through it. Or do it yourself:
-
-```bash
-python3 scripts/configure.py set model A1 mode local printer_ip 192.168.1.50 serial 01P00A000000000
-printf '%s' 'YOUR_ACCESS_CODE' | python3 scripts/configure.py secret access_code
-python3 scripts/bambu.py status
-```
-
-LAN mode: on the printer touchscreen, turn on LAN mode and note the IP, serial number and access
-code. Settings are stored in `~/.bambu-studio-ai/`, outside the skill folder, so updates never
-wipe them. See [references/setup.md](references/setup.md) for cloud mode, auto-print and AI
-provider keys.
-
----
-
-## Try it
-
-Talk to your agent normally. The skill activates on its own:
-
-- *"Print me a cute cat figurine, about 6 cm tall"*
-- *"Design a wall bracket for a 32 mm pipe with two M4 screw holes"*
-- *"Turn this photo into a 3D print, 8 cm tall, in full color"*
-- *"Find me a good cable organizer on MakerWorld"*
-- *"Is my print done? Show me the camera"*
-- *"What filament is loaded in my AMS?"*
-
-The agent always shows you a preview, opens the model in Bambu Studio for you to check and slice,
-and never starts a print without your explicit go-ahead.
-
----
-
-## What it can do
-
-| Capability | Script | Highlights |
-|---|---|---|
-| **Model search** | `search.py` | MakerWorld, Printables, Thingiverse, Thangs; deduplicated |
-| **AI text/image-to-3D** | `generate.py` | Meshy, Tripo3D, Printpal, 3D AI Studio, Hyper3D Rodin; print-aware prompt enhancement, auto-scale to `--height`, retries, format conversion |
-| **Parametric CAD** | `parametric.py` | Exact-dimension functional parts with `manifold3d`: boxes, brackets, plates with holes, enclosures, arbitrary CSG from JSON; always watertight |
-| **Printability analysis** | `analyze.py` | 11-point check (walls, overhangs, floating parts, orientation, build volume, material/printer fit); tiered auto-repair; auto-orient; unit detection |
-| **Multi-color (AMS)** | `colorize` | Texture → HSV families → CIELAB assignment → vertex-color OBJ, ≤ 8 colors, nearest Bambu filament match |
-| **Preview** | `preview.py` | Blender Cycles renders, 360° turntable GIF, size verification |
-| **Bambu Studio handoff** | `bambu.py open` | Opens the model on macOS, Windows or Linux |
-| **Printer control** | `bambu.py` | Status, AMS, camera, pause/resume/cancel, speed, light, G-code, upload, print (LAN MQTT/FTPS or cloud) |
-| **Monitoring** | `monitor.py` | Waits for the print to start, progress reports, stall/temperature/pause alerts, snapshots, optional auto-pause |
-| **Setup** | `configure.py`, `doctor.py` | Settings and secrets without hand-editing JSON; dependency diagnostics |
-
-Supports all 10 current Bambu Lab printers: **A1 Mini, A1, P1S, P2S, X1C, X1E, X2D, H2C, H2S, H2D**
-([specs](references/model-specs.md)).
-
----
-
-## How it's organized
-
-```
-bambu-studio-ai/
-├── SKILL.md                 What the agent reads: workflow, ground rules, commands (~300 lines)
-├── references/              Loaded on demand: setup, multicolor, monitoring, troubleshooting,
-│                            printer specs, prompt guide, CSG patterns, protocol notes, security
-├── scripts/                 The tools (plain Python CLIs, all with --help)
-│   ├── common.py            Shared config, paths, printer data, cross-platform helpers
-│   ├── configure.py         Settings and secrets  →  ~/.bambu-studio-ai/
-│   ├── doctor.py            Dependency check
-│   ├── search.py  generate.py  parametric.py  analyze.py  preview.py
-│   ├── colorize/            Multi-color package (python3 scripts/colorize …)
-│   ├── bambu.py             Printer control + open in Bambu Studio
-│   ├── monitor.py           Print monitoring
-│   └── slice.py             Optional OrcaSlicer CLI slicing
-├── tests/                   pytest suite, including SKILL.md spec compliance
-└── research/                Design notes (not loaded by agents)
-```
-
-The skill follows the Agent Skills approach of progressive disclosure. Agents see only the name
-and description until a 3D-printing task comes up, then load `SKILL.md`, and open reference
-files only when a step needs them.
-
-**Where your data goes**
+<details>
+<summary><b>Where files go</b></summary>
 
 | What | Where | Override |
 |---|---|---|
-| Settings, secrets (chmod 600), cloud token, certificates | `~/.bambu-studio-ai/` | `BAMBU_STUDIO_AI_HOME` |
+| Settings, secrets, cloud token, certificates | `~/.bambu-studio-ai/` | `BAMBU_STUDIO_AI_HOME` |
 | Generated models, previews, snapshots, logs | `./bambu-output/` in your working directory | `BAMBU_OUTPUT_DIR` |
 
-See [references/security.md](references/security.md) for every network endpoint the skill talks to.
+</details>
 
----
+<details>
+<summary><b>Using the tools without an agent</b></summary>
 
-## Using it without an agent
-
-Every script is a normal CLI:
+Every tool is a normal CLI with `--help`:
 
 ```bash
 python3 scripts/search.py "vase" --limit 3
-python3 scripts/generate.py text "cute cat figurine" --wait --height 60
-python3 scripts/analyze.py bambu-output/models/cat.3mf --orient --repair --height 60
-python3 scripts/preview.py bambu-output/models/cat_scaled.3mf --views turntable
-python3 scripts/bambu.py open bambu-output/models/cat_scaled.3mf
+python3 scripts/parametric.py enclosure --width 60 --depth 40 --height 30 --wall 2 --lid -o box.stl
+python3 scripts/analyze.py box.stl --orient --repair --material PETG
+python3 scripts/preview.py box_oriented.stl --views turntable
+python3 scripts/bambu.py open box_oriented.stl
 python3 scripts/monitor.py --wait-start 30 --interval 300
 ```
 
----
+</details>
 
-## Upgrading from v1.x
+<details>
+<summary><b>Upgrading from v1.x (OpenClaw)</b></summary>
 
-v2.0 turns this from an OpenClaw/ClawHub skill into a standard Agent Skill:
+- v2 is a standard Agent Skill. The OpenClaw-only install metadata is gone, so install Python
+  dependencies with `pip install -r requirements.txt`. OpenClaw still loads the skill.
+- Settings moved from the skill folder to `~/.bambu-studio-ai/`. Old files are still read, and
+  `python3 scripts/configure.py migrate` moves them.
+- Outputs moved from `<skill>/output/` to `./bambu-output/`.
+- Python 3.10+ is required (`bambulabs-api` 2.x needs it).
 
-- **Frontmatter follows the Agent Skills spec.** The OpenClaw-specific install and env metadata is
-  gone. Install Python dependencies with `pip install -r requirements.txt`.
-- **Config moved** from the skill folder to `~/.bambu-studio-ai/`. Old files are still read.
-  Run `python3 scripts/configure.py migrate` to move them.
-- **Outputs moved** from `<skill>/output/` to `./bambu-output/` in your working directory.
-- **Fixed:** printer IP, serial and access code in `config.json` / `.secrets.json` are now actually
-  used. v1.x only read them from environment variables, which OpenClaw injected.
-- **New:** `configure.py`, `bambu.py open` (cross-platform), `monitor.py --wait-start`, Linux
-  desktop notifications, fast failure (~12 s) when the printer is unreachable.
+</details>
 
 ---
 
-## Development
+## Contributing
 
 ```bash
 python3 -m pip install -r requirements-dev.txt
-python3 -m pytest -q          # includes SKILL.md spec + link checks
+python3 -m pytest -q        # includes SKILL.md spec and link checks
 python3 -m ruff check .
-pip install "git+https://github.com/agentskills/agentskills.git#subdirectory=skills-ref"
-skills-ref validate "$PWD"    # official Agent Skills validator
 ```
 
-Contributions welcome, especially: more generation providers, better mesh repair, print-failure
-recognition from camera images, and Windows/Linux testing.
-
----
+Help is especially welcome with more generation providers, better mesh repair, recognizing failed
+prints from camera snapshots, and testing on Windows and Linux.
 
 ## Version history
 
 | Version | Highlights |
 |---|---|
-| **2.0.0** | Universal Agent Skill: spec-compliant `SKILL.md` with progressive disclosure, config moved to `~/.bambu-studio-ai/`, `configure.py`, cross-platform `bambu.py open`, `monitor.py --wait-start`, config.json connection bug fixed, fast fail on unreachable printer, printer-aware temperature alerts, skills-ref validation in CI |
-| **1.0.2** | X2D support, MIT license text fix, CI for pytest + ruff |
-| **1.0.0** | `--height` across the pipeline, smart unit detection, parametric modeling (`manifold3d`), test suite, download integrity |
-| **0.23.0** | Colorize → 6-module package, `common.py`, pytest |
-| **0.22.0** | Colorize v4 (HSV + CIELAB + vertex-color OBJ), Blender preview renderer |
-| **0.20.0** | CLI slicing, auto-orient, Rodin provider, X.509 MQTT |
-
----
+| **2.0.0** | Works with any agent: spec-compliant `SKILL.md`, settings in `~/.bambu-studio-ai/`, `configure.py`, cross-platform Bambu Studio handoff, `monitor.py --wait-start`, config and cloud-login fixes, real L-bracket and enclosure-lid geometry, Python 3.10+ |
+| **1.0.2** | X2D support, CI |
+| **1.0.0** | `--height` across the pipeline, parametric modeling, test suite |
+| **0.23.0** | Multi-color as a package, shared `common.py` |
+| **0.22.0** | Colorize v4 (HSV + CIELAB + vertex-color OBJ), Blender previews |
+| **0.20.0** | CLI slicing, auto-orient, Rodin provider, signed MQTT |
 
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+<sub>Bambu Studio AI is an independent community project. It is not affiliated with or endorsed by
+Bambu Lab. "Bambu Lab" and "Bambu Studio" are trademarks of their respective owner.</sub>
