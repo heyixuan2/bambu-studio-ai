@@ -1,0 +1,8 @@
+{
+ "_recorded": "2026-09-19 POST https://api.printables.com/graphql/ searchPrints2(query='xyznonexistentqq42')",
+ "data": {
+  "searchPrints2": {
+   "items": []
+  }
+ }
+}

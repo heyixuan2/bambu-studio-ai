@@ -1,0 +1,14 @@
+{
+ "_recorded": "2026-09-19 POST https://api.printables.com/graphql/ with ordering='downloads' (HTTP 400)",
+ "errors": [
+  {
+   "message": "Variable '$ordering' got invalid value 'downloads'; Value 'downloads' does not exist in 'SearchChoicesEnum' enum.",
+   "locations": [
+    {
+     "line": 2,
+     "column": 51
+    }
+   ]
+  }
+ ]
+}

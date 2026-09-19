@@ -1,0 +1,114 @@
+{
+ "_recorded": "2026-09-19 POST https://api.printables.com/graphql/ searchPrints2(query='phone stand', limit=5, ordering=popular)",
+ "data": {
+  "searchPrints2": {
+   "items": [
+    {
+     "id": "187125",
+     "name": "Phone Stand",
+     "slug": "phone-stand",
+     "nsfw": false,
+     "likesCount": 11358,
+     "downloadCount": 86047,
+     "makesCount": 744,
+     "datePublished": "2025-06-03T07:38:44.615430+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial",
+      "abbreviation": "CC-BY-NC"
+     },
+     "user": {
+      "publicUsername": "PlatinumStars",
+      "handle": "PlatinumStars"
+     },
+     "image": {
+      "filePath": "media/prints/187125/images/1744516_d3dcf9f7-b0e5-4579-99f1-87e23bc610d6/img_5985.jpg"
+     }
+    },
+    {
+     "id": "1161",
+     "name": "Phone/Tablet Stand - Flat fold - Print in place!",
+     "slug": "phonetablet-stand-flat-fold-print-in-place",
+     "nsfw": false,
+     "likesCount": 8187,
+     "downloadCount": 58876,
+     "makesCount": 1009,
+     "datePublished": "2019-04-24T10:05:40.717128+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Cherry Labs",
+      "handle": "Cherry_Labs"
+     },
+     "image": {
+      "filePath": "media/prints/1161/images/7458_be823588-aa29-4ba0-b723-dd762f80842d/small_openclosed.jpg"
+     }
+    },
+    {
+     "id": "1202776",
+     "name": "Geared Phone stand",
+     "slug": "geared-phone-stand",
+     "nsfw": false,
+     "likesCount": 7796,
+     "downloadCount": 43823,
+     "makesCount": 359,
+     "datePublished": "2026-02-04T18:16:56.632082+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  NoDerivatives",
+      "abbreviation": "CC-BY-NC-ND"
+     },
+     "user": {
+      "publicUsername": "Thorin Oakenshield",
+      "handle": "ThorinOakenshield"
+     },
+     "image": {
+      "filePath": "media/prints/1202776/images/9033750_5e4c01fe-51f3-41e4-a8ac-f2867d5ed0a4_2914c063-ede2-4712-92e9-c6a6f514a855/img20250222183712.jpg"
+     }
+    },
+    {
+     "id": "770146",
+     "name": "Phone Stand (No MMU or AMS Needed)",
+     "slug": "phone-stand-no-mmu-or-ams-needed",
+     "nsfw": false,
+     "likesCount": 3450,
+     "downloadCount": 24263,
+     "makesCount": 296,
+     "datePublished": "2024-03-02T12:40:28.526891+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Reckit",
+      "handle": "Reckit"
+     },
+     "image": {
+      "filePath": "media/prints/770146/images/5991701_85a3df16-0066-46b4-a108-6579624d7b6b_df04d770-8049-4d88-b7a8-dba44d53c745/img_0969.jpeg"
+     }
+    },
+    {
+     "id": "582465",
+     "name": "Magsafe charger stand for iPhone - standby mode",
+     "slug": "magsafe-charger-stand-for-iphone-standby-mode",
+     "nsfw": false,
+     "likesCount": 3915,
+     "downloadCount": 15732,
+     "makesCount": 235,
+     "datePublished": "2025-03-04T17:44:42.474145+00:00",
+     "license": {
+      "name": "Creative Commons — Attribution  — Noncommercial  —  Share Alike",
+      "abbreviation": "CC-BY-NC-SA"
+     },
+     "user": {
+      "publicUsername": "Thomas",
+      "handle": "ThomasD"
+     },
+     "image": {
+      "filePath": "media/prints/582465/images/4648557_acc7d241-cdac-4965-b8be-9956e7bfbb51/dscf6724-2.jpg"
+     }
+    }
+   ]
+  }
+ }
+}
