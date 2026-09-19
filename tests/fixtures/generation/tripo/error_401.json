@@ -1,0 +1,10 @@
+{
+  "source": "live unauthenticated POST https://openapi.tripo3d.ai/v3/generation/text-to-model, 2026-09-19",
+  "status": 401,
+  "body": {
+    "code": 2,
+    "status": "error",
+    "message": "Authentication required",
+    "suggestion": "Check if your credentials is valid"
+  }
+}

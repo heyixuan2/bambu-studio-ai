@@ -1,0 +1,16 @@
+{
+  "source": "https://docs.hyper3d.ai/en/api-specification/rodin-gen2-5 (fetched 2026-09-19)",
+  "status": 201,
+  "body": {
+    "message": "Submitted.",
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "jobs": {
+      "uuids": [
+        "223e4567-e89b-12d3-a456-426614174000",
+        "323e4567-e89b-12d3-a456-426614174000"
+      ],
+      "subscription_key": "eyJhbGciOiJIUzI1NiJ9.eyJ0YXNrIjoiMTIzIn0.c2lnbmF0dXJl"
+    },
+    "consumed": 0.5
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "source": "https://docs.hyper3d.ai/en/api-specification/check-status (fetched 2026-09-19)",
+  "status": 201,
+  "body": {
+    "jobs": [
+      {
+        "uuid": "223e4567-e89b-12d3-a456-426614174000",
+        "status": "Done"
+      },
+      {
+        "uuid": "323e4567-e89b-12d3-a456-426614174000",
+        "status": "Generating"
+      }
+    ]
+  }
+}

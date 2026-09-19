@@ -1,0 +1,16 @@
+{
+  "source": "https://developers.tripo3d.ai/en/docs/task-query (fetched 2026-09-19); error_code/error_message when failed",
+  "status": 200,
+  "body": {
+    "code": 0,
+    "data": {
+      "task_id": "task_01J8ZKQ4ABCDEF0123456789",
+      "type": "text_to_model",
+      "status": "failed",
+      "progress": 0,
+      "created_at": "2026-09-19T12:00:00Z",
+      "error_code": 2018,
+      "error_message": "Model too complex"
+    }
+  }
+}

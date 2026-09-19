@@ -1,0 +1,20 @@
+{
+  "source": "https://developers.tripo3d.ai/en/docs/task-query (fetched 2026-09-19)",
+  "status": 200,
+  "body": {
+    "code": 0,
+    "data": {
+      "task_id": "task_01J8ZKQ4ABCDEF0123456789",
+      "type": "text_to_model",
+      "status": "success",
+      "progress": 100,
+      "created_at": "2026-09-19T12:00:00Z",
+      "output": {
+        "model_url": "https://cdn.tripo3d.ai/output/task_01J8ZKQ4ABCDEF0123456789/model_pbr.glb?auth_key=1758290000-0-0-abc",
+        "rendered_image_url": "https://cdn.tripo3d.ai/output/preview.png"
+      },
+      "credits_consumed": 20.0,
+      "completed_at": "2026-09-19T12:01:30Z"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "source": "https://developers.tripo3d.ai/en/docs/task-lifecycle (fetched 2026-09-19)",
+  "status": 200,
+  "body": {
+    "code": 0,
+    "data": {
+      "task_id": "task_01J8ZKQ4ABCDEF0123456789",
+      "type": "text_to_model",
+      "status": "expired",
+      "progress": 0,
+      "created_at": "2026-09-19T12:00:00Z"
+    }
+  }
+}

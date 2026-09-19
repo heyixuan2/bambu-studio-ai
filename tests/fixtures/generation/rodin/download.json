@@ -1,0 +1,20 @@
+{
+  "source": "https://docs.hyper3d.ai/en/api-specification/download-results (fetched 2026-09-19); file names crafted",
+  "status": 201,
+  "body": {
+    "list": [
+      {
+        "url": "https://file.hyper3d.ai/abc/texture_diffuse.png?sig=1",
+        "name": "texture_diffuse.png"
+      },
+      {
+        "url": "https://file.hyper3d.ai/abc/preview.webp?sig=1",
+        "name": "preview.webp"
+      },
+      {
+        "url": "https://file.hyper3d.ai/abc/base_basic_pbr.glb?sig=1",
+        "name": "base_basic_pbr.glb"
+      }
+    ]
+  }
+}

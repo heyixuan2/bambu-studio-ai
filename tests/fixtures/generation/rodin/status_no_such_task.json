@@ -1,0 +1,8 @@
+{
+  "source": "https://docs.hyper3d.ai/en/api-specification/errors (fetched 2026-09-19)",
+  "status": 201,
+  "body": {
+    "error": "NO_SUCH_TASK",
+    "message": "The subscription key does not identify an available task."
+  }
+}

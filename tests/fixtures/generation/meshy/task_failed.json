@@ -1,0 +1,25 @@
+{
+  "source": "https://docs.meshy.ai/api/errors (task_error examples, fetched 2026-09-19)",
+  "status": 200,
+  "body": {
+    "id": "018a210d-8ba4-705c-b111-1f1776f7f578",
+    "type": "text-to-3d-preview",
+    "model_urls": {},
+    "thumbnail_url": "",
+    "prompt": "a fireplace mantel",
+    "progress": 0,
+    "started_at": 1692771667037,
+    "created_at": 1692771650657,
+    "finished_at": 1692771669037,
+    "status": "FAILED",
+    "texture_urls": [],
+    "preceding_tasks": 0,
+    "task_error": {
+      "type": "invalid_input",
+      "code": "image_too_complex",
+      "message": "The uploaded image is too complex for 3D generation.",
+      "doc_url": "https://docs.meshy.ai/en/api/errors#image-too-complex"
+    },
+    "consumed_credits": 0
+  }
+}

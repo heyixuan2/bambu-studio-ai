@@ -1,0 +1,8 @@
+{
+  "source": "https://docs.hyper3d.ai/en/api-specification/errors (fetched 2026-09-19)",
+  "status": 201,
+  "body": {
+    "error": "API_INSUFFICIENT_FUNDS",
+    "message": "The fund in your wallet is insufficient to perform this operation."
+  }
+}

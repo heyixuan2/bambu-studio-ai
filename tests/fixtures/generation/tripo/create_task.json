@@ -1,0 +1,10 @@
+{
+  "source": "https://developers.tripo3d.ai/en/docs/generation-text-to-model/standard (fetched 2026-09-19)",
+  "status": 200,
+  "body": {
+    "code": 0,
+    "data": {
+      "task_id": "task_01J8ZKQ4ABCDEF0123456789"
+    }
+  }
+}

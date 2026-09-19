@@ -1,0 +1,22 @@
+{
+  "source": "https://docs.meshy.ai/api/text-to-3d (task object example, fetched 2026-09-19)",
+  "status": 200,
+  "body": {
+    "id": "018a210d-8ba4-705c-b111-1f1776f7f578",
+    "type": "text-to-3d-preview",
+    "model_urls": {},
+    "thumbnail_url": "",
+    "prompt": "a fireplace mantel",
+    "progress": 55,
+    "started_at": 1692771667037,
+    "created_at": 1692771650657,
+    "finished_at": 0,
+    "status": "IN_PROGRESS",
+    "texture_urls": [],
+    "preceding_tasks": 0,
+    "task_error": {
+      "message": ""
+    },
+    "consumed_credits": 20
+  }
+}

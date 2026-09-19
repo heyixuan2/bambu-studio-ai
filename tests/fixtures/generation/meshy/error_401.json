@@ -1,0 +1,7 @@
+{
+  "source": "live unauthenticated POST https://api.meshy.ai/openapi/v2/text-to-3d, 2026-09-19",
+  "status": 401,
+  "body": {
+    "message": "Missing API key"
+  }
+}

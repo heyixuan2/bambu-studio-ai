@@ -1,0 +1,7 @@
+{
+  "source": "https://docs.meshy.ai/api/errors: request errors carry one `message` field; 402 = insufficient funds (message text crafted)",
+  "status": 402,
+  "body": {
+    "message": "Insufficient funds"
+  }
+}

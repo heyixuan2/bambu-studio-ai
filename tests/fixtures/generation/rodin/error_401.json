@@ -1,0 +1,8 @@
+{
+  "source": "live unauthenticated POST https://api.hyper3d.com/api/v2/rodin, 2026-09-19",
+  "status": 401,
+  "body": {
+    "error": "UNAUTHORIZED",
+    "message": "Active API key is required."
+  }
+}

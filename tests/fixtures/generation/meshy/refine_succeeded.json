@@ -1,0 +1,29 @@
+{
+  "source": "https://docs.meshy.ai/api/text-to-3d (task object example, fetched 2026-09-19)",
+  "status": 200,
+  "body": {
+    "id": "018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b",
+    "type": "text-to-3d-refine",
+    "model_urls": {
+      "glb": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.glb?Expires=1758400000&Signature=x",
+      "fbx": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.fbx?Expires=1758400000&Signature=x",
+      "obj": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.obj?Expires=1758400000&Signature=x",
+      "mtl": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.mtl?Expires=1758400000&Signature=x",
+      "usdz": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.usdz?Expires=1758400000&Signature=x",
+      "stl": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.stl?Expires=1758400000&Signature=x"
+    },
+    "thumbnail_url": "https://assets.meshy.ai/abc/tasks/018a210d-9c11-7d2e-a0b4-2c3d4e5f6a7b/output/model.png?Expires=1758400000&Signature=x",
+    "prompt": "a fireplace mantel",
+    "progress": 100,
+    "started_at": 1692771667037,
+    "created_at": 1692771650657,
+    "finished_at": 1692771669037,
+    "status": "SUCCEEDED",
+    "texture_urls": [],
+    "preceding_tasks": 0,
+    "task_error": {
+      "message": ""
+    },
+    "consumed_credits": 10
+  }
+}

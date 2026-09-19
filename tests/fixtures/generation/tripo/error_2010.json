@@ -1,0 +1,10 @@
+{
+  "source": "https://developers.tripo3d.ai/en/docs/error-handling (fetched 2026-09-19)",
+  "status": 403,
+  "body": {
+    "code": 2010,
+    "message": "Insufficient credits",
+    "suggestion": "Please top up your account at https://platform.tripo3d.ai",
+    "request_id": "req_abc123"
+  }
+}
