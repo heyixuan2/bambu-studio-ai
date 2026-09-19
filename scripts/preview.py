@@ -18,6 +18,24 @@ import os, sys, subprocess, argparse, tempfile, json
 from common import find_blender
 
 
+def _assemble_gif(frames_dir, output_path, frame_ms=120):
+    """Build the turntable GIF from Blender's PNG frames and remove the frames."""
+    import glob
+    import shutil
+
+    from PIL import Image
+
+    frame_paths = sorted(glob.glob(os.path.join(frames_dir, "frame_*.png")))
+    if not frame_paths:
+        print("   ❌ Turntable produced no frames")
+        return False
+    frames = [Image.open(fp).convert("P", palette=Image.ADAPTIVE, colors=128) for fp in frame_paths]
+    frames[0].save(output_path, save_all=True, append_images=frames[1:],
+                   duration=frame_ms, loop=0, optimize=True)
+    shutil.rmtree(frames_dir, ignore_errors=True)
+    return True
+
+
 def preview(model_path, output_path, views="perspective", expected_height_mm=0):
     """Render model preview using Blender Cycles."""
     blender = find_blender()
@@ -196,12 +214,16 @@ cam_obj = bpy.data.objects.new("Cam", cam)
 bpy.context.scene.collection.objects.link(cam_obj)
 bpy.context.scene.camera = cam_obj
 
-dist = size * 2.2
+# Frame the model's bounding sphere at ~92% of the field of view, whatever its aspect ratio.
+radius = math.sqrt(dims[0]**2 + dims[1]**2 + dims[2]**2) / 2
+half_fov = math.atan((cam.sensor_width / 2) / cam.lens)
+dist = radius / (0.92 * math.sin(half_fov))
+_d = mathutils.Vector((0.7, -0.9, 0.5)).normalized() * dist
 view_configs = {{
-    "perspective": (center.x + dist*0.7, center.y - dist*0.9, center.z + dist*0.5),
-    "front": (center.x, center.y - dist*1.5, center.z + size*0.1),
-    "side": (center.x + dist*1.5, center.y, center.z + size*0.1),
-    "top": (center.x, center.y, center.z + dist*1.5),
+    "perspective": (center.x + _d.x, center.y + _d.y, center.z + _d.z),
+    "front": (center.x, center.y - dist, center.z + size*0.05),
+    "side": (center.x + dist, center.y, center.z + size*0.05),
+    "top": (center.x, center.y, center.z + dist),
 }}
 
 key = bpy.data.lights.new("Key", 'SUN')
@@ -317,9 +339,9 @@ _base_angle = math.atan2(cam_obj.location.y - center.y, cam_obj.location.x - cen
 
 for _i in range(_num_frames):
     _angle = _base_angle + (2 * math.pi * _i / _num_frames)
-    # Elevation oscillates: high(70deg) → below(-20deg), covers top/front/bottom
-    _elev = math.radians(25 + 45 * math.sin(2 * math.pi * _i / _num_frames))
-    _r = dist * 0.9
+    # Gentle elevation sway (20°–36°): shows the top and sides without diving under the model
+    _elev = math.radians(28 + 8 * math.sin(2 * math.pi * _i / _num_frames))
+    _r = dist
     _cx = center.x + _r * math.cos(_elev) * math.cos(_angle)
     _cy = center.y + _r * math.cos(_elev) * math.sin(_angle)
     _cz = center.z + _r * math.sin(_elev)
@@ -328,23 +350,8 @@ for _i in range(_num_frames):
     bpy.context.scene.render.filepath = _frame_path
     bpy.ops.render.render(write_still=True)
 
-# Assemble GIF
-try:
-    from PIL import Image
-    _frames = []
-    for _i in range(_num_frames):
-        _fp = os.path.join(_turntable_dir, "frame_%03d.png" % _i)
-        _frames.append(Image.open(_fp).copy())
-    _frames[0].save(OUTPUT_PATH, save_all=True, append_images=_frames[1:],
-                     duration=120, loop=0, optimize=True)
-    print("TURNTABLE_OK")
-except ImportError:
-    import shutil
-    shutil.copy(os.path.join(_turntable_dir, "frame_000.png"), OUTPUT_PATH)
-    print("TURNTABLE_FALLBACK_PNG")
-
-import shutil as _shutil
-_shutil.rmtree(_turntable_dir, ignore_errors=True)
+# The GIF is assembled by the host process (Blender's Python has no PIL).
+print("TURNTABLE_FRAMES: " + _turntable_dir)
 """
 
     # Inject turntable rendering if requested
@@ -364,11 +371,10 @@ _shutil.rmtree(_turntable_dir, ignore_errors=True)
 
         rendered = False
         for line in result.stdout.split('\n'):
-            if "RENDER_OK" in line or "TURNTABLE_OK" in line:
+            if "RENDER_OK" in line:
                 rendered = True
-            if "TURNTABLE_FALLBACK_PNG" in line:
-                rendered = True
-                print("   ⚠️ PIL not available — saved single frame PNG instead of GIF")
+            if "TURNTABLE_FRAMES:" in line:
+                rendered = _assemble_gif(line.split("TURNTABLE_FRAMES: ", 1)[1].strip(), output_path)
             if "MODEL_INFO:" in line:
                 info_text = line.split('MODEL_INFO: ')[1]
                 print(f"   {info_text}")

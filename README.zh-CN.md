@@ -1,29 +1,67 @@
+<a id="top"></a>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00AE42,55:0B5B33,100:060E1B&height=230&section=header&text=Bambu%20Lab%20AI&fontSize=68&fontColor=F2FC75&fontAlignY=36&animation=fadeIn&desc=%E8%B7%9F%E4%BD%A0%E7%9A%84%20AI%20%E8%AF%B4%E4%B8%80%E5%8F%A5%E8%AF%9D%EF%BC%8C%E5%AE%83%E6%9D%A5%E5%BB%BA%E6%A8%A1%E3%80%81%E6%A3%80%E6%9F%A5%E3%80%81%E6%89%93%E5%8D%B0%E5%88%B0%E4%BD%A0%E7%9A%84%E6%8B%93%E7%AB%B9%E3%80%82&descSize=18&descAlignY=58" width="100%" alt="Bambu Lab AI">
+
 <div align="center">
 
-# Bambu Lab AI
+<img src="https://readme-typing-svg.demolab.com?font=Noto+Sans+SC&weight=600&size=19&duration=2800&pause=900&color=00AE42&center=true&vCenter=true&repeat=true&width=780&height=42&lines=%E2%80%9C%E7%BB%99%E6%88%91%E6%89%93%E4%B8%80%E5%8F%AA+6+cm+%E9%AB%98%E7%9A%84%E5%B0%8F%E7%8C%AB%E6%89%8B%E5%8A%9E%E2%80%9D;%E2%80%9C%E8%AE%BE%E8%AE%A1%E4%B8%80%E4%B8%AA%E5%8D%A1+32+mm+%E6%B0%B4%E7%AE%A1%E7%9A%84%E5%A2%99%E9%9D%A2%E6%94%AF%E6%9E%B6%EF%BC%8C%E4%B8%A4%E4%B8%AA+M4+%E8%9E%BA%E4%B8%9D%E5%AD%94%E2%80%9D;%E2%80%9C%E6%8A%8A%E8%BF%99%E5%BC%A0%E7%85%A7%E7%89%87%E5%8F%98%E6%88%90%E5%BD%A9%E8%89%B2+3D+%E6%89%93%E5%8D%B0%E4%BB%B6%E2%80%9D;%E2%80%9C%E6%89%93%E5%AE%8C%E4%BA%86%E5%90%97%EF%BC%9FAMS+%E9%87%8C%E8%A3%85%E7%9A%84%E4%BB%80%E4%B9%88%E8%80%97%E6%9D%90%EF%BC%9F%E2%80%9D" alt="示例对话">
 
-**开源仓库名：Bambu Studio AI（`bambu-studio-ai`）** · [English](README.md)
+<sub>开源仓库名：<b>Bambu Studio AI</b>（<code>bambu-studio-ai</code>）· <a href="README.md">English</a></sub>
 
-### 跟你的 AI 说一句话，它来建模、检查、开到 Bambu Studio，最后打印出来。
+<br><br>
 
-一个开源 **Agent Skill**，装进 Claude Code、OpenAI Codex、Cursor、Gemini CLI、GitHub Copilot
-以及任何支持 [`SKILL.md`](https://agentskills.io) 标准的 AI 助手里。它负责找模型或生成模型、
-确认真的能打印、交给 Bambu Studio 让你过目切片，然后盯着打印进度。全程你说了算。
+[![拓竹官方精选](https://img.shields.io/badge/%F0%9F%8F%86_%E6%8B%93%E7%AB%B9%E5%AE%98%E6%96%B9%E7%B2%BE%E9%80%89-Skill_%E5%A4%A7%E8%B5%8F_2026-00AE42?style=for-the-badge&labelColor=060E1B)](https://xhslink.cn/o/6JZRUdwvZdC)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-SKILL.md-060E1B?style=for-the-badge&logo=markdown&logoColor=F2FC75)](https://agentskills.io)
+[![Release](https://img.shields.io/github/v/release/heyixuan2/bambu-studio-ai?style=for-the-badge&label=release&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/heyixuan2/bambu-studio-ai/ci.yml?style=for-the-badge&label=CI&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/heyixuan2/bambu-studio-ai?style=for-the-badge&logo=github&labelColor=060E1B&color=F2FC75)](https://github.com/heyixuan2/bambu-studio-ai/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-00AE42?style=for-the-badge&labelColor=060E1B)](LICENSE)
 
-[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-SKILL.md-8A2BE2)](https://agentskills.io)
-[![CI](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)](#版本历史)
-[![拓竹官方精选](https://img.shields.io/badge/%E6%8B%93%E7%AB%B9%E5%AE%98%E6%96%B9-Skill%20%E5%A4%A7%E8%B5%8F%E9%A6%96%E6%89%B9%E7%B2%BE%E9%80%89-00AE42)](https://xhslink.cn/o/6JZRUdwvZdC)
+<br>
+
+**装进你已经在用的 AI 助手**
+
+[![Claude Code](https://img.shields.io/badge/Claude_Code-060E1B?style=for-the-badge&logo=claude&logoColor=D97757)](#三步开始)
+[![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-060E1B?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjIuMjgyIDkuODIxYTUuOTg1IDUuOTg1IDAgMCAwLS41MTYtNC45MSA2LjA0NiA2LjA0NiAwIDAgMC02LjUxLTIuOUE2LjA2NSA2LjA2NSAwIDAgMCAxMS43MDggMGE2LjA2IDYuMDYgMCAwIDAtNS43OSA0LjIgNS45ODggNS45ODggMCAwIDAtNC4wMDUgMi45MDIgNi4wNTMgNi4wNTMgMCAwIDAgLjc0OCA3LjA5NyA1Ljk4IDUuOTggMCAwIDAgLjUxIDQuOTExIDYuMDUxIDYuMDUxIDAgMCAwIDYuNTE1IDIuOUE1Ljk4NSA1Ljk4NSAwIDAgMCAxMy4yNiAyNGE2LjA1NiA2LjA1NiAwIDAgMCA1Ljc3Mi00LjIwNiA1Ljk5IDUuOTkgMCAwIDAgMy45OTctMi45IDYuMDU2IDYuMDU2IDAgMCAwLS43NDctNy4wNzN6TTEzLjI2IDIyLjQzYTQuNDc2IDQuNDc2IDAgMCAxLTIuODc2LTEuMDRsLjE0MS0uMDgxIDQuNzc5LTIuNzU4YS43OTUuNzk1IDAgMCAwIC4zOTItLjY4MXYtNi43MzdsMi4wMiAxLjE2OGEuMDcxLjA3MSAwIDAgMSAuMDM4LjA1MnY1LjU4M2E0LjUwNCA0LjUwNCAwIDAgMS00LjQ5NCA0LjQ5NHpNMy42IDE4LjMwNGE0LjQ3IDQuNDcgMCAwIDEtLjUzNS0zLjAxNGwuMTQyLjA4NSA0Ljc4MyAyLjc1OWEuNzcxLjc3MSAwIDAgMCAuNzggMGw1Ljg0My0zLjM2OXYyLjMzMmEuMDguMDggMCAwIDEtLjAzMy4wNjJMOS43NCAxOS45NWE0LjUgNC41IDAgMCAxLTYuMTQtMS42NDZ6TTIuMzQgNy44OTZhNC40ODUgNC40ODUgMCAwIDEgMi4zNjYtMS45NzNWMTEuNmEuNzY2Ljc2NiAwIDAgMCAuMzg4LjY3Nmw1LjgxNSAzLjM1NS0yLjAyIDEuMTY4YS4wNzYuMDc2IDAgMCAxLS4wNzEgMGwtNC44My0yLjc4NkE0LjUwNCA0LjUwNCAwIDAgMSAyLjM0IDcuODcyem0xNi41OTcgMy44NTVsLTUuODMzLTMuMzg3TDE1LjExOSA3LjJhLjA3Ni4wNzYgMCAwIDEgLjA3MSAwbDQuODMgMi43OTFhNC40OTQgNC40OTQgMCAwIDEtLjY3NiA4LjEwNXYtNS42NzhhLjc5Ljc5IDAgMCAwLS40MDctLjY2N3ptMi4wMS0zLjAyM2wtLjE0MS0uMDg1LTQuNzc0LTIuNzgyYS43NzYuNzc2IDAgMCAwLS43NzYgMEw5LjQwOSA5LjIzVjYuODk3YS4wNjYuMDY2IDAgMCAxIC4wMjgtLjA2MWw0LjgzLTIuNzg3YTQuNSA0LjUgMCAwIDEgNi42OCA0LjY2em0tMTIuNjQgNC4xMzVsLTIuMDItMS4xNjRhLjA4LjA4IDAgMCAxLS4wMzgtLjA1N1Y2LjA3NWE0LjUgNC41IDAgMCAxIDcuMzc1LTMuNDUzbC0uMTQyLjA4TDguNzA0IDUuNDZhLjc5NS43OTUgMCAwIDAtLjM5My42ODF6bTEuMDk3LTIuMzY1bDIuNjAyLTEuNSAyLjYwNyAxLjV2Mi45OTlsLTIuNTk3IDEuNS0yLjYwNy0xLjV6Ii8+PC9zdmc+)](#三步开始)
+[![Cursor](https://img.shields.io/badge/Cursor-060E1B?style=for-the-badge&logo=cursor&logoColor=white)](#三步开始)
+[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-060E1B?style=for-the-badge&logo=googlegemini&logoColor=8E75B2)](#三步开始)
+[![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-060E1B?style=for-the-badge&logo=githubcopilot&logoColor=white)](#三步开始)
+[![还有 60 多种](https://img.shields.io/badge/%E8%BF%98%E6%9C%89_60_%E5%A4%9A%E7%A7%8D-00AE42?style=for-the-badge&labelColor=060E1B)](#安装细节)
 
 </div>
 
-> **🏆 拓竹官方精选。** 入选 Bambu Lab 官方「我的拓竹 Skill 大赏」**首批精选作品**，
-> 官方海报名称为 **Bambu Lab AI**。[小红书原帖 →](https://xhslink.cn/o/6JZRUdwvZdC)
->
-> <img src="docs/assets/bambu-skill-award-2026.jpg" alt="Bambu Lab AI · 我的拓竹 Skill 大赏（海报来自拓竹官方）" width="360">
->
-> <sub>海报 © Bambu Lab 拓竹科技，来自官方发布。</sub>
+<br>
+
+<table align="center">
+<tr>
+<td width="38%" align="center" valign="middle">
+<a href="https://xhslink.cn/o/6JZRUdwvZdC"><img src="docs/assets/bambu-skill-award-2026.jpg" alt="Bambu Lab AI · 我的拓竹 Skill 大赏（海报来自拓竹官方）" width="300"></a>
+</td>
+<td width="62%" valign="middle">
+
+### 🏆 拓竹官方精选
+
+入选 Bambu Lab 官方「**我的拓竹 Skill 大赏**」**首批精选作品**，官方海报名称为 **Bambu Lab AI**。
+
+> *「从想法到成品，最少需要几步？这位拓竹玩家的答案是：一步。」*
+> <br>—— 拓竹官方发布语
+
+海报上那只黄色小人是真实打印件，由这个 skill 从生成到打印全程完成。
+
+[**查看小红书原帖 →**](https://xhslink.cn/o/6JZRUdwvZdC)
+
+<sub>海报 © Bambu Lab 拓竹科技，来自官方发布。</sub>
+
+</td>
+</tr>
+</table>
+
+<br>
+
+## 💬 一次对话长什么样
+
+<table>
+<tr>
+<td width="58%" valign="top">
 
 ```text
 你     我要一个卡 32 mm 水管的墙面支架，两个 M4 螺丝孔，PETG，用 A1 打。
@@ -40,6 +78,17 @@ AI     这是精密件，我按精确尺寸建模，不用 AI 生成。
 
 AI     检测到打印开始。每 30 分钟给你一次进度，卡住或温度异常会立刻提醒。
 ```
+
+</td>
+<td width="42%" align="center" valign="middle">
+
+<img src="docs/assets/demo-pipe-clamp-turntable.gif" alt="preview.py 生成的管卡 360° 转盘渲染" width="100%">
+
+<sub>这段对话的真实产物：<code>parametric.py</code> 建模，<code>preview.py --views turntable</code> 渲染，未经修饰。</sub>
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -266,3 +315,12 @@ MIT，见 [LICENSE](LICENSE)。
 
 <sub>Bambu Lab AI / Bambu Studio AI 是 TieGaier 的独立社区项目，获拓竹官方精选推荐，但并非拓竹科技
 开发或官方支持的产品。"Bambu Lab" 与 "Bambu Studio" 为其所有者的商标。</sub>
+
+<div align="center">
+<br>
+
+**为拓竹社区用 💚 制作** · [回到顶部 ↑](#top)
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:060E1B,45:0B5B33,100:00AE42&height=120&section=footer" width="100%" alt="">
