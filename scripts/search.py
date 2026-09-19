@@ -1,153 +1,131 @@
 #!/usr/bin/env python3
 """
-Bambu Studio AI — Model Search
-Searches 3D model repositories via DuckDuckGo.
+Search MakerWorld and Printables for ready-made 3D models.
+
+Both sites are searched in parallel through their own public search APIs, and the
+results come with author, licence, downloads and likes. Only the query text is sent;
+nothing is downloaded (the user opens the link and downloads from the site).
 
 Usage:
-  python3 scripts/search.py "pikachu"
-  python3 scripts/search.py "vase" --source makerworld --limit 5
-  python3 scripts/search.py "gear" --source all
+  python3 scripts/search.py "phone stand"
+  python3 scripts/search.py "vase" --source makerworld --limit 10
+  python3 scripts/search.py "cable clip" --sort likes --json
 
-Sources: MakerWorld, Printables, Thingiverse, Thangs
-Requires: pip install ddgs
+Exit codes: 0 the search ran (even with no results) · 1 every site failed ·
+2 bad arguments.
 """
 
-import argparse, json, os, re, sys
+import argparse
+import json
+import sys
+
+from bambu_studio_ai.search import DEFAULT_LIMIT, MAX_LIMIT, SITE_NAMES, SITES, SORT_KEYS, search
 from common import use_utf8_stdio
 
-SOURCES = {
-    "makerworld": {
-        "site": "makerworld.com",
-        "url_pattern": r"makerworld\.com/en/models/(\d+)",
-        "display": "MakerWorld (Bambu Lab)"
-    },
-    "printables": {
-        "site": "printables.com/model",
-        "url_pattern": r"printables\.com/model/(\d+)",
-        "display": "Printables (Prusa)"
-    },
-    "thingiverse": {
-        "site": "thingiverse.com/thing",
-        "url_pattern": r"thingiverse\.com/thing:(\d+)",
-        "display": "Thingiverse"
-    },
-    "thangs": {
-        "site": "thangs.com",
-        "url_pattern": r"thangs\.com/.+/(\d+)",
-        "display": "Thangs"
-    }
-}
+EXIT_OK, EXIT_FAILED, EXIT_USAGE = 0, 1, 2
+
+REMOVED_SOURCES = ("thangs", "thingiverse")
+REMOVED_MESSAGE = """\
+`--source {source}` was removed in v2.1.
+
+Model search now asks each site's own search API instead of a web search engine,
+which returned ads and pages from other sites. Thingiverse's API needs every user to
+register their own OAuth app, and Thangs has no public API, so neither is searched
+for now. Search MakerWorld and Printables instead:
+
+  python3 scripts/search.py "<query>"                  # both sites
+  python3 scripts/search.py "<query>" --source printables
+"""
+
+AGENT_HINT = ("➡️ Show the user these options (title, site, licence, link) and let them pick; "
+              "they download the file from the site themselves.")
 
 
-def _web_search(query, site=None, limit=5):
-    """Search via DuckDuckGo (ddgs package)."""
+def limit_value(text):
+    """argparse type for --limit: an int from 1 to MAX_LIMIT."""
     try:
-        from ddgs import DDGS
-    except ImportError:
-        try:
-            from duckduckgo_search import DDGS
-        except ImportError:
-            print("⚠️ Install search backend: pip install ddgs", file=sys.stderr)
-            return []
-
-    search_q = f"site:{site} {query}" if site else query
-    try:
-        raw = DDGS().text(search_q, max_results=limit)
-        return [{"url": r["href"], "title": r["title"]} for r in raw if r.get("href")]
-    except Exception as e:
-        print(f"⚠️ Search failed: {e}", file=sys.stderr)
-        return []
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if not 1 <= value <= MAX_LIMIT:
+        raise argparse.ArgumentTypeError(f"must be between 1 and {MAX_LIMIT}")
+    return value
 
 
-def _dedup_results(results):
-    """Deduplicate results by URL path (ignore query params). Keep first occurrence."""
-    from urllib.parse import urlparse
-    seen = set()
-    deduped = []
-    for r in results:
-        key = urlparse(r["url"])._replace(query="", fragment="").geturl()
-        if key not in seen:
-            seen.add(key)
-            deduped.append(r)
-    return deduped
-
-
-def search(query, source="all", limit=5):
-    """Search 3D model repositories."""
-    results = []
-
-    if source == "all":
-        sources_to_search = SOURCES.items()
-    elif source in SOURCES:
-        sources_to_search = [(source, SOURCES[source])]
-    else:
-        print(f"❌ Unknown source: {source}. Choose: {', '.join(SOURCES.keys())}, all", file=sys.stderr)
-        return []
-
-    for name, config in sources_to_search:
-        raw = _web_search(f"{query} 3D printable model", site=config["site"], limit=limit)
-        for r in raw:
-            id_match = re.search(config["url_pattern"], r["url"])
-            model_id = id_match.group(1) if id_match else ""
-            results.append({
-                "source": config["display"],
-                "source_key": name,
-                "name": r["title"],
-                "url": r["url"],
-                "id": model_id,
-            })
-
-    return _dedup_results(results)
-
-
-def print_results(results):
-    """Pretty-print search results."""
-    if not results:
-        print("❌ No models found. Try different keywords.")
-        return
-
-    print(f"\n🔍 Found {len(results)} models:\n")
-    for i, r in enumerate(results, 1):
-        print(f"  {i}. [{r['source']}] {r['name']}")
-        print(f"     {r['url']}")
-        print()
-
-    print("💡 To use a model:")
-    print("   1. Download the STL/OBJ from the link above")
-    print("   2. Run: python3 scripts/analyze.py <file> --height 80 --orient --repair")
-    print("   3. For multi-color: python3 scripts/colorize <file.glb> --max_colors 6")
-
-
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
-        description="Search 3D model repositories (MakerWorld, Printables, Thingiverse, Thangs)")
-    parser.add_argument("query", help="Search query (e.g. 'pikachu', 'gear box')")
-    parser.add_argument("--source", "-s", default="all",
-                       choices=["all"] + list(SOURCES.keys()),
-                       help="Source (default: all)")
-    parser.add_argument("--limit", "-l", type=int, default=5,
-                       help="Max results per source (default: 5)")
-    parser.add_argument("--json", action="store_true", help="JSON output")
-    args = parser.parse_args()
+        description="Search MakerWorld and Printables for 3D models to print.",
+        epilog="Only the query is sent, to api.bambulab.com (MakerWorld) and "
+               "api.printables.com. Nothing is downloaded.",
+    )
+    parser.add_argument("query", help="what to look for, e.g. 'phone stand'")
+    parser.add_argument("--source", "-s", default="all", choices=["all", *SITES, *REMOVED_SOURCES],
+                        metavar="{all," + ",".join(SITES) + "}",
+                        help="site to search (default: all)")
+    parser.add_argument("--limit", "-l", type=limit_value, default=DEFAULT_LIMIT,
+                        help=f"total number of results across all sites, not per site "
+                             f"(1-{MAX_LIMIT}, default {DEFAULT_LIMIT})")
+    parser.add_argument("--sort", choices=SORT_KEYS, default="downloads",
+                        help="downloads (default), likes, newest, or relevance "
+                             "(each site's own ranking, alternating between sites)")
+    parser.add_argument("--json", action="store_true", help="print one JSON object")
+    return parser
 
-    results = search(args.query, args.source, args.limit)
+
+def format_result(number, result):
+    stats = [SITE_NAMES[result.site]]
+    if result.author:
+        stats.append(f"by {result.author}")
+    if result.downloads is not None:
+        stats.append(f"{result.downloads:,} downloads")
+    if result.likes is not None:
+        stats.append(f"{result.likes:,} likes")
+    stats.append(result.license or "licence not stated")
+    return f"{number:>2}. {result.title}\n    {' · '.join(stats)}\n    {result.url}"
+
+
+def print_human(query, report, sort):
+    names = " and ".join(SITE_NAMES[site] for site in report.sites)
+    if not report.results:
+        if not report.all_failed:
+            print(f'No models found for "{query}" on {names}. Try fewer or different words, or English terms.')
+        return
+    print(f'🔍 {len(report.results)} models for "{query}" on {names}, by {sort}:\n')
+    for number, result in enumerate(report.results, 1):
+        print(format_result(number, result))
+    print()
+    print(AGENT_HINT)
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    if args.source in REMOVED_SOURCES:
+        print(REMOVED_MESSAGE.format(source=args.source), file=sys.stderr)
+        return EXIT_USAGE
+    sites = SITES if args.source == "all" else (args.source,)
+    try:
+        report = search(args.query, sites=sites, limit=args.limit, sort=args.sort)
+    except ValueError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+    for failure in report.failed_sites:
+        print(f"⚠️ {SITE_NAMES[failure.site]} could not be searched: {failure.reason}", file=sys.stderr)
+    if report.all_failed:
+        print("❌ Search failed on every site; check the internet connection and try again.", file=sys.stderr)
+
+    query = " ".join(args.query.split())
     if args.json:
-        print(json.dumps(results, indent=2))
+        print(json.dumps({"schema": 1, "query": query, "sort": args.sort, **report.to_dict()},
+                         ensure_ascii=False))
     else:
-        print_results(results)
-        if not results:
-            sys.exit(1)
+        print_human(query, report, args.sort)
+    return EXIT_FAILED if report.all_failed else EXIT_OK
 
 
 if __name__ == "__main__":
     use_utf8_stdio()
     try:
-        main()
+        sys.exit(main())
     except KeyboardInterrupt:
-        print("\n⏹️ Cancelled.")
         sys.exit(130)
-    except SystemExit:
-        raise
-    except Exception as e:
-        print(f"❌ Search error: {e}", file=sys.stderr)
-        sys.exit(1)
