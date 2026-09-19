@@ -10,7 +10,6 @@ MAX_LINES = 400
 LEGACY_LIMITS = {
     "scripts/generate.py": 1235,
     "scripts/analyze.py": 866,
-    "scripts/preview.py": 457,
     "scripts/parametric.py": 453,
 }
 
