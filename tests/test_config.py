@@ -70,9 +70,28 @@ def test_configure_set_and_secret(home):
 
 
 def test_configure_rejects_bad_values(home):
-    assert _configure("set", "model", "Z9").returncode != 0
+    r = _configure("set", "model", "Z9")
+    assert r.returncode != 0
+    assert "H2D Pro" in r.stdout + r.stderr  # lists the valid models
     assert _configure("set", "access_code", "x").returncode != 0
     assert not (home / "config.json").exists()
+
+
+@pytest.mark.parametrize("given, stored", [("A2L", "A2L"), ("x1 carbon", "X1C"), ("h2d pro", "H2D Pro")])
+def test_configure_accepts_every_model_and_alias(home, given, stored):
+    """Regression: A2L and H2D Pro were rejected because they were missing from BUILD_VOLUMES."""
+    r = _configure("set", "model", given)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads((home / "config.json").read_text())["model"] == stored
+
+
+def test_configure_model_validator_matches_printers_json():
+    import configure
+    from bambu_studio_ai import hardware
+
+    for key, printer in hardware.printers().items():
+        assert configure.CONFIG_KEYS["model"](key) == key
+        assert configure.CONFIG_KEYS["model"](printer.machine) == key
 
 
 def test_bambu_reads_connection_from_config(home):

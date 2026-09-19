@@ -21,17 +21,17 @@ import os
 import shutil
 import sys
 
+from bambu_studio_ai import hardware
 from common import use_utf8_stdio
 from common import (
-    SKILL_DIR, BUILD_VOLUMES, ENV_TO_CONFIG, home_dir, user_file, write_private_json,
+    SKILL_DIR, ENV_TO_CONFIG, home_dir, user_file, write_private_json,
 )
 
-PRINTER_MODELS = list(BUILD_VOLUMES)
 PROVIDERS = ["meshy", "tripo", "printpal", "3daistudio", "rodin"]
 
 # key -> validator/coercer. Unknown keys are accepted with a warning.
 CONFIG_KEYS = {
-    "model": lambda v: _choice(v, PRINTER_MODELS),
+    "model": lambda v: _printer_model(v),
     "printer_ip": str,
     "serial": str,
     "printer_name": str,
@@ -56,6 +56,14 @@ def _choice(value, options):
         if value.lower() == opt.lower():
             return opt
     raise ValueError(f"must be one of: {', '.join(options)}")
+
+
+def _printer_model(value):
+    """Canonical model key for a name or alias ("x1 carbon" -> "X1C")."""
+    try:
+        return hardware.printer(value).key
+    except hardware.UnknownHardwareError as e:
+        raise ValueError(f"must be one of: {', '.join(hardware.printers())}") from e
 
 
 def _bool(value):

@@ -85,7 +85,22 @@ def test_not_configured_is_exit_2(capsys):
     assert monitor.main(["--once"]) == monitor.EXIT_CONFIG
 
 
-def test_limits_for_models():
-    assert monitor.limits_for("H2D").nozzle_c == 350
-    assert monitor.limits_for("X1E").nozzle_c == 320
-    assert monitor.limits_for("A1 Mini").bed_c == 80
+@pytest.mark.parametrize("model, nozzle, bed", [
+    ("H2D", 350, 120),
+    ("H2S", 350, 120),      # regression: was 300 °C, so every H2S print raised a false alarm
+    ("H2D Pro", 350, 120),  # regression: missing, fell back to 300 °C
+    ("X1E", 320, 110),
+    ("A1 Mini", 300, 80),
+    ("a2l", 300, 80),
+    ("X1 Carbon", 300, 110),
+])
+def test_limits_come_from_printers_json(model, nozzle, bed):
+    limits = monitor.limits_for(model)
+    assert (limits.nozzle_c, limits.bed_c) == (nozzle, bed)
+
+
+@pytest.mark.parametrize("model", ["", "Ender 3", None])
+def test_unknown_printer_gets_the_highest_limits(model):
+    """An unidentified printer must never raise a false over-temperature alert."""
+    limits = monitor.limits_for(model)
+    assert (limits.nozzle_c, limits.bed_c) == (350, 120)

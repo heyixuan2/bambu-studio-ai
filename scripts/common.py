@@ -14,6 +14,8 @@ import subprocess
 import sys
 import threading
 
+from bambu_studio_ai import hardware
+
 # ─── Paths ──────────────────────────────────────────────────────────
 #
 # The skill folder itself is treated as read-only: agents install it into
@@ -127,37 +129,56 @@ def get_config(env_key, config_dict, config_key, default=""):
     return config_dict.get(config_key, default)
 
 
-# ─── Build Volumes (with 10% safety margin) ─────────────────────────
+# ─── Printer and material tables (legacy names) ─────────────────────
+#
+# analyze.py, generate.py and configure.py import these names. They are built on first
+# access (PEP 562 module __getattr__) from assets/printers.json and assets/materials.json
+# through bambu_studio_ai.hardware, so importing common reads nothing. New code should
+# call bambu_studio_ai.hardware directly.
 
-BUILD_VOLUMES = {
-    "A1 Mini":  (162, 162, 162),
-    "A1":       (230, 230, 230),
-    "P1S":      (230, 230, 230),
-    "P2S":      (230, 230, 230),
-    "X1C":      (230, 230, 230),
-    "X1E":      (230, 230, 230),
-    "H2C":      (230, 230, 230),
-    "H2S":      (306, 288, 306),
-    "H2D":      (315, 288, 292),
-    "X2D":      (230, 230, 234),
+# Infill is chosen by purpose, not material; these are the defaults analyze.py suggests.
+_LEGACY_INFILL = {"infill_deco": 15, "infill_func": 30}
+
+
+def _mm(value):
+    return int(value) if float(value).is_integer() else value
+
+
+def _build_volumes():
+    """Model key -> (W, D, H) in mm that a part must fit: the region every nozzle reaches,
+    less a 5 mm margin per side for a brim (hardware.usable_volume)."""
+    return {key: tuple(_mm(v) for v in hardware.usable_volume(printer))
+            for key, printer in hardware.printers().items()}
+
+
+def _materials():
+    """Upper-case material name or alias -> the property dict analyze.py reads."""
+    table = {}
+    for m in hardware.materials().values():
+        props = {"min_wall": m.min_wall_mm, "min_temp": m.nozzle_c[0], "max_temp": m.nozzle_c[1],
+                 "bed": m.bed_c, "enclosed": m.needs_enclosure, **_LEGACY_INFILL}
+        for name in (m.key, *m.aliases):
+            table[name.upper()] = props
+    return table
+
+
+_LEGACY_TABLES = {
+    "BUILD_VOLUMES": _build_volumes,
+    "MATERIALS": _materials,
+    "ENCLOSED_PRINTERS": lambda: {k for k, p in hardware.printers().items() if p.enclosed},
+    # Printers with a 350 °C hotend (the H2 series).
+    "HIGH_TEMP_PRINTERS": lambda: {k for k, p in hardware.printers().items() if p.max_nozzle_c >= 350},
 }
 
-# ─── Materials ──────────────────────────────────────────────────────
 
-MATERIALS = {
-    "PLA":  {"min_wall": 1.2, "min_temp": 190, "max_temp": 220, "bed": 60,  "infill_deco": 15, "infill_func": 30, "enclosed": False},
-    "PLA+": {"min_wall": 1.2, "min_temp": 200, "max_temp": 230, "bed": 60,  "infill_deco": 15, "infill_func": 30, "enclosed": False},
-    "PETG": {"min_wall": 1.2, "min_temp": 220, "max_temp": 250, "bed": 80,  "infill_deco": 20, "infill_func": 40, "enclosed": False},
-    "TPU":  {"min_wall": 1.6, "min_temp": 210, "max_temp": 240, "bed": 50,  "infill_deco": 10, "infill_func": 30, "enclosed": False},
-    "ABS":  {"min_wall": 1.2, "min_temp": 230, "max_temp": 260, "bed": 100, "infill_deco": 15, "infill_func": 30, "enclosed": True},
-    "ASA":  {"min_wall": 1.2, "min_temp": 230, "max_temp": 260, "bed": 100, "infill_deco": 15, "infill_func": 30, "enclosed": True},
-    "PA":   {"min_wall": 1.5, "min_temp": 250, "max_temp": 280, "bed": 80,  "infill_deco": 20, "infill_func": 40, "enclosed": True},
-    "PC":   {"min_wall": 1.5, "min_temp": 260, "max_temp": 300, "bed": 100, "infill_deco": 20, "infill_func": 40, "enclosed": True},
-    "PEEK": {"min_wall": 2.0, "min_temp": 330, "max_temp": 350, "bed": 120, "infill_deco": 25, "infill_func": 50, "enclosed": True},
-}
+def __getattr__(name):
+    """Build a legacy table the first time it is imported."""
+    if name in _LEGACY_TABLES:
+        value = _LEGACY_TABLES[name]()
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-ENCLOSED_PRINTERS = {"P1S", "P2S", "X1C", "X1E", "H2C", "H2S", "H2D", "X2D"}
-HIGH_TEMP_PRINTERS = {"H2C", "H2D"}
 
 # ─── Named Constants ─────────────────────────────────────────────
 

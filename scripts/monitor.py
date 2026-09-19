@@ -25,10 +25,11 @@ import sys
 import time
 from datetime import datetime
 
+from bambu_studio_ai import hardware
 from bambu_studio_ai.monitor import Event, Limits, MonitorState, evaluate
 from bambu_studio_ai.printer import PrinterAuthError, PrinterConnectionError, parse_status, read_report
 from bambu import printer_settings
-from common import HIGH_TEMP_PRINTERS, desktop_notify, get_config, home_dir, load_config, output_dir, use_utf8_stdio
+from common import desktop_notify, get_config, home_dir, load_config, output_dir, use_utf8_stdio
 
 EXIT_OK, EXIT_FAILED, EXIT_CONFIG = 0, 1, 2
 MAX_FAILURES = 10            # consecutive failed checks before giving up (~20 min at the default interval)
@@ -45,15 +46,18 @@ def log_path():
 
 
 def limits_for(model):
-    """Rated maximum temperatures for a printer model."""
-    if model in HIGH_TEMP_PRINTERS:
-        nozzle = 350.0
-    elif model == "X1E":
-        nozzle = 320.0
-    else:
-        nozzle = 300.0
-    bed = {"A1 Mini": 80.0, "A1": 100.0, "A2L": 80.0}.get(model, 120.0)
-    return Limits(nozzle_c=nozzle, bed_c=bed)
+    """Rated maximum temperatures for a printer model (assets/printers.json).
+
+    An unknown or unset model gets the highest ratings in the table, so a printer we
+    can't identify never raises a false over-temperature alert.
+    """
+    try:
+        printer = hardware.printer(model or "")
+    except hardware.UnknownHardwareError:
+        known = hardware.printers().values()
+        return Limits(nozzle_c=float(max(p.max_nozzle_c for p in known)),
+                      bed_c=float(max(p.max_bed_c for p in known)))
+    return Limits(nozzle_c=float(printer.max_nozzle_c), bed_c=float(printer.max_bed_c))
 
 
 def load_state():
