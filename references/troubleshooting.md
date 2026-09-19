@@ -1,7 +1,7 @@
 # Troubleshooting
 
-Start with `python3 scripts/doctor.py`. It checks packages, Blender, Bambu Studio and where the
-config is being read from.
+Start with `python3 scripts/doctor.py`. It checks packages, Blender, Bambu Studio (the app, its
+command line and its printer profiles) and where the config is being read from.
 
 ## Setup and connection
 
@@ -34,7 +34,23 @@ config is being read from.
 |---|---|
 | `Bambu Studio not found` | Install it from bambulab.com/en/download/studio. On Linux, AppImage or Flatpak (`com.bambulab.BambuStudio`) are detected; otherwise open the file manually |
 | Multi-color OBJ imports as one color | See [multicolor: importing](multicolor.md#importing-into-bambu-studio). Don't re-run colorize |
-| CLI slicing crashes | `slice.py` uses OrcaSlicer because the Bambu Studio CLI crashed in v2.5. Slice in the Bambu Studio GUI instead |
+
+## Slicing (`slice.py`)
+
+`slice.py` runs Bambu Studio's own command line with Bambu Studio's own printer profiles, so the
+sliced 3MF keeps the printer's start sequence (bed levelling, vibration compensation, AMS loading)
+unchanged. Verified with Bambu Studio 02.07.01.62 on macOS; the Windows and Linux paths are
+untested.
+
+| Problem | Fix |
+|---|---|
+| `No printer given and none configured` | Pass `--printer P1S` (or any model `slice.py --help` lists), or `configure.py set model P1S` |
+| `Bambu Studio not found` | Install Bambu Studio 02.05.02 or newer and start it once. On Linux, or for an unusual install, set `BAMBU_STUDIO_CLI` to the executable and `BAMBU_STUDIO_PROFILES` to the folder that holds `BBL.json` |
+| Crashes or prints nothing | Bambu Studio 02.05.00–02.05.01 crashed in command-line mode; update. On Windows the command line may print nothing (bambulab/BambuStudio#9802, open): slice in the app instead |
+| `can't read STEP files` | The command line reads STL, 3MF, OBJ, AMF, PLY, glTF/GLB and FBX. Export one of those, or open the STEP with `bambu.py open` and slice in the app |
+| `No … process profile` / `No … filament profile` / `no … nozzle profile` | The message lists what exists for that printer. `slice.py --list-profiles --printer P1S` shows nozzles, quality presets, layer heights and materials |
+| `Filaments are not compatible with the plate type` | That filament can't print on the printer's default plate (Textured PEI). Pick the plate and slice in the app |
+| Estimate looks long for a small part | It includes Bambu's start sequence (heating, bed levelling, purge: several minutes), like the "total estimated time" Bambu Studio shows |
 
 ## Known limitations
 
@@ -43,7 +59,7 @@ config is being read from.
 | Single-color pipeline | Stable |
 | Multi-color (colorize) | Pipeline stable. Bambu Studio's vertex-color import sometimes misses colors |
 | Parametric modeling | Geometric and functional parts only, single-color STL |
-| CLI slicing | OrcaSlicer backend. Optional |
+| CLI slicing | Bambu Studio command line with its own profiles; one filament per slice. Needs Bambu Studio installed |
 | Auto-print | Works with Developer Mode (signed MQTT + FTPS upload). Disconnects Bambu Studio cloud and Handy |
 | Cloud mode | Status and basic control only. No camera, G-code or monitoring |
 | Desktop notifications | macOS and Linux (`notify-send`). Windows prints to the console only |
