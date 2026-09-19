@@ -2,14 +2,14 @@
 name = "bambu-studio-ai"
 version = "2.0.0"
 description = "Agent skill for Bambu Lab 3D printers: model search, AI generation, printability analysis, multi-color, printer control and monitoring"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 # Keep CI focused on correctness-critical checks for now.

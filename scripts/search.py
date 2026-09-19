@@ -46,7 +46,7 @@ def _web_search(query, site=None, limit=5):
         try:
             from duckduckgo_search import DDGS
         except ImportError:
-            print("⚠️ Install search backend: pip install ddgs")
+            print("⚠️ Install search backend: pip install ddgs", file=sys.stderr)
             return []
 
     search_q = f"site:{site} {query}" if site else query
@@ -54,7 +54,7 @@ def _web_search(query, site=None, limit=5):
         raw = DDGS().text(search_q, max_results=limit)
         return [{"url": r["href"], "title": r["title"]} for r in raw if r.get("href")]
     except Exception as e:
-        print(f"⚠️ Search failed: {e}")
+        print(f"⚠️ Search failed: {e}", file=sys.stderr)
         return []
 
 
@@ -80,7 +80,7 @@ def search(query, source="all", limit=5):
     elif source in SOURCES:
         sources_to_search = [(source, SOURCES[source])]
     else:
-        print(f"❌ Unknown source: {source}. Choose: {', '.join(SOURCES.keys())}, all")
+        print(f"❌ Unknown source: {source}. Choose: {', '.join(SOURCES.keys())}, all", file=sys.stderr)
         return []
 
     for name, config in sources_to_search:
