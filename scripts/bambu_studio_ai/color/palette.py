@@ -142,17 +142,22 @@ def assign(lab: FloatArray, palette: Palette) -> NDArray[np.int64]:
     return np.argmin(distances, axis=1).astype(np.int64)
 
 
+def _squared_distance(lab: FloatArray, centre: FloatArray) -> FloatArray:
+    difference: FloatArray = lab - centre
+    return np.asarray(np.sum(difference * difference, axis=1), dtype=np.float64)
+
+
 def _kmeans(lab: FloatArray, weight: FloatArray, k: int) -> FloatArray:
     """Weighted k-means with deterministic farthest-point seeding (heaviest bin first)."""
-    centres = [lab[int(np.argmax(weight))]]
-    nearest = np.sum((lab - centres[0]) ** 2, axis=1)
+    centres: list[FloatArray] = [lab[int(np.argmax(weight))]]
+    nearest = _squared_distance(lab, centres[0])
     while len(centres) < k:
-        score = weight * nearest
+        score: FloatArray = weight * nearest
         if float(score.max()) <= 0:
             break
-        pick = lab[int(np.argmax(score))]
+        pick: FloatArray = lab[int(np.argmax(score))]
         centres.append(pick)
-        nearest = np.minimum(nearest, np.sum((lab - pick) ** 2, axis=1))
+        nearest = np.minimum(nearest, _squared_distance(lab, pick))
     return _lloyd(lab, weight, np.array(centres), _KMEANS_ITERATIONS)
 
 
