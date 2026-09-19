@@ -22,12 +22,13 @@ import shutil
 import sys
 
 from bambu_studio_ai import hardware
+from bambu_studio_ai.generation.providers import PROVIDER_NAMES
 from common import use_utf8_stdio
 from common import (
     SKILL_DIR, ENV_TO_CONFIG, home_dir, user_file, write_private_json,
 )
 
-PROVIDERS = ["meshy", "tripo", "printpal", "3daistudio", "rodin"]
+PROVIDERS = list(PROVIDER_NAMES)  # meshy, tripo, rodin
 
 # key -> validator/coercer. Unknown keys are accepted with a warning.
 CONFIG_KEYS = {

@@ -1,1235 +1,328 @@
 #!/usr/bin/env python3
 """
-🎨 AI 3D Model Generator — Text/Image to 3D
-Supports: Meshy, Tripo3D, 3D AI Studio, Printpal, Hyper3D Rodin
+AI text-to-3D and image-to-3D with Meshy, Tripo or Hyper3D Rodin.
+
+The prompt is sent exactly as written. The default output is the provider's textured
+GLB, untouched: Bambu Studio 2.7+ opens GLB files and turns the texture into paint.
 
 Usage:
-  python3 scripts/generate.py text "a phone stand with cable hole"
-  python3 scripts/generate.py image photo.jpg
-  python3 scripts/generate.py image photo.jpg --prompt "make it a 3D printable model"
-  python3 scripts/generate.py status <task_id>
-  python3 scripts/generate.py download <task_id> [--format 3mf]
+  python3 scripts/generate.py text "a small dragon figurine" --wait
+  python3 scripts/generate.py image photo.png --wait --height 60
+  python3 scripts/generate.py status <task id>
+  python3 scripts/generate.py download <task id> [--format stl] [--height 60]
 
-Download reports disconnected parts but does NOT auto-delete — AI meshes often have
-non-manifold topology that trimesh.split() misreads as fragments even when the model
-is visually solid. Manual cleanup if truly needed: analyze.py model --repair --keep-main
+A task id looks like meshy:text:0193… and is all that is needed to check or resume a
+task later. Waiting never spends credits: if --timeout runs out, the task keeps running
+at the provider and `download <task id>` picks it up.
+
+Exit codes: 0 ok (including "still running") · 1 generation or download failed ·
+2 bad arguments or no API key · 3 missing dependency.
 """
 
+import argparse
+import json
 import os
 import sys
-import json
-import time
-import argparse
-import shutil
-import requests
 from pathlib import Path
 
+from bambu_studio_ai.generation.errors import DependencyError, InputError, ProviderError
+from bambu_studio_ai.generation.inputs import load_image
+from bambu_studio_ai.generation.ledger import FollowUpLedger
+from bambu_studio_ai.generation.pipeline import GenerationResult, Generator
+from bambu_studio_ai.generation.providers import PROVIDER_NAMES, ProviderSettings, create_provider
+from bambu_studio_ai.generation.providers.base import OUTPUT_FORMATS, GenerationRequest, TaskRef
+from common import get_config, home_dir, load_config, output_dir, use_utf8_stdio
 
-def _convert_model(input_path, target_format):
-    """Convert GLB/OBJ to STL/3MF using trimesh. Returns new path or original if conversion fails."""
-    if not input_path or not os.path.exists(input_path):
-        return input_path
-    
-    current_ext = os.path.splitext(input_path)[1].lower().lstrip('.')
-    target_format = target_format.lower().lstrip('.')
-    
-    # No conversion needed
-    if current_ext == target_format:
-        return input_path
-    
-    # Bambu Lab compatible formats
-    BAMBU_FORMATS = {"3mf", "stl", "step", "stp", "obj"}
-    
-    try:
-        import trimesh
-        mesh = trimesh.load(input_path, force="mesh")
-        new_path = os.path.splitext(input_path)[0] + f".{target_format}"
-        mesh.export(new_path)
-        print(f"🔄 Converted {current_ext.upper()} → {target_format.upper()}: {os.path.basename(new_path)}")
-        
-        # Warn if original format not Bambu-compatible
-        if current_ext not in BAMBU_FORMATS:
-            print(f"   ⚠️ Original {current_ext.upper()} is not Bambu Studio compatible. Using converted {target_format.upper()}.")
-        
-        return new_path
-    except ImportError:
-        print(f"⚠️ trimesh not installed — cannot convert {current_ext.upper()} to {target_format.upper()}")
-        print(f"   Run: pip3 install trimesh")
-        if current_ext not in BAMBU_FORMATS:
-            print(f"   ❌ WARNING: {current_ext.upper()} cannot be opened in Bambu Studio!")
-        return input_path
-    except Exception as e:
-        print(f"⚠️ Conversion failed: {e}")
-        return input_path
+EXIT_OK, EXIT_FAILED, EXIT_CONFIG, EXIT_DEPENDENCY = 0, 1, 2, 3
+LIBRARY_ERRORS = (InputError, DependencyError, ProviderError)
+DEFAULT_TIMEOUT_S = 900.0
+SCRIPT = "python3 scripts/generate.py"
 
-# ─── Config ──────────────────────────────────────────────────────────
-
-from common import use_utf8_stdio
-from common import BUILD_VOLUMES, load_config, output_dir, MAX_POLL_ITERATIONS
-
-_cfg = load_config(include_secrets=True)
-
-PROVIDER = os.environ.get("BAMBU_3D_PROVIDER", _cfg.get("3d_provider", "meshy")).lower()
-API_KEY = os.environ.get("BAMBU_3D_API_KEY", 
-    _cfg.get(f"{PROVIDER}_api_key", _cfg.get("3d_api_key", "")))
-OUTPUT_DIR = output_dir("models", create=False)  # created on first write
-PRINTER_MODEL = os.environ.get("BAMBU_MODEL", _cfg.get("model", ""))
-
-def get_max_size():
-    """Return max printable dimensions (W, D, H) in mm."""
-    if PRINTER_MODEL in BUILD_VOLUMES:
-        return BUILD_VOLUMES[PRINTER_MODEL]
-    return (230, 230, 230)
-
-# ─── Prompt Enhancement ──────────────────────────────────────────────
-
-def enhance_prompt(user_prompt, max_size=None, geometry_type="auto"):
-    """Add 3D-printing-specific instructions to user prompt.
-
-    Focus on connected printable geometry. Also rewrites a few common prompt
-    failure words (particles, wisps, detached flames, etc.) into solid
-    sculptural equivalents that text-to-3D models handle more reliably.
-    """
-    if not max_size:
-        max_size = get_max_size()
-
-    lower = user_prompt.lower()
-    # Don't double-enhance
-    if "3d print" in lower or "watertight" in lower:
-        return user_prompt
-
-    replacements = {
-        "smoke wisps": "solid smoke shapes attached to the model",
-        "hair strands": "smooth stylized hair mass",
-        "particles": "solid sculptural details",
-        "sparks": "thick attached accents",
-        "smoke": "solid smoke forms attached to the model",
-        "wisps": "solid stylized forms",
-        "flames": "solid sculptural flames attached to the model",
-        "fire": "solid sculptural fire attached to the model",
-        "strands": "smooth connected forms",
-        "floating": "attached",
-        "hovering": "connected",
-    }
-    rewritten = user_prompt
-    for bad, good in sorted(replacements.items(), key=lambda kv: -len(kv[0])):
-        rewritten = rewritten.replace(bad, good)
-        rewritten = rewritten.replace(bad.title(), good)
-
-    if geometry_type == "auto":
-        if any(k in lower for k in ["case", "stand", "hook", "bracket", "mount", "holder"]):
-            geometry_type = "functional"
-        elif any(k in lower for k in ["figurine", "character", "toy", "dragon", "animal", "statue"]):
-            geometry_type = "figurine"
-        else:
-            geometry_type = "general"
-
-    geometry_hint = {
-        "functional": (
-            "Engineering-friendly solid geometry, no separate screws or floating hardware, "
-            "thick connected base or mounting surface, minimum 1.5mm wall thickness."
-        ),
-        "figurine": (
-            "Solid sculpture figurine style, single connected piece, smooth continuous surfaces, "
-            "all limbs and accessories physically connected, no thin protruding details."
-        ),
-        "general": (
-            "Single fully-connected mesh with no floating or detached parts, all appendages must share mesh "
-            "geometry with the main body, minimum feature thickness 2mm, flat stable base for bed adhesion."
-        ),
-    }[geometry_type]
-
-    enhanced = (
-        f"{rewritten}. Designed for FDM 3D printing. "
-        f"CRITICAL STRUCTURAL REQUIREMENTS: {geometry_hint} "
-        f"No overhangs beyond 45° if possible. Maximum size {max_size[0]}×{max_size[1]}×{max_size[2]}mm. "
-        f"Watertight manifold mesh. Compact solid form preferred over open lattice structures."
-    )
-    return enhanced
-
-
-def refine_prompt_for_retry(prompt, attempt, failure_reason=""):
-    """Tighten prompt constraints after a failed generation/analysis pass."""
-    suffixes = [
-        "IMPORTANT: generate as one single connected solid piece with no disconnected geometry.",
-        "IMPORTANT: avoid floating accessories, particles, wisps, or detached details; merge all details into the main body.",
-        "IMPORTANT: prioritize printability over visual complexity; use thicker, simpler, more connected shapes.",
-    ]
-    extra = suffixes[min(max(attempt, 0), len(suffixes) - 1)]
-    if failure_reason:
-        extra += f" Failure to avoid: {failure_reason}."
-    return f"{prompt} {extra}"
-
-
-# ─── Image Preprocessing ─────────────────────────────────────────────
-
-def validate_image(path):
-    """Validate image file for 3D generation. Returns (ok, info_dict)."""
-    info = {"path": path, "width": 0, "height": 0, "format": "", "file_size": 0}
-    if not os.path.exists(path):
-        print(f"❌ Image not found: {path}")
-        return False, info
-    info["file_size"] = os.path.getsize(path)
-    if info["file_size"] > 20 * 1024 * 1024:
-        print(f"❌ Image too large ({info['file_size'] // 1024 // 1024}MB). Max 20MB.")
-        return False, info
-    if info["file_size"] > 10 * 1024 * 1024:
-        print(f"⚠️ Large image ({info['file_size'] // 1024 // 1024}MB) — may be slow to upload")
-    try:
-        from PIL import Image
-        img = Image.open(path)
-        info["width"], info["height"] = img.size
-        info["format"] = img.format or ""
-        info["has_alpha"] = img.mode in ("RGBA", "LA", "PA")
-        if info["format"] not in ("JPEG", "PNG", "WEBP", "BMP", "TIFF"):
-            print(f"⚠️ Unusual image format: {info['format']}. JPEG/PNG recommended.")
-        if info["width"] < 256 or info["height"] < 256:
-            print(f"❌ Image too small ({info['width']}×{info['height']}). Min 256×256 for decent 3D generation.")
-            return False, info
-        print(f"📷 Image: {info['width']}×{info['height']} {info['format']} ({info['file_size'] // 1024}KB)")
-    except ImportError:
-        print("⚠️ PIL not installed — skipping image validation (pip install Pillow)")
-        return True, info
-    except Exception as e:
-        print(f"❌ Cannot read image: {e}")
-        return False, info
-    return True, info
-
-
-def remove_background(image_path, info=None):
-    """Remove background using rembg. Returns path to processed image."""
-    if info and info.get("has_alpha"):
-        print("   Image already has alpha channel — skipping background removal")
-        return image_path
-    try:
-        from rembg import remove as rembg_remove
-        from PIL import Image
-    except ImportError:
-        print("⚠️ rembg not installed — skipping background removal (pip install rembg)")
-        return image_path
-
-    stem = os.path.splitext(image_path)[0]
-    out_path = f"{stem}_nobg.png"
-    try:
-        img = Image.open(image_path)
-        result = rembg_remove(img)
-        result.save(out_path, "PNG")
-        print(f"   ✅ Background removed → {os.path.basename(out_path)}")
-        return out_path
-    except Exception as e:
-        print(f"⚠️ Background removal failed: {e} — using original image")
-        return image_path
-
-
-def _download_url_image(url):
-    """Download URL image to temp file. Returns local path."""
-    import tempfile
-    suffix = ".jpg"
-    for ext in (".png", ".webp", ".bmp", ".jpeg", ".jpg"):
-        if ext in url.lower():
-            suffix = ext
-            break
-    try:
-        r = requests.get(url, timeout=30)
-        r.raise_for_status()
-        content_type = r.headers.get("content-type", "")
-        if "png" in content_type:
-            suffix = ".png"
-        elif "webp" in content_type:
-            suffix = ".webp"
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir=OUTPUT_DIR)
-        tmp.write(r.content)
-        tmp.close()
-        print(f"📥 Downloaded image → {os.path.basename(tmp.name)} ({len(r.content) // 1024}KB)")
-        return tmp.name
-    except Exception as e:
-        print(f"❌ Failed to download image: {e}")
-        return None
-
-
-def enhance_image_prompt(user_prompt="", max_size=None):
-    """Build a prompt for image-to-3D with 3D-printing constraints."""
-    if not max_size:
-        max_size = get_max_size()
-    if user_prompt and ("3d print" in user_prompt.lower() or "watertight" in user_prompt.lower()):
-        return user_prompt
-    base = user_prompt.strip() if user_prompt else "Convert this image to a 3D model"
-    return (
-        f"{base}. "
-        f"Designed for FDM 3D printing: single connected solid piece, smooth continuous surfaces, "
-        f"all parts physically attached, minimum feature thickness 2mm, flat stable base. "
-        f"Watertight manifold mesh. Max size {max_size[0]}×{max_size[1]}×{max_size[2]}mm."
-    )
-
-
-def _detect_texture_in_glb(file_path):
-    """Check if a GLB/GLTF file contains embedded textures. Returns True/False/None."""
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext not in (".glb", ".gltf"):
-        return None
-    try:
-        import pygltflib
-        glb = pygltflib.GLTF2().load(file_path)
-        if glb.images and len(glb.images) > 0:
-            return True
-        return False
-    except ImportError:
-        return None
-    except Exception:
-        return None
-
-
-# ─── Provider Backends ───────────────────────────────────────────────
-
-class _BaseBackend:
-    """Shared helpers for all AI 3D-model providers."""
-
-    # Map provider-specific status strings → unified states
-    _STATUS_MAP = {
-        "completed": "completed", "success": "completed", "succeeded": "completed",
-        "done": "completed",
-        "pending": "pending", "queued": "queued", "waiting": "queued",
-        "processing": "in_progress", "in_progress": "in_progress",
-        "generating": "in_progress", "running": "in_progress",
-        "failed": "failed", "error": "failed", "cancelled": "failed",
-    }
-
-    def _normalize_status(self, raw_status):
-        """Map a provider-specific status string to a unified state."""
-        return self._STATUS_MAP.get(raw_status.lower(), raw_status.lower())
-
-    @staticmethod
-    def _pick_download_url(urls, preferred_fmt="glb"):
-        """Pick best download URL from a dict of {format: url}."""
-        if not urls:
-            return None
-        preferred_fmt = preferred_fmt.lower().lstrip(".")
-        for key in (preferred_fmt, "glb", "obj", "stl", "fbx"):
-            url = urls.get(key)
-            if url:
-                return url
-        return next((v for v in urls.values() if v), None)
-
-    def _download_to(self, url, filename, timeout=(10, 120), retries=2):
-        """Download URL to OUTPUT_DIR/<filename>, return path. Retries on failure.
-        Writes to a .tmp file first and verifies Content-Length to prevent truncation.
-        """
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        out = os.path.join(OUTPUT_DIR, filename)
-        tmp = out + ".tmp"
-        last_err = None
-        for attempt in range(1 + retries):
-            try:
-                r = requests.get(url, stream=True, timeout=timeout)
-                r.raise_for_status()
-                expected_size = int(r.headers.get("Content-Length", 0)) or None
-                written = 0
-                with open(tmp, "wb") as f:
-                    for chunk in r.iter_content(8192):
-                        f.write(chunk)
-                        written += len(chunk)
-                if expected_size and written < expected_size:
-                    raise IOError(f"Incomplete download: got {written} bytes, expected {expected_size}")
-                os.replace(tmp, out)
-                return out
-            except Exception as e:
-                last_err = e
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-                if attempt < retries:
-                    time.sleep(3 * (attempt + 1))
-        raise last_err
-
-    def _download_model(self, url, task_id):
-        """Download model, inferring extension from URL."""
-        from urllib.parse import urlparse
-        url_ext = os.path.splitext(urlparse(url).path)[1].lstrip('.').lower()
-        ext = url_ext if url_ext in ("glb", "stl", "obj", "fbx", "gltf") else "glb"
-        return self._download_to(url, f"{task_id}.{ext}")
-
-
-class MeshyBackend(_BaseBackend):
-    """Meshy.ai — docs.meshy.ai"""
-    BASE = "https://api.meshy.ai"
-    
-    def headers(self):
-        return {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    
-    def text_to_3d(self, prompt, **kwargs):
-        # Step 1: Preview
-        r = requests.post(f"{self.BASE}/openapi/v2/text-to-3d",
-            headers=self.headers(),
-            json={"mode": "preview", "prompt": prompt, "art_style": kwargs.get("style", "realistic")}
-        )
-        r.raise_for_status()
-        task_id = r.json().get("result")
-        print(f"📤 Meshy task created: {task_id}")
-        return task_id
-    
-    def image_to_3d(self, image_path, prompt="", **kwargs):
-        # Upload image first or use URL
-        if image_path.startswith("http"):
-            image_url = image_path
-        else:
-            image_url = self._upload_image(image_path)
-        
-        r = requests.post(f"{self.BASE}/openapi/v1/image-to-3d",
-            headers=self.headers(),
-            json={"image_url": image_url, "enable_pbr": True}
-        )
-        r.raise_for_status()
-        task_id = r.json().get("result")
-        print(f"📤 Meshy image-to-3D task: {task_id}")
-        return task_id
-    
-    def _upload_image(self, path):
-        """Upload local image and return URL."""
-        with open(path, "rb") as f:
-            r = requests.post(f"{self.BASE}/openapi/v1/files",
-                headers={"Authorization": f"Bearer {API_KEY}"},
-                files={"file": f}
-            )
-        r.raise_for_status()
-        return r.json().get("url", r.json().get("result", ""))
-    
-    def get_status(self, task_id):
-        r = requests.get(f"{self.BASE}/openapi/v2/text-to-3d/{task_id}",
-            headers=self.headers())
-        if r.status_code == 404:
-            r = requests.get(f"{self.BASE}/openapi/v1/image-to-3d/{task_id}",
-                headers=self.headers())
-        r.raise_for_status()
-        data = r.json()
-        return {
-            "status": self._normalize_status(data.get("status", "unknown")),
-            "progress": data.get("progress", 0),
-            "model_urls": data.get("model_urls", {}),
-            "thumbnail": data.get("thumbnail_url", ""),
-        }
-
-    def download(self, task_id, fmt="stl"):
-        status = self.get_status(task_id)
-        url = self._pick_download_url(status.get("model_urls", {}), fmt)
-        if not url:
-            print(f"❌ No download URL. Status: {status['status']}")
-            return None
-        return self._download_model(url, task_id)
-
-
-class TripoBackend(_BaseBackend):
-    """Tripo3D — platform.tripo3d.ai"""
-    BASE = "https://api.tripo3d.ai/v2/openapi"
-    
-    def headers(self):
-        return {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    
-    def text_to_3d(self, prompt, **kwargs):
-        r = requests.post(f"{self.BASE}/task",
-            headers=self.headers(),
-            json={"type": "text_to_model", "texture": True, "prompt": prompt}
-        )
-        r.raise_for_status()
-        task_id = r.json()["data"]["task_id"]
-        print(f"📤 Tripo task created: {task_id}")
-        return task_id
-    
-    def image_to_3d(self, image_path, prompt="", **kwargs):
-        if not image_path.startswith("http"):
-            # Upload first
-            with open(image_path, "rb") as f:
-                r = requests.post(f"{self.BASE}/upload",
-                    headers={"Authorization": f"Bearer {API_KEY}"},
-                    files={"file": f}
-                )
-            r.raise_for_status()
-            image_token = r.json()["data"]["image_token"]
-        else:
-            image_token = image_path
-        
-        r = requests.post(f"{self.BASE}/task",
-            headers=self.headers(),
-            json={"type": "image_to_model", "texture": True, "file": {"type": "jpg", "file_token": image_token}}
-        )
-        r.raise_for_status()
-        task_id = r.json()["data"]["task_id"]
-        print(f"📤 Tripo image task: {task_id}")
-        return task_id
-    
-    def get_status(self, task_id):
-        r = requests.get(f"{self.BASE}/task/{task_id}", headers=self.headers(), timeout=(10, 120))
-        r.raise_for_status()
-        data = r.json()["data"]
-        output = data.get("output", {})
-        return {
-            "status": self._normalize_status(data.get("status", "unknown")),
-            "progress": data.get("progress", 0),
-            "model_urls": {"glb": output.get("pbr_model") or output.get("model", "")},
-        }
-
-    def download(self, task_id, fmt="glb"):
-        status = self.get_status(task_id)
-        url = self._pick_download_url(status.get("model_urls", {}), fmt)
-        if not url:
-            print(f"❌ No download URL. Status: {status['status']}")
-            return None
-        return self._download_model(url, task_id)
-
-
-class PrintpalBackend(_BaseBackend):
-    """Printpal.io — printpal.io/api/documentation"""
-    BASE = "https://printpal.io"
-    
-    def headers(self):
-        return {"X-API-Key": API_KEY, "Content-Type": "application/json"}
-    
-    def text_to_3d(self, prompt, **kwargs):
-        r = requests.post(f"{self.BASE}/api/generate",
-            headers=self.headers(),
-            json={"prompt": prompt, "quality": kwargs.get("quality", "default")}
-        )
-        r.raise_for_status()
-        uid = r.json().get("generation_uid")
-        print(f"📤 Printpal task: {uid}")
-        return uid
-    
-    def image_to_3d(self, image_path, prompt="", **kwargs):
-        if image_path.startswith("http"):
-            r = requests.post(f"{self.BASE}/api/generate",
-                headers=self.headers(),
-                json={"image_url": image_path, "prompt": prompt})
-        else:
-            with open(image_path, "rb") as f:
-                r = requests.post(f"{self.BASE}/api/generate",
-                    headers={"X-API-Key": API_KEY},
-                    files={"image": f},
-                    data={"prompt": prompt})
-        r.raise_for_status()
-        uid = r.json().get("generation_uid")
-        print(f"📤 Printpal image task: {uid}")
-        return uid
-    
-    def get_status(self, task_id):
-        r = requests.get(f"{self.BASE}/api/generate/{task_id}/status",
-            headers=self.headers())
-        r.raise_for_status()
-        data = r.json()
-        raw = data.get("status", "unknown")
-        return {
-            "status": self._normalize_status(raw),
-            "progress": 100 if raw == "completed" else 0,
-            "model_urls": {"glb": data.get("download_url", "")},
-        }
-    
-    def download(self, task_id, fmt="stl"):
-        ext = fmt.lower().lstrip('.') if fmt else "glb"
-        url = f"{self.BASE}/api/generate/{task_id}/download?format={ext}"
-        return self._download_to(url, f"{task_id}.{ext}")
-
-
-class Studio3DBackend(_BaseBackend):
-    """3D AI Studio — docs.3daistudio.com/API"""
-    BASE = "https://api.3daistudio.com"
-    
-    def headers(self):
-        return {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    
-    def text_to_3d(self, prompt, **kwargs):
-        r = requests.post(f"{self.BASE}/v1/generate",
-            headers=self.headers(),
-            json={"prompt": prompt, "type": "text-to-3d"})
-        r.raise_for_status()
-        task_id = r.json().get("id", r.json().get("task_id"))
-        print(f"📤 3D AI Studio task: {task_id}")
-        return task_id
-    
-    def image_to_3d(self, image_path, prompt="", **kwargs):
-        if image_path.startswith("http"):
-            r = requests.post(f"{self.BASE}/v1/generate",
-                headers=self.headers(),
-                json={"image_url": image_path, "type": "image-to-3d"})
-        else:
-            with open(image_path, "rb") as f:
-                r = requests.post(f"{self.BASE}/v1/generate",
-                    headers={"Authorization": f"Bearer {API_KEY}"},
-                    files={"image": f})
-        r.raise_for_status()
-        task_id = r.json().get("id", r.json().get("task_id"))
-        print(f"📤 3D AI Studio image task: {task_id}")
-        return task_id
-    
-    def get_status(self, task_id):
-        r = requests.get(f"{self.BASE}/v1/generate/{task_id}",
-            headers=self.headers())
-        r.raise_for_status()
-        data = r.json()
-        return {
-            "status": self._normalize_status(data.get("status", "unknown")),
-            "progress": data.get("progress", 0),
-            "model_urls": data.get("output", {}),
-        }
-
-    def download(self, task_id, fmt="stl"):
-        status = self.get_status(task_id)
-        url = self._pick_download_url(status.get("model_urls", {}), fmt)
-        if not url:
-            print(f"❌ No URL. Status: {status['status']}")
-            return None
-        return self._download_model(url, task_id)
-
-
-class RodinBackend(_BaseBackend):
-    """Hyper3D Rodin — developer.hyper3d.ai (Business subscription)"""
-    BASE = "https://api.hyper3d.com/api/v2"
-
-    def __init__(self):
-        # Force Gen-2 with BAMBU_RODIN_TIER=Gen-2
-        self.tier = os.environ.get("BAMBU_RODIN_TIER", _cfg.get("rodin_tier", "Regular"))
-    
-    def _auth(self):
-        return {"Authorization": f"Bearer {API_KEY}"}
-    
-    def text_to_3d(self, prompt, **kwargs):
-        # Rodin docs require multipart/form-data (even for text-only generation)
-        files = [
-            ("prompt", (None, prompt)),
-            ("tier", (None, self.tier)),
-            ("geometry_file_format", (None, "glb")),
-            ("material", (None, "PBR")),
-            ("quality", (None, "high")),
-            ("mesh_mode", (None, "Quad")),
-        ]
-        r = requests.post(f"{self.BASE}/rodin",
-            headers=self._auth(),
-            files=files,
-        )
-        r.raise_for_status()
-        resp = r.json()
-        # Rodin returns uuid (for download) + subscription_key JWT (for status)
-        # We encode both as "uuid::subscription_key" so status/download can use the right one
-        uuid = resp.get("uuid", "")
-        sub_key = resp.get("jobs", {}).get("subscription_key", "")
-        task_id = f"{uuid}::{sub_key}" if sub_key else uuid
-        print(f"📤 Rodin task created: {uuid}")
-        return task_id
-    
-    def image_to_3d(self, image_path, prompt="", **kwargs):
-        if image_path.startswith("http"):
-            import tempfile
-            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-            r = requests.get(image_path, timeout=30)
-            tmp.write(r.content)
-            tmp.close()
-            image_path = tmp.name
-        
-        with open(image_path, "rb") as f:
-            img_data = f.read()
-        
-        files = [("images", (os.path.basename(image_path), img_data, "image/jpeg"))]
-        data = {
-            "tier": self.tier,
-            "geometry_file_format": "glb",
-            "material": "PBR",
-            "quality": "high",
-            "mesh_mode": "Quad",
-        }
-        if prompt:
-            data["prompt"] = prompt
-        
-        r = requests.post(f"{self.BASE}/rodin",
-            headers=self._auth(),
-            data=data,
-            files=files
-        )
-        r.raise_for_status()
-        resp = r.json()
-        uuid = resp.get("uuid", "")
-        sub_key = resp.get("jobs", {}).get("subscription_key", "")
-        task_id = f"{uuid}::{sub_key}" if sub_key else uuid
-        print(f"📤 Rodin image task: {uuid}")
-        return task_id
-    
-    def _parse_task_id(self, task_id):
-        """Split composite task_id into (uuid, subscription_key)."""
-        if "::" in task_id:
-            uuid, sub_key = task_id.split("::", 1)
-            return uuid, sub_key
-        return task_id, task_id
-    
-    def get_status(self, task_id):
-        uuid, sub_key = self._parse_task_id(task_id)
-        r = requests.post(f"{self.BASE}/status",
-            headers={**self._auth(), "Content-Type": "application/json"},
-            json={"subscription_key": sub_key}
-        )
-        r.raise_for_status()
-        data = r.json()
-        jobs = data.get("jobs", [])
-        
-        statuses = []
-        if isinstance(jobs, list):
-            statuses = [j.get("status", "unknown") for j in jobs]
-        elif isinstance(jobs, dict):
-            statuses = [v.get("status", "unknown") for v in jobs.values()]
-
-        normalized = [self._normalize_status(s) for s in statuses]
-        if all(s == "completed" for s in normalized):
-            overall = "completed"
-            progress = 100
-        elif any(s == "failed" for s in normalized):
-            overall = "failed"
-            progress = 0
-        elif any(s == "in_progress" for s in normalized):
-            done_count = sum(1 for s in normalized if s == "completed")
-            overall = "in_progress"
-            progress = int(done_count / max(len(normalized), 1) * 100)
-        else:
-            overall = "queued"
-            progress = 0
-        
-        return {
-            "status": overall,
-            "progress": progress,
-            "model_urls": {},
-        }
-    
-    def download(self, task_id, fmt="glb"):
-        uuid, sub_key = self._parse_task_id(task_id)
-        r = requests.post(f"{self.BASE}/download",
-            headers={**self._auth(), "Content-Type": "application/json"},
-            json={"task_uuid": uuid}
-        )
-        r.raise_for_status()
-        items = r.json().get("list", [])
-        
-        target_url = None
-        for item in items:
-            name = item.get("name", "")
-            if name.endswith(f".{fmt}") or name.endswith(".glb"):
-                target_url = item.get("url")
-                break
-        if not target_url and items:
-            target_url = items[0].get("url")
-        
-        if not target_url:
-            print(f"❌ No download URL found")
-            return None
-        
-        out = self._download_to(target_url, f"{uuid}.glb", timeout=(10, 300))
-        print(f"📥 Downloaded: {os.path.basename(out)} ({os.path.getsize(out) / 1024:.0f} KB)")
-        return out
-
-
-# ─── Provider Registry ───────────────────────────────────────────────
-
-PROVIDERS = {
-    "meshy": MeshyBackend,
-    "tripo": TripoBackend,
-    "printpal": PrintpalBackend,
-    "3daistudio": Studio3DBackend,
-    "rodin": RodinBackend,
+REMOVED_FLAGS = {
+    "--raw": "Prompts are no longer rewritten, so there is nothing to turn off: the prompt is "
+             "sent to the provider exactly as written. Put printing requirements in the prompt "
+             "yourself (see references/3d-prompt-guide.md).",
+    "--auto-retry": "Automatic re-generation was removed: it started new paid generations, even "
+                    "when a generation was merely slow. Check the model with analyze.py and "
+                    "decide whether to generate again.",
+    "--style": "Meshy ignores art_style since Meshy-6. Choose a model with --model instead.",
+    "--no-bg-remove": "Background removal was removed; providers isolate the subject "
+                      "themselves. Crop the photo to one object on a plain background instead.",
 }
-
-def get_backend():
-    if not API_KEY:
-        print(f"❌ Missing API key for {PROVIDER}")
-        print(f"   export BAMBU_3D_API_KEY='your_api_key'")
-        print(f"   export BAMBU_3D_PROVIDER='{PROVIDER}'  (meshy/tripo/printpal/3daistudio/rodin)")
-        sys.exit(1)
-    
-    cls = PROVIDERS.get(PROVIDER)
-    if not cls:
-        print(f"❌ Unknown provider: {PROVIDER}")
-        print(f"   Options: {', '.join(PROVIDERS.keys())}")
-        sys.exit(1)
-    
-    return cls()
-
-# ─── Commands ────────────────────────────────────────────────────────
-
-def _clean_keep_main(file_path):
-    """Remove all floating parts, keep only the largest component. In-place overwrite.
-    Returns True if cleaned, False if skipped or failed.
-
-    Safety: uses FACE COUNT (not volume) to pick the main body — volume is
-    unreliable for non-watertight AI meshes where trimesh computes negative or
-    near-zero volumes for perfectly good geometry.
-    Also refuses to operate if the 'main' body has < 30% of total faces,
-    because that usually means trimesh.split() mis-fragmented a solid mesh.
-    """
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext == '.3mf':
-        return False
-    try:
-        import trimesh
-        mesh = trimesh.load(file_path, force="mesh")
-        if mesh is None or len(getattr(mesh, 'faces', [])) == 0:
-            return False
-        bodies = mesh.split(only_watertight=False)
-        if len(bodies) <= 1:
-            return False
-
-        face_counts = [len(b.faces) for b in bodies]
-        total_faces = sum(face_counts) or 1
-        max_faces = max(face_counts)
-        main_face_pct = max_faces / total_faces * 100
-
-        # Safety: if "main" body is < 30% of total faces, trimesh likely
-        # mis-split a solid mesh — do NOT auto-clean
-        if main_face_pct < 30:
-            print(f"⚠️ Largest component is only {main_face_pct:.0f}% of faces — "
-                  f"split may be unreliable. Skipping auto-clean.")
-            return False
-
-        largest = bodies[face_counts.index(max_faces)]
-        largest.export(file_path)
-        print(f"🗑️ Auto-cleaned: kept main body ({main_face_pct:.0f}% faces), "
-              f"removed {len(bodies)-1} floating part(s)")
-        return True
-    except Exception as e:
-        print(f"⚠️ Auto-clean failed: {e}")
-        return False
+REMOVED_PROVIDERS = {
+    "printpal": "Printpal support was removed: the code called routes and formats that "
+                "Printpal's API does not have.",
+    "3daistudio": "3D AI Studio support was removed: the code called routes that do not exist.",
+}
+REMOVED_NOTE = "\nSupported providers: {names}. Set one with: python3 scripts/configure.py set 3d_provider meshy"
 
 
-def _check_connectivity(file_path):
-    """Quick disconnected-parts check using trimesh.
-
-    Returns (n_bodies, sorted_volumes_mm3) or (None, None) if check can't run.
-    Skips 3MF (complex internal structure) and uses a 10-second timeout.
-    """
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext == '.3mf':
-        return None, None
-
-    try:
-        import trimesh
-        from common import safe_split_mesh
-
-        mesh = trimesh.load(file_path, force="mesh")
-        if mesh is None or len(getattr(mesh, 'faces', [])) == 0:
-            return None, None
-
-        bodies, timed_out = safe_split_mesh(mesh, timeout_sec=10)
-        if timed_out:
-            return None, None
-
-        sizes = sorted([b.volume for b in bodies], reverse=True)
-        return len(bodies), sizes
-
-    except ImportError:
-        return None, None
-    except Exception:
-        return None, None
-
-
-def _auto_scale(file_path, target_height_mm=80):
-    """Auto-scale models with normalized coordinates to printable mm size.
-    Many AI providers (Rodin, Meshy, etc.) output models in normalized units
-    (~1-2 units max). This detects tiny models and scales to target_height_mm.
-    Skip 3MF — trimesh destroys internal G-code/config on re-export.
-    """
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext == '.3mf':
-        return  # 3MF has internal structure trimesh can't preserve
-    try:
-        import trimesh
-        mesh = trimesh.load(file_path, force="mesh")
-        max_dim = max(mesh.extents)
-        
-        if max_dim < 10:  # Less than 10mm = likely normalized coordinates
-            scale = target_height_mm / max_dim
-            mesh.apply_scale(scale)
-            mesh.export(file_path)
-            new_dims = mesh.extents
-            print(f"📏 Auto-scaled: {max_dim:.2f} → {max(new_dims):.0f}mm "
-                  f"({new_dims[0]:.0f} × {new_dims[1]:.0f} × {new_dims[2]:.0f}mm)")
-        elif max_dim > 1000:
-            # Might be in micrometers or wrong unit — scale down
-            scale = target_height_mm / max_dim
-            mesh.apply_scale(scale)
-            mesh.export(file_path)
-            new_dims = mesh.extents
-            print(f"📏 Auto-scaled: {max_dim:.0f} → {max(new_dims):.0f}mm "
-                  f"({new_dims[0]:.0f} × {new_dims[1]:.0f} × {new_dims[2]:.0f}mm)")
-    except ImportError:
-        pass  # trimesh not available, skip
-    except Exception as e:
-        print(f"⚠️ Auto-scale failed: {e}")
-
-
-def _finalize(file_path, target_format="stl", target_height_mm=0):
-    """Unified post-download processing: validate format, convert, scale, verify."""
-    if not file_path or not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return None
-    
-    # 1. Validate magic bytes
-    with open(file_path, 'rb') as f:
-        magic = f.read(8)
-    actual_ext = None
-    if magic[:4] == b'glTF':
-        actual_ext = '.glb'
-    elif magic[:2] == b'PK':
-        actual_ext = '.3mf'
-    elif magic[:1] == b'v' or magic[:2] == b'# ':
-        actual_ext = '.obj'
-    else:
-        # Binary STL: 80-byte header + 4-byte uint32 face count
-        import struct
-        with open(file_path, 'rb') as f2:
-            f2.seek(80)
-            fc = f2.read(4)
-        if len(fc) == 4:
-            nf = struct.unpack('<I', fc)[0]
-            expected = 80 + 4 + nf * 50
-            if 0 < nf < 50_000_000 and abs(expected - os.path.getsize(file_path)) < 100:
-                actual_ext = '.stl'
-    
-    if actual_ext and not file_path.endswith(actual_ext):
-        correct = file_path.rsplit('.', 1)[0] + actual_ext
-        os.rename(file_path, correct)
-        file_path = correct
-        print(f"🔄 Format corrected → {actual_ext}")
-    
-    # 2. Auto-scale if model uses normalized coordinates
-    _auto_scale(file_path, target_height_mm=target_height_mm or 80)
-    
-    # 3. Connectivity check — WARN only, never auto-delete
-    # trimesh.split() is unreliable on non-manifold AI meshes: it can fragment
-    # a visually solid model into dozens of "bodies". Auto-deleting based on
-    # split() results destroyed good models (e.g. a mango became a sliver).
-    # Now we only report; user can manually run --keep-main if truly needed.
-    current_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
-    n_bodies, body_sizes = _check_connectivity(file_path)
-    if n_bodies is not None and n_bodies > 1:
-        total_vol = sum(body_sizes) or 1
-        main_pct = body_sizes[0] / total_vol * 100
-        print(f"ℹ️  Connectivity: {n_bodies} bodies detected (main: {main_pct:.0f}% of volume)")
-        if n_bodies >= 10:
-            print(f"   ⚠️ Many disconnected parts — this may be normal for AI models (non-manifold topology)")
-            print(f"   💡 If model looks correct in preview, ignore this warning")
-            print(f"   💡 If model is actually fragmented: python3 scripts/analyze.py {file_path} --repair --keep-main")
-        else:
-            print(f"   💡 To keep main only: python3 scripts/analyze.py {file_path} --repair --keep-main")
-    
-    # 4. Convert if needed
-    target = target_format.lower().lstrip('.')
-    if current_ext != target and current_ext in ('glb', 'gltf', 'obj'):
-        converted = _convert_model(file_path, target)
-        if converted and converted != file_path:
-            print(f"🔄 Converted {current_ext.upper()} → {target.upper()}")
-            file_path = converted
-    
-    # 5. Verify file is readable
-    size = os.path.getsize(file_path)
-    if size < 100:
-        print(f"⚠️ File suspiciously small ({size} bytes)")
-
-    return file_path
-
-
-def _maybe_retry_generated_model(path, prompt, fmt="3mf", auto_retry=0):
-    """Return None when the mesh clearly needs a retry, else return path."""
-    if not path:
-        return path
-    try:
-        import trimesh
-        mesh = trimesh.load(path, force="mesh")
-        if not hasattr(mesh, "split"):
-            return path
-        bodies = mesh.split(only_watertight=False)
-        if len(bodies) <= 1:
-            return path
-        print(f"⚠️ Generated mesh has {len(bodies)} disconnected parts.")
-        if auto_retry > 0:
-            print("   Retrying with a stricter prompt...")
-            return None
-    except Exception as e:
-        print(f"⚠️ Post-generation validation skipped: {e}")
-    return path
-
-
-
-def cmd_text(prompt, wait=False, multicolor=False, **kwargs):
-    if not prompt or not prompt.strip():
-        print("❌ Empty prompt. Please describe what you want to generate.")
-        return
-    backend = get_backend()
-    auto_retry = max(0, int(kwargs.pop("auto_retry", 0)))
-    target_height = float(kwargs.pop("height", 0))
-
-    original = prompt
-    base_prompt = prompt
-    if not kwargs.get("raw"):
-        base_prompt = enhance_prompt(prompt)
-        max_sz = get_max_size()
-        if PRINTER_MODEL:
-            print(f"🖨️ Printer: {PRINTER_MODEL} (max {max_sz[0]}x{max_sz[1]}x{max_sz[2]}mm)")
-        print(f"📝 Original: {original}")
-        print(f"✨ Enhanced: {base_prompt[:160]}...")
-        if target_height > 0:
-            print(f"📏 Target height: {target_height:.0f}mm")
-        print()
-
-    last_task_id = None
-    for attempt in range(auto_retry + 1):
-        effective_prompt = base_prompt if attempt == 0 else refine_prompt_for_retry(base_prompt, attempt - 1, "disconnected parts or fragile geometry")
-        if attempt > 0:
-            print(f"🔁 Retry attempt {attempt}/{auto_retry} with stronger printability constraints...")
-        task_id = backend.text_to_3d(effective_prompt, **kwargs)
-        last_task_id = task_id
-        if wait:
-            path = _wait_and_download(backend, task_id, kwargs.get("format", "3mf"),
-                                      target_height_mm=target_height)
-            path = _maybe_retry_generated_model(path, effective_prompt, kwargs.get("format", "3mf"), auto_retry=(auto_retry - attempt))
-            if path or attempt == auto_retry:
-                return path
-        else:
-            print(f"\n💡 Check status: python3 scripts/generate.py status {task_id}")
-            print(f"💡 Download:     python3 scripts/generate.py download {task_id}")
-            return task_id
-    return last_task_id
-
-def cmd_image(image_path, prompt="", wait=False, **kwargs):
-    no_bg_remove = kwargs.pop("no_bg_remove", False)
-    raw = kwargs.pop("raw", False)
-    target_height = float(kwargs.pop("height", 0))
-
-    # 1. Resolve URL → local file
-    is_url = image_path.startswith("http")
-    if is_url:
-        local_path = _download_url_image(image_path)
-        if not local_path:
-            sys.exit(1)
-    else:
-        local_path = image_path
-
-    # 2. Validate image
-    ok, info = validate_image(local_path)
-    if not ok:
-        sys.exit(1)
-
-    # 3. Background removal
-    processed_path = local_path
-    if not no_bg_remove:
-        processed_path = remove_background(local_path, info)
-
-    # 4. Prompt enhancement
-    effective_prompt = prompt
-    if not raw:
-        effective_prompt = enhance_image_prompt(prompt)
-        if prompt:
-            print(f"📝 Original prompt: {prompt}")
-        print(f"✨ Enhanced: {effective_prompt[:120]}...")
-    if target_height > 0:
-        print(f"📏 Target height: {target_height:.0f}mm")
-    print()
-
-    # 5. Upload & generate
-    backend = get_backend()
-    task_id = backend.image_to_3d(processed_path, effective_prompt, **kwargs)
-
-    # Track temp files for cleanup
-    _temp_files = []
-    if is_url and local_path != image_path:
-        _temp_files.append(local_path)
-    if processed_path != local_path and processed_path != image_path:
-        _temp_files.append(processed_path)
-
-    try:
-        if wait:
-            path = _wait_and_download(backend, task_id, kwargs.get("format", "3mf"),
-                                      target_height_mm=target_height)
-            if path:
-                has_tex = _detect_texture_in_glb(path)
-                if has_tex is True:
-                    print(f"\n🎨 Textured model detected — run colorize for multi-color printing:")
-                    print(f"   python3 scripts/colorize {path} --height {target_height or 80:.0f} --bambu-map")
-                elif has_tex is False:
-                    print(f"\n📦 No texture — single-color model ready for printing")
-            return path
-        else:
-            print(f"\n💡 Check status: python3 scripts/generate.py status {task_id}")
-            print(f"💡 Download:     python3 scripts/generate.py download {task_id}")
-        return task_id
-    finally:
-        for tmp in _temp_files:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-
-def cmd_status(task_id):
-    backend = get_backend()
-    status = backend.get_status(task_id)
-    
-    state = status["status"]
-    progress = status.get("progress", 0)
-    
-    icons = {"pending": "⏳", "in_progress": "🔄", "queued": "⏳",
-             "completed": "✅", "failed": "❌"}
-    icon = icons.get(state, "❓")
-
-    print(f"{icon} Status: {state}")
-    if progress:
-        bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
-        print(f"📊 Progress: [{bar}] {progress}%")
-
-    if state == "completed":
-        urls = status.get("model_urls", {})
-        if urls:
-            print(f"📦 Available formats: {', '.join(urls.keys())}")
-        print(f"\n💡 Download: python3 scripts/generate.py download {task_id} --format stl")
-        print(f"   Note: If provider returns GLB, it will be auto-converted to your preferred format.")
-    
-    return status
-
-def cmd_download(task_id, fmt="3mf", height=0):
-    backend = get_backend()
-    path = backend.download(task_id, fmt)
-    if not path:
-        return None
-    
-    # Unified post-processing: format detection, conversion, auto-scale
-    path = _finalize(path, target_format=fmt, target_height_mm=height)
-    if not path:
-        print(f"❌ Post-processing failed")
-        return None
-    
-    size = os.path.getsize(path)
-    print(f"✅ Downloaded: {path} ({size / 1024:.1f} KB)")
-    # Verify Bambu compatibility
-    final_ext = os.path.splitext(path)[1].lower().lstrip('.')
-    if final_ext in ("3mf", "stl", "step", "stp", "obj"):
-        print(f"   ✅ {final_ext.upper()} is Bambu Studio compatible")
-    else:
-        print(f"   ❌ WARNING: {final_ext.upper()} is NOT compatible with Bambu Studio!")
-        print(f"   Run: python3 scripts/generate.py download {task_id} --format stl")
-    print(f"\n💡 Next: python3 scripts/analyze.py {path}")
-    print(f"         python3 scripts/bambu.py print {os.path.basename(path)}")
-    return path
-
-def _wait_and_download(backend, task_id, fmt="3mf", target_height_mm=0):
-    """Poll until complete, then download."""
-    print(f"\n⏳ Waiting for generation...")
-    
-    retries_502 = 0
-    max_502_retries = 10
-    for i in range(MAX_POLL_ITERATIONS):
-        time.sleep(5)
-        try:
-            status = backend.get_status(task_id)
-        except Exception as poll_err:
-            err_str = str(poll_err)
-            if "502" in err_str or "503" in err_str or "500" in err_str:
-                retries_502 += 1
-                if retries_502 <= max_502_retries:
-                    print(f"   ⚠️ API returned error ({err_str[:30]}), retry {retries_502}/{max_502_retries}...")
-                    time.sleep(10)
-                    continue
-                else:
-                    print(f"   ❌ API error persisted after {max_502_retries} retries.")
-                    print(f"   💡 Try manually: python3 scripts/generate.py status {task_id}")
-                    print(f"   💡 Or download: python3 scripts/generate.py download {task_id}")
-                    sys.exit(1)
-            raise
-        retries_502 = 0
-        state = status["status"]
-        progress = status.get("progress", 0)
-        
-        bar = "█" * (progress // 5) + "░" * (20 - progress // 5)
-        print(f"\r  [{bar}] {progress}% - {state}", end="", flush=True)
-        
-        if state == "completed":
-            print(f"\n✅ Done!")
-            path = backend.download(task_id, fmt)
-            if path:
-                path = _finalize(path, target_format=fmt, target_height_mm=target_height_mm)
-                print(f"📦 Saved: {path}")
-            return path
-        elif state == "failed":
-            print(f"\n❌ Generation failed")
-            sys.exit(1)
-    
-    print(f"\n⚠️ Timeout. Check later: python3 scripts/generate.py status {task_id}")
+def removed_flag(argv):
+    """The first removed flag in argv, if any."""
+    for arg in argv:
+        name = arg.split("=", 1)[0]
+        if name in REMOVED_FLAGS:
+            return name
     return None
 
-# ─── Main ────────────────────────────────────────────────────────────
 
-def main():
+def emit(data, *, as_json):
+    """Print the one JSON document (``--json``) that is the command's result."""
+    if as_json:
+        print(json.dumps(data))
+
+
+def human(message, *, as_json):
+    """Human output: stdout normally, stderr under --json so stdout stays one document."""
+    print(message, file=sys.stderr if as_json else sys.stdout)
+
+
+def fail(message, code, *, as_json, kind, task_id=None, resume=None):
+    """Report an error on stderr (and as JSON on stdout with --json); return the exit code."""
+    emit({"error": {"type": kind, "message": message}, "task_id": task_id, "next_command": resume},
+         as_json=as_json)
+    print(f"❌ {message}", file=sys.stderr)
+    if resume:
+        print(f"   The task keeps its id; retry with: {resume}", file=sys.stderr)
+    return code
+
+
+def fail_from(exc, *, as_json, task_id=None, resume=None):
+    """Map a library exception to its exit code and report it."""
+    if isinstance(exc, InputError):
+        code, kind, message = EXIT_CONFIG, "bad_input", str(exc)
+    elif isinstance(exc, DependencyError):
+        code, kind, message = EXIT_DEPENDENCY, "dependency", str(exc)
+    else:
+        code, kind, message = EXIT_FAILED, "provider", f"{exc.message} [{exc.code}]"
+    return fail(message, code, as_json=as_json, kind=kind, task_id=task_id, resume=resume)
+
+
+def api_key(provider, config):
+    """BAMBU_3D_API_KEY, else <provider>_api_key, else 3d_api_key. Never printed."""
+    return (os.environ.get("BAMBU_3D_API_KEY")
+            or str(config.get(f"{provider}_api_key") or config.get("3d_api_key") or ""))
+
+
+def build_generator(provider_name, config, *, as_json):
+    """The configured provider wrapped in a Generator, or an exit code if it can't be built."""
+    if provider_name in REMOVED_PROVIDERS:
+        message = REMOVED_PROVIDERS[provider_name] + REMOVED_NOTE.format(names=", ".join(PROVIDER_NAMES))
+        return None, fail(message, EXIT_CONFIG, as_json=as_json, kind="removed_provider")
+    if provider_name not in PROVIDER_NAMES:
+        return None, fail(f"unknown provider {provider_name!r}; choose one of {', '.join(PROVIDER_NAMES)}",
+                          EXIT_CONFIG, as_json=as_json, kind="bad_input")
+    key = api_key(provider_name, config)
+    if not key:
+        hint = (f"No API key for {provider_name}. Save it with: python3 scripts/configure.py "
+                f"secret {provider_name}_api_key   (it prompts for the key, or reads it from stdin)")
+        return None, fail(hint, EXIT_CONFIG, as_json=as_json, kind="not_configured")
+    options = {"rodin_tier": str(config.get("rodin_tier") or "")}
+    provider = create_provider(provider_name, ProviderSettings(api_key=key, options=options))
+    notify = (lambda message: print(f"⏳ {message}", file=sys.stderr))
+    generator = Generator(provider, output_dir=Path(output_dir("models")),
+                          ledger=FollowUpLedger(Path(home_dir()) / "generation-tasks.json"),
+                          notify=notify)
+    return generator, EXIT_OK
+
+
+def resume_flags(args):
+    """The download flags that reproduce this command's result when resuming."""
+    flags = []
+    if getattr(args, "format", "glb") != "glb":
+        flags += ["--format", args.format]
+    if getattr(args, "height", None):
+        flags += ["--height", f"{args.height:g}"]
+    if getattr(args, "no_texture", False):
+        flags.append("--no-texture")
+    return " ".join(flags)
+
+
+def next_command(verb, result, args):
+    extra = resume_flags(args) if verb == "download" else ""
+    return f"{SCRIPT} {verb} {result.task_id}" + (f" {extra}" if extra else "")
+
+
+def report(result: GenerationResult, args, *, as_json, submitted_only=False):
+    """Print a result (human lines and/or the JSON document); return the exit code."""
+    data = result.to_dict()
+    if result.still_running:
+        data["next_command"] = next_command("download", result, args)
+    emit(data, as_json=as_json)
+
+    def say(message):
+        human(message, as_json=as_json)
+
+    if submitted_only:
+        say(f"📤 Submitted to {result.provider}. Task id: {result.task_id}")
+        say(f"   Check:    {next_command('status', result, args)}")
+        say(f"   Download: {next_command('download', result, args)}")
+        return EXIT_OK
+    if result.still_running:
+        progress = f" ({result.progress}%)" if result.progress is not None else ""
+        say(f"⏳ Still {result.status}{progress} at {result.provider}; nothing was resubmitted "
+            f"and no extra credits were used. {result.message}".rstrip())
+        say(f"   Resume with: {data['next_command']}")
+        return EXIT_OK
+    if result.status != "succeeded":
+        say(f"❌ Task {result.task_id} ended as {result.status}: {result.message or 'no reason given'}")
+        return EXIT_FAILED
+    size = " × ".join(f"{value:.1f}" for value in result.extents_mm or ())
+    colour = "textured" if result.has_texture else "no colour"
+    say(f"✅ {result.output_format.upper()} saved ({size} mm, X × Y × Z; {colour})")
+    for warning in result.warnings:
+        say(f"⚠️ {warning}")
+    say(f"➡️ Use this file: {result.output_file}")
+    return EXIT_OK
+
+
+def check_numbers(args):
+    if getattr(args, "height", None) is not None and args.height <= 0:
+        raise InputError("--height must be a positive number of millimetres")
+    if getattr(args, "timeout", 1) <= 0:
+        raise InputError("--timeout must be a positive number of seconds")
+
+
+def cmd_generate(args, config):
+    """text / image: submit, then optionally wait and download."""
+    as_json = args.json
+    check_numbers(args)
+    image = load_image(args.image) if args.command == "image" else None  # before any network call
+    provider_name = (args.provider or get_config("BAMBU_3D_PROVIDER", config, "3d_provider", "meshy")).lower()
+    generator, code = build_generator(provider_name, config, as_json=as_json)
+    if generator is None:
+        return code
+    provider = generator.provider
+    prompt = args.prompt if args.command == "text" else (args.prompt or None)
+    prompt_used = None
+    if image is not None:
+        prompt_used = bool(prompt) and provider.image_prompt_supported
+        if prompt and not prompt_used:
+            print(f"⚠️ {provider.name} image-to-3D has no prompt field; --prompt was not sent.", file=sys.stderr)
+    texture = not args.no_texture and args.format == "glb"
+    if args.format != "glb" and not args.no_texture:
+        print(f"ℹ️ {args.format.upper()} carries no colour, so no texture is generated (saves credits).",
+              file=sys.stderr)
+    request = GenerationRequest(prompt=prompt, image=image, model=args.model,
+                                output_format=args.format, texture=texture)
+    if image is not None and image.data is not None:
+        print(f"📤 Uploading {image.name} to {provider.name} (the image leaves this computer).",
+              file=sys.stderr)
+    try:
+        ref = generator.submit(request)
+    except ProviderError as exc:
+        # A dropped connection may hide a task the provider did start (and bill).
+        note = (" The request may still have reached the provider: check its dashboard before "
+                "submitting again, to avoid paying twice." if exc.code == "network" else "")
+        return fail(f"{exc.message} [{exc.code}]{note}", EXIT_FAILED, as_json=as_json, kind="provider")
+    if not args.wait:
+        result = GenerationResult(ref.token, ref.provider, "submitted", prompt_used=prompt_used)
+        return report(result, args, as_json=as_json, submitted_only=True)
+    print(f"📤 Task id: {ref.token} (waiting up to {args.timeout:.0f} s)", file=sys.stderr)
+    try:
+        result = generator.complete(ref, output_format=args.format, texture=texture,
+                                    height_mm=args.height, timeout_s=args.timeout,
+                                    first_delay_s=provider.poll_interval_s)
+    except LIBRARY_ERRORS as exc:
+        resume = f"{SCRIPT} download {ref.token} {resume_flags(args)}".rstrip()
+        return fail_from(exc, as_json=as_json, task_id=ref.token, resume=resume)
+    result.prompt_used = prompt_used
+    return report(result, args, as_json=as_json)
+
+
+def cmd_task(args, config):
+    """status / download: resume a task from its id."""
+    as_json = args.json
+    check_numbers(args)
+    ref = TaskRef.parse(args.task_id)
+    generator, code = build_generator(ref.provider, config, as_json=as_json)
+    if generator is None:
+        return code
+    if args.command == "status":
+        result = generator.status(ref)
+        data = result.to_dict()
+        if result.still_running:
+            data["next_command"] = next_command("download", result, args)
+        emit(data, as_json=as_json)
+        progress = f" {result.progress}%" if result.progress is not None else ""
+        human(f"{result.task_id}: {result.status}{progress}"
+              + (f" ({result.message})" if result.message else ""), as_json=as_json)
+        return EXIT_OK
+    texture = not args.no_texture and args.format == "glb"
+    try:
+        result = generator.complete(ref, output_format=args.format, texture=texture,
+                                    height_mm=args.height, timeout_s=args.timeout)
+    except LIBRARY_ERRORS as exc:
+        resume = f"{SCRIPT} download {ref.token} {resume_flags(args)}".rstrip()
+        return fail_from(exc, as_json=as_json, task_id=ref.token, resume=resume)
+    return report(result, args, as_json=as_json)
+
+
+def add_output_options(parser):
+    parser.add_argument("--format", choices=OUTPUT_FORMATS, default="glb",
+                        help="glb (default): the provider's textured model, which Bambu Studio 2.7+ "
+                             "opens with its colours. stl/3mf/obj: geometry only, converted by the "
+                             "provider where it can (else locally, discarding colour)")
+    parser.add_argument("--height", type=float, metavar="MM",
+                        help="scale the model so its height (Z, as Bambu Studio imports it) is MM; "
+                             "without it the provider's size is kept")
+    parser.add_argument("--no-texture", action="store_true",
+                        help="skip the texture (cheaper; e.g. Meshy skips its 10-credit refine step)")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S, metavar="SECONDS",
+                        help=f"how long to wait (default {DEFAULT_TIMEOUT_S:.0f}); the task keeps "
+                             "running after that and can be resumed with download")
+    parser.add_argument("--json", action="store_true", help="print one JSON object on stdout")
+
+
+def build_parser():
     parser = argparse.ArgumentParser(
-        description="🎨 AI 3D Model Generator",
-        epilog=f"Provider: {PROVIDER.upper()} | Set BAMBU_3D_PROVIDER & BAMBU_3D_API_KEY"
-    )
-    sub = parser.add_subparsers(dest="command")
-    
-    p_text = sub.add_parser("text", help="Text to 3D model")
-    p_text.add_argument("prompt", help="Description of the 3D model")
-    p_text.add_argument("--wait", action="store_true", help="Wait and auto-download")
-    p_text.add_argument("--format", default="3mf", help="Output format (3mf recommended for Bambu Lab) (stl/obj/glb/3mf)")
-    p_text.add_argument("--style", default="realistic", help="Art style")
-    p_text.add_argument("--height", type=float, default=0, help="Target height in mm (0 = auto: 80mm)")
-    p_text.add_argument("--raw", action="store_true", help="Skip prompt enhancement")
-    p_text.add_argument("--auto-retry", type=int, default=0, choices=range(0, 4), help="Retry generation 1-3 times if downloaded mesh has disconnected parts")
-    
-    p_img = sub.add_parser("image", help="Image to 3D model")
-    p_img.add_argument("image", help="Image path or URL")
-    p_img.add_argument("--prompt", default="", help="Additional description")
-    p_img.add_argument("--wait", action="store_true", help="Wait and auto-download")
-    p_img.add_argument("--format", default="3mf", help="Output format (3mf recommended for Bambu Lab)")
-    p_img.add_argument("--height", type=float, default=0, help="Target height in mm (0 = auto: 80mm)")
-    p_img.add_argument("--raw", action="store_true", help="Skip prompt enhancement")
-    p_img.add_argument("--no-bg-remove", action="store_true",
-                        help="Skip automatic background removal")
-    
-    p_stat = sub.add_parser("status", help="Check generation status")
-    p_stat.add_argument("task_id")
-    
-    p_dl = sub.add_parser("download", help="Download generated model")
-    p_dl.add_argument("task_id")
-    p_dl.add_argument("--format", default="3mf", help="Output format (auto-converts from GLB if needed)")
-    p_dl.add_argument("--height", type=float, default=0, help="Target height in mm (0 = auto: 80mm)")
-    
-    args = parser.parse_args()
-    if not args.command:
-        parser.print_help()
-        print(f"\n📡 Provider: {PROVIDER} | Models saved to: {OUTPUT_DIR}")
-        sys.exit(1)
-    
-    if args.command == "text":
-        cmd_text(args.prompt, wait=args.wait, format=args.format, style=args.style,
-                 raw=args.raw, auto_retry=args.auto_retry, height=args.height)
-    elif args.command == "image":
-        cmd_image(args.image, prompt=args.prompt, wait=args.wait, format=args.format,
-                  raw=args.raw, no_bg_remove=getattr(args, "no_bg_remove", False),
-                  height=args.height)
-    elif args.command == "status":
-        cmd_status(args.task_id)
-    elif args.command == "download":
-        cmd_download(args.task_id, args.format, height=getattr(args, "height", 0))
+        description="AI text/image-to-3D (Meshy, Tripo, Hyper3D Rodin). Prompts are sent as written.",
+        epilog="Keys: python3 scripts/configure.py secret <provider>_api_key. "
+               "Default provider: config 3d_provider (meshy).")
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name, help_text in (("text", "generate from a text prompt"),
+                            ("image", "generate from a photo or drawing (local file or http(s) URL)")):
+        command = sub.add_parser(name, help=help_text)
+        if name == "text":
+            command.add_argument("prompt", help="what to make, sent to the provider unchanged")
+        else:
+            command.add_argument("image", help="PNG/JPEG/WebP path or http(s) URL (max 20 MB)")
+            command.add_argument("--prompt", help="optional guidance; only Rodin uses it for images")
+        command.add_argument("--provider", help=f"one of {', '.join(PROVIDER_NAMES)} (default: config)")
+        command.add_argument("--model", help="provider model/tier, e.g. meshy-6, v3.0-20250812, "
+                                             "Gen-2.5-High (default: the provider's current one)")
+        command.add_argument("--wait", action="store_true", help="wait for the model and download it")
+        add_output_options(command)
+    status = sub.add_parser("status", help="check a task once (never starts or pays for anything)")
+    status.add_argument("task_id", help="the task id printed when the task was submitted")
+    status.add_argument("--json", action="store_true", help="print one JSON object on stdout")
+    download = sub.add_parser("download", help="wait for a task if needed, then download it")
+    download.add_argument("task_id", help="the task id printed when the task was submitted")
+    add_output_options(download)
+    return parser
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    flag = removed_flag(argv)
+    if flag:
+        print(f"`{flag}` was removed in v2.1. {REMOVED_FLAGS[flag]}", file=sys.stderr)
+        return EXIT_CONFIG
+    args = build_parser().parse_args(argv)
+    as_json = getattr(args, "json", False)
+    config = load_config(include_secrets=True)
+    handler = cmd_task if args.command in ("status", "download") else cmd_generate
+    try:
+        return handler(args, config)
+    except LIBRARY_ERRORS as exc:
+        return fail_from(exc, as_json=as_json, task_id=getattr(args, "task_id", None))
+
 
 if __name__ == "__main__":
     use_utf8_stdio()
     try:
-        main()
+        sys.exit(main())
     except KeyboardInterrupt:
-        print("\n⏹️ Cancelled.")
+        print("\nInterrupted. Any submitted task keeps running; resume it with generate.py download.",
+              file=sys.stderr)
         sys.exit(130)
-    except SystemExit:
-        raise
-    except Exception as e:
-        err = str(e)
-        if "401" in err or "Unauthorized" in err:
-            print(f"❌ API authentication failed. Check your API key.")
-            print(f"   export BAMBU_3D_API_KEY='your_key'")
-        elif "403" in err or "Forbidden" in err:
-            print(f"❌ API access denied. Your plan may not support this feature.")
-        elif "429" in err or "rate" in err.lower():
-            print(f"❌ Rate limited. Wait a moment and try again.")
-        elif "timeout" in err.lower():
-            print(f"❌ Request timed out. The API may be slow. Try again.")
-        else:
-            print(f"❌ Error: {e}")
-        sys.exit(1)

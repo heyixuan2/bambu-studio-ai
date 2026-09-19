@@ -8,7 +8,6 @@ MAX_LINES = 400
 # Files written before the 400-line rule, with the size they may not grow past.
 # Shrink an entry when you split a file; delete it once the file is under the limit.
 LEGACY_LIMITS = {
-    "scripts/generate.py": 1235,
     "scripts/analyze.py": 866,
     "scripts/parametric.py": 453,
 }
