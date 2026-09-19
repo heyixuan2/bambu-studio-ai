@@ -44,6 +44,7 @@ from bambu_studio_ai.color import (  # noqa: E402
     nearest_filaments,
     render_preview,
 )
+from bambu_studio_ai.filaments import filament_colors  # noqa: E402
 from colorize.bambu_map import load_bambu_palette  # noqa: E402
 from common import use_utf8_stdio  # noqa: E402
 
@@ -88,8 +89,24 @@ def build_parser():
     parser.add_argument("--format", choices=FORMATS,
                         help="3mf: Bambu Studio project with painted triangles (default); "
                         "obj: vertex-colour OBJ (Bambu Studio asks you to map its colours)")
+    parser.add_argument("--bambu-finish", default="opaque,matte", metavar="FINISHES",
+                        help="filament finishes the suggestions may use, comma-separated "
+                        "(opaque, matte, silk, translucent, …) or 'all' (default: opaque,matte)")
     parser.add_argument("--json", action="store_true", help="print one JSON object on stdout")
     return parser
+
+
+def finishes(value):
+    """--bambu-finish as a set of finish names, or an error message."""
+    known = {c.finish for c in filament_colors()}
+    if value.strip().lower() == "all":
+        return known, None
+    wanted = {f.strip().lower() for f in value.split(",") if f.strip()}
+    unknown = wanted - known
+    if unknown or not wanted:
+        return None, (f"--bambu-finish: unknown finish {', '.join(sorted(unknown)) or '(none)'}; "
+                      f"choose from {', '.join(sorted(known))} or 'all'")
+    return wanted, None
 
 
 def split_removed_flags(argv):
@@ -147,9 +164,10 @@ def output_path(args):
     return source.with_name(f"{source.stem}_multicolor.{fmt}"), fmt
 
 
-def filament_catalogue():
-    """Bambu filament colours from the skill's palette file (see colorize/bambu_map.py)."""
-    return [Filament(entry["line"], entry["name"], entry["hex"]) for entry in load_bambu_palette()]
+def filament_catalogue(allowed_finishes):
+    """Bambu filament colours of the allowed finishes (see colorize/bambu_map.py)."""
+    return [Filament(entry["line"], entry["name"], entry["hex"])
+            for entry in load_bambu_palette(allowed_finishes)]
 
 
 def run(args, notes):
@@ -157,7 +175,8 @@ def run(args, notes):
     for note in notes:
         print(note, file=sys.stderr)
     colours = tuple(c.strip() for c in args.colors.split(",") if c.strip()) if args.colors else ()
-    problem = check_arguments(args, colours)
+    allowed_finishes, problem = finishes(args.bambu_finish)
+    problem = problem or check_arguments(args, colours)
     if problem:
         return fail(problem, EXIT_USAGE, as_json=as_json, kind="bad_arguments")
     source = Path(args.input)
@@ -191,7 +210,7 @@ def run(args, notes):
     except OSError as exc:
         return fail(f"could not write {target}: {exc}", EXIT_FAILED, as_json=as_json, kind="write_failed")
 
-    matches = nearest_filaments(palette, filament_catalogue())
+    matches = nearest_filaments(palette, filament_catalogue(allowed_finishes))
     report = {
         "schema": 1,
         "output_file": str(target.resolve()),
