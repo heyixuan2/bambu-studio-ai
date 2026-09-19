@@ -37,3 +37,22 @@ jobs:
 
       - name: Test
         run: python -m pytest -q
+
+  validate-skill:
+    name: Validate SKILL.md (Agent Skills spec)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install skills-ref
+        run: python -m pip install "git+https://github.com/agentskills/agentskills.git#subdirectory=skills-ref"
+
+      # Absolute path: skills-ref checks that the directory name matches the skill name.
+      - name: Validate
+        run: skills-ref validate "$GITHUB_WORKSPACE"

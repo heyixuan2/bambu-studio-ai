@@ -131,30 +131,35 @@ def cmd_extrude(args):
 # ---------------------------------------------------------------------------
 
 def cmd_bracket(args):
-    """L-bracket with optional mounting holes and fillet."""
-    w, h, t = args.width, args.height, args.thickness
+    """L-bracket: a base arm on the build plate and an upright arm, optional holes and fillet.
 
-    horizontal = m3d.Manifold.cube([w, t, t])
-    vertical = m3d.Manifold.cube([w, t, h])
-    bracket = horizontal + vertical
+    X = width, base arm runs along +Y (length --depth), upright rises along +Z (--height).
+    """
+    w, h, t = args.width, args.height, args.thickness
+    d = args.depth or h
+    if d <= t or h <= t:
+        raise SystemExit("❌ --height and --depth must be larger than --thickness")
+
+    base = m3d.Manifold.cube([w, d, t])
+    upright = m3d.Manifold.cube([w, t, h])
+    bracket = base + upright
 
     if args.fillet > 0:
-        # Approximate fillet: subtract a cube-minus-cylinder from the inner corner
-        r = min(args.fillet, t)
-        fillet_block = m3d.Manifold.cube([w, r, r]).translate([0, t, t])
-        fillet_cyl = m3d.Manifold.cylinder(w, r, r).rotate([0, 90, 0]).translate([0, t + r, t + r])
-        fillet_cut = fillet_block - fillet_cyl
-        bracket = bracket - fillet_cut
+        # Fill the inner corner: a square block minus a cylinder leaves a concave fillet.
+        r = min(args.fillet, d - t, h - t)
+        block = m3d.Manifold.cube([w, r, r]).translate([0, t, t])
+        cyl = m3d.Manifold.cylinder(w, r, r).rotate([0, 90, 0]).translate([0, t + r, t + r])
+        bracket = bracket + (block - cyl)
 
     if args.hole_diameter > 0:
         hole_r = args.hole_diameter / 2
-        # Horizontal arm hole (through Y axis)
-        hole_horizontal = m3d.Manifold.cylinder(t + 1, hole_r).rotate([-90, 0, 0]).translate([w / 2, t + 0.5, t / 2])
-        bracket = bracket - hole_horizontal
-
-        # Vertical arm hole (through Y axis at 70% height)
-        hole_vertical = m3d.Manifold.cylinder(t + 1, hole_r).rotate([-90, 0, 0]).translate([w / 2, t + 0.5, h * 0.7])
-        bracket = bracket - hole_vertical
+        # Base arm: vertical hole (along Z), centred on the part of the arm beyond the upright
+        base_hole = m3d.Manifold.cylinder(t + 1, hole_r).translate([w / 2, t + (d - t) / 2, -0.5])
+        # Upright arm: horizontal hole (along Y), centred on the part above the base
+        # rotate(-90° about X) turns the cylinder's +Z axis into +Y
+        upright_hole = (m3d.Manifold.cylinder(t + 1, hole_r).rotate([-90, 0, 0])
+                        .translate([w / 2, -0.5, t + (h - t) / 2]))
+        bracket = bracket - base_hole - upright_hole
 
     return _export(bracket, _default_output(args, "bracket.stl"))
 
@@ -219,7 +224,8 @@ def cmd_enclosure(args):
             0,
         ])
         lid = lid_outer - lid_inner
-        lid = lid.translate([0, 0, h + 2])
+        # Beside the body on the build plate (not above it, where it would print in mid-air)
+        lid = lid.translate([w + 5, 0, 0])
 
         combined = m3d.Manifold.compose([body, lid])
         return _export(combined, out_path)
@@ -370,6 +376,7 @@ def build_parser():
     p.add_argument("--width", type=float, required=True, help="Width / length along X (mm)")
     p.add_argument("--height", type=float, required=True, help="Vertical arm height (mm)")
     p.add_argument("--thickness", type=float, required=True, help="Material thickness (mm)")
+    p.add_argument("--depth", type=float, default=0, help="Base arm length along Y (mm), default = --height")
     p.add_argument("--hole-diameter", type=float, default=0, help="Mounting hole diameter (mm), 0=no holes")
     p.add_argument("--fillet", type=float, default=0, help="Inner fillet radius (mm), 0=sharp corner")
     p.add_argument("-o", "--output", default="", help="Output file")
@@ -390,7 +397,7 @@ def build_parser():
     p.add_argument("--depth", type=float, required=True, help="Outer depth Y (mm)")
     p.add_argument("--height", type=float, required=True, help="Outer height Z (mm)")
     p.add_argument("--wall", type=float, default=2.0, help="Wall thickness (mm)")
-    p.add_argument("--lid", action="store_true", help="Generate a matching lid (placed above body)")
+    p.add_argument("--lid", action="store_true", help="Generate a matching lid (placed next to the body)")
     p.add_argument("-o", "--output", default="", help="Output file")
 
     # --- csg ---

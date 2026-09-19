@@ -205,7 +205,7 @@ def detect_printer_info():
     script = os.path.join(os.path.dirname(__file__), "bambu.py")
     try:
         r = subprocess.run(
-            ["python3", script, "info", "--json"],
+            [sys.executable, script, "info", "--json"],
             capture_output=True, text=True, timeout=30)
         if r.returncode == 0:
             return json.loads(r.stdout)

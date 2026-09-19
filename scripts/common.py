@@ -4,30 +4,102 @@ Eliminates duplication across analyze.py, generate.py, colorize/, preview.py,
 slice.py, monitor.py, and bambu.py.
 """
 
-__version__ = "1.0.2"
+__version__ = "2.0.0"
 
 import os
 import json
 import platform
+import shutil
 import subprocess
 import threading
 
 # ─── Paths ──────────────────────────────────────────────────────────
+#
+# The skill folder itself is treated as read-only: agents install it into
+# ~/.claude/skills, ~/.codex/skills, .agents/skills, ... and `npx skills update`
+# or `git pull` replaces it. User state therefore lives elsewhere:
+#
+#   home dir   (config, secrets, token cache, certs)
+#              $BAMBU_STUDIO_AI_HOME  or  ~/.bambu-studio-ai/
+#   output dir (models, previews, snapshots, logs)
+#              $BAMBU_OUTPUT_DIR  or  config "output_dir"  or  ./bambu-output/
+#
+# Files left in the skill folder by v1.x are still read as a fallback.
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def home_dir():
+    """User-level directory for config, secrets, token cache and certificates."""
+    base = os.environ.get("BAMBU_STUDIO_AI_HOME") or os.path.join("~", ".bambu-studio-ai")
+    return os.path.abspath(os.path.expanduser(base))
+
+
+def user_file(name, legacy=None):
+    """Path of a user state file in home_dir().
+
+    If it doesn't exist there but a v1.x copy exists inside the skill folder,
+    return the legacy path so existing installs keep working.
+    `legacy` is the path relative to SKILL_DIR (defaults to `name`).
+    """
+    path = os.path.join(home_dir(), name)
+    old = os.path.join(SKILL_DIR, legacy or name)
+    if not os.path.exists(path) and os.path.exists(old):
+        return old
+    return path
+
+
+def output_dir(*sub, create=True):
+    """Directory for generated files. Relative to the current working directory
+    by default, so outputs land in the user's project rather than the skill folder."""
+    base = (os.environ.get("BAMBU_OUTPUT_DIR")
+            or load_config().get("output_dir")
+            or "bambu-output")
+    path = os.path.join(os.path.abspath(os.path.expanduser(base)), *sub)
+    if create:
+        os.makedirs(path, exist_ok=True)
+    return path
+
+
+def write_private_json(path, data):
+    """Write JSON readable only by the current user (chmod 600)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 # ─── Config Loading ─────────────────────────────────────────────────
+
+# Env var → config/secrets key. Env vars always win over files.
+ENV_TO_CONFIG = {
+    "BAMBU_MODE": "mode",
+    "BAMBU_MODEL": "model",
+    "BAMBU_IP": "printer_ip",
+    "BAMBU_SERIAL": "serial",
+    "BAMBU_ACCESS_CODE": "access_code",
+    "BAMBU_EMAIL": "email",
+    "BAMBU_PASSWORD": "password",
+    "BAMBU_DEVICE_ID": "device_id",
+    "BAMBU_3D_PROVIDER": "3d_provider",
+    "BAMBU_3D_API_KEY": "3d_api_key",
+}
+
 
 def load_config(include_secrets=False):
     """Load config.json and optionally .secrets.json. Returns merged dict.
     Handles malformed JSON gracefully (prints warning, returns partial config).
     """
     cfg = {}
-    files = [os.path.join(SKILL_DIR, "config.json")]
+    files = [user_file("config.json")]
     if include_secrets:
-        files.append(os.path.join(SKILL_DIR, ".secrets.json"))
+        files.append(user_file(".secrets.json"))
     for path in files:
         if os.path.exists(path):
             try:
@@ -164,6 +236,73 @@ def find_bambu_studio_profiles():
         if os.path.isdir(p):
             return p
     return None
+
+
+def find_bambu_studio():
+    """Return the command (list) that launches Bambu Studio, or None if not installed.
+    The model path gets appended to this list."""
+    if _SYSTEM == "Darwin":
+        for app in ("/Applications/BambuStudio.app",
+                    os.path.expanduser("~/Applications/BambuStudio.app")):
+            if os.path.isdir(app):
+                return ["open", "-a", app]
+        return None
+    if _SYSTEM == "Windows":
+        pf = os.environ.get("PROGRAMFILES", "C:\\Program Files")
+        exe = os.path.join(pf, "Bambu Studio", "bambu-studio.exe")
+        if os.path.isfile(exe):
+            return [exe]
+        found = shutil.which("bambu-studio")
+        return [found] if found else None
+    for name in ("bambu-studio", "BambuStudio", "bambustudio"):
+        found = shutil.which(name)
+        if found:
+            return [found]
+    if shutil.which("flatpak"):
+        try:
+            r = subprocess.run(["flatpak", "info", "com.bambulab.BambuStudio"],
+                               capture_output=True, timeout=10)
+            if r.returncode == 0:
+                return ["flatpak", "run", "com.bambulab.BambuStudio"]
+        except Exception:
+            pass
+    return None
+
+
+def open_in_bambu_studio(path):
+    """Open a model file in Bambu Studio without blocking. Returns (ok, message)."""
+    path = os.path.abspath(path)
+    if not os.path.exists(path):
+        return False, f"File not found: {path}"
+    cmd = find_bambu_studio()
+    if not cmd:
+        return False, ("Bambu Studio not found. Install it from https://bambulab.com/en/download/studio "
+                       f"and open this file manually: {path}")
+    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if _SYSTEM != "Windows":
+        kwargs["start_new_session"] = True
+    try:
+        subprocess.Popen(cmd + [path], **kwargs)
+    except Exception as e:
+        return False, f"Could not launch Bambu Studio ({e}). Open this file manually: {path}"
+    return True, f"Opened in Bambu Studio: {path}"
+
+
+def desktop_notify(title, message):
+    """Best-effort local desktop notification (macOS / Linux). Never raises."""
+    try:
+        if _SYSTEM == "Darwin":
+            def esc(s):
+                return s.replace("\\", "\\\\").replace('"', '\\"')
+            subprocess.run(
+                ["osascript", "-e",
+                 f'display notification "{esc(message)}" with title "Bambu Studio AI" subtitle "{esc(title)}"'],
+                capture_output=True, timeout=5)
+        elif _SYSTEM == "Linux" and shutil.which("notify-send"):
+            subprocess.run(["notify-send", f"Bambu Studio AI: {title}", message],
+                           capture_output=True, timeout=5)
+    except Exception:
+        pass
 
 
 # ─── Cross-Platform Timeout ─────────────────────────────────────────

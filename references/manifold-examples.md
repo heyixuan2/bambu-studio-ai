@@ -80,13 +80,14 @@ python3 scripts/parametric.py extrude --polygon "[[0,0],[20,0],[20,10],[0,10]]" 
 ### Built-in Part Helpers
 
 ```bash
-# L-bracket with M3 mounting holes and 2mm fillet
-python3 scripts/parametric.py bracket --width 30 --height 40 --thickness 3 --hole-diameter 3.2 --fillet 2 -o bracket.stl
+# L-bracket: 30mm wide, 40mm upright, 25mm base arm, one M3 hole per arm, 2mm inner fillet
+# (base arm along +Y, upright along +Z; --depth defaults to --height)
+python3 scripts/parametric.py bracket --width 30 --height 40 --depth 25 --thickness 3 --hole-diameter 3.2 --fillet 2 -o bracket.stl
 
 # Mounting plate with 4x M3 holes, 25mm spacing
 python3 scripts/parametric.py plate-with-holes --width 60 --depth 40 --thickness 3 --holes 4 --hole-diameter 3.2 --hole-spacing 25 -o plate.stl
 
-# Hollow enclosure with snap-fit lid
+# Hollow enclosure with a matching flat lid (printed beside the body)
 python3 scripts/parametric.py enclosure --width 60 --depth 40 --height 30 --wall 2 --lid -o enclosure.stl
 ```
 

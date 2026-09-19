@@ -1,7 +1,7 @@
 [project]
 name = "bambu-studio-ai"
-version = "1.0.2"
-description = "Bambu Lab 3D printer control, AI model generation, and multi-color automation"
+version = "2.0.0"
+description = "Agent skill for Bambu Lab 3D printers: model search, AI generation, printability analysis, multi-color, printer control and monitoring"
 requires-python = ">=3.9"
 
 [project.optional-dependencies]

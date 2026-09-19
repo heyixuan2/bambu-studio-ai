@@ -5,7 +5,7 @@ Model Preview Generator — Renders 3D model preview images via Blender Cycles.
 Auto-loads PBR materials/textures from GLB. Supports STL, OBJ, GLB/GLTF.
 Uses Cycles for accurate PBR texture rendering in headless mode.
 
-Requires: Blender 4.0+ (brew install --cask blender)
+Requires: Blender 4.0+ (https://www.blender.org/download/ — macOS: brew install --cask blender)
 
 Usage:
   python3 scripts/preview.py model.glb                      # Perspective render
@@ -22,7 +22,7 @@ def preview(model_path, output_path, views="perspective", expected_height_mm=0):
     """Render model preview using Blender Cycles."""
     blender = find_blender()
     if not blender:
-        print("❌ Blender not found. Install: brew install --cask blender")
+        print("❌ Blender not found. Install Blender 4.0+ from https://www.blender.org/download/ (macOS: brew install --cask blender)")
         return None
 
     if not os.path.exists(model_path):
@@ -396,7 +396,7 @@ _shutil.rmtree(_turntable_dir, ignore_errors=True)
 def main():
     parser = argparse.ArgumentParser(
         description="📸 3D Model Preview Generator (Blender Cycles)",
-        epilog="Requires: Blender 4.0+ (brew install --cask blender)"
+        epilog="Requires: Blender 4.0+ (https://www.blender.org/download/ — macOS: brew install --cask blender)"
     )
     parser.add_argument("model", help="Model file (STL/OBJ/GLB/GLTF/FBX)")
     parser.add_argument("--output", "-o", help="Output PNG path")

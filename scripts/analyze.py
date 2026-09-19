@@ -711,6 +711,9 @@ def main():
     elif max_dim < 30:  # Likely cm or small mm
         print(f"⚠️ Small model (max dim: {max_dim:.1f}). Assuming mm. Use --unit cm if wrong.")
 
+    # Files written by this run, in pipeline order — the last one is the most processed.
+    written = []
+
     # Auto-scale if target height specified
     height_scaled = False
     if args.height and args.height > 0:
@@ -733,6 +736,7 @@ def main():
         # Export oriented model
         orient_path = os.path.splitext(args.file)[0] + "_oriented.stl"  # Always STL after unit conversion
         mesh.export(orient_path)
+        written.append(orient_path)
         print(f"📁 Oriented model: {orient_path}")
 
     # ─── Auto-simplify if too many faces ───
@@ -741,6 +745,7 @@ def main():
         if was_simplified:
             simp_path = os.path.splitext(args.file)[0] + "_simplified" + os.path.splitext(args.file)[1]
             mesh.export(simp_path)
+            written.append(simp_path)
             print(f"💾 Simplified model: {simp_path}")
 
     # ─── Floating parts handling ───
@@ -753,12 +758,14 @@ def main():
         if removed_parts > 0:
             clean_path = os.path.splitext(args.file)[0] + "_cleaned" + os.path.splitext(args.file)[1]
             mesh.export(clean_path)
+            written.append(clean_path)
             print(f"💾 Cleaned model: {clean_path}")
 
     # ─── Export scaled mesh if --height or unit conversion changed it ───
     if height_scaled or converted_to_mm:
         scaled_path = os.path.splitext(args.file)[0] + "_scaled" + os.path.splitext(args.file)[1]
         mesh.export(scaled_path)
+        written.append(scaled_path)
         print(f"💾 Scaled model: {scaled_path}")
 
     # ─── Run analysis on ORIGINAL mesh first ───
@@ -784,12 +791,16 @@ def main():
                 print(f"\n🔧 Auto-repairing minor issues (holes + normals — low risk)...")
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)
+                if was_repaired and os.path.exists(repair_path):
+                    written.append(repair_path)
                 if not was_repaired:
                     print(f"   ℹ️ Pass --no-auto-repair to skip this step.")
             elif args.repair:
                 print(f"\n🔧 Light repair (filling holes, fixing normals)...")
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)
+                if was_repaired and os.path.exists(repair_path):
+                    written.append(repair_path)
             else:
                 print(f"\n💡 Minor issues found. Will auto-repair on next run (or pass --repair).")
         elif severity == "major":
@@ -801,6 +812,8 @@ def main():
             if args.repair:
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)
+                if was_repaired and os.path.exists(repair_path):
+                    written.append(repair_path)
             else:
                 print(f"\n💡 Major issues found. Run with --repair to attempt auto-fix.")
         else:
@@ -810,6 +823,8 @@ def main():
             if args.repair:
                 repair_path = os.path.splitext(args.file)[0] + "_repaired" + os.path.splitext(args.file)[1]
                 mesh, was_repaired = repair_mesh(mesh, repair_path)
+                if was_repaired and os.path.exists(repair_path):
+                    written.append(repair_path)
     elif args.repair:
         print(f"\n✅ Mesh is clean — no repair needed.")
     # If no issues and no --repair flag, skip entirely
@@ -817,6 +832,7 @@ def main():
     # Analyze
     report = analyze_mesh(mesh, printer, material, args.purpose)
     report["file"] = args.file
+    report["output_file"] = written[-1] if written else args.file
 
     # Render views
     if args.render:
@@ -828,6 +844,7 @@ def main():
         print(json.dumps(report, indent=2))
     else:
         print(format_report(report))
+        print(f"\n➡️  Use this file for the next steps: {report['output_file']}")
 
 
 if __name__ == "__main__":

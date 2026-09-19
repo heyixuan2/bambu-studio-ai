@@ -33,7 +33,10 @@ except ImportError:
 
 MODE = os.environ.get("BAMBU_MODE", "").lower()
 
-from common import SKILL_DIR as _skill_dir, load_config as _load_config_base, TOKEN_TTL_SECONDS, run_with_timeout
+from common import (
+    load_config as _load_config_base, TOKEN_TTL_SECONDS, run_with_timeout,
+    ENV_TO_CONFIG, user_file, output_dir, write_private_json, desktop_notify, open_in_bambu_studio,
+)
 
 # Load config.json at import (non-sensitive).
 # Secrets loaded lazily on first _get_config() call.
@@ -57,12 +60,7 @@ if not MODE:
     MODE = _config.get("mode", "local").lower()
 # Config values available via _config dict. NOT mapped to env vars (security).
 # Use _get_config() to check env var first, then _config fallback.
-_ENV_TO_CONFIG = {
-    "BAMBU_MODE": "mode", "BAMBU_IP": "printer_ip", "BAMBU_SERIAL": "serial",
-    "BAMBU_ACCESS_CODE": "access_code", "BAMBU_EMAIL": "email",
-    "BAMBU_PASSWORD": "password", "BAMBU_DEVICE_ID": "device_id",
-    "BAMBU_3D_API_KEY": "3d_api_key", "BAMBU_VERIFY_CODE": None,
-}
+_ENV_TO_CONFIG = dict(ENV_TO_CONFIG)
 
 def _get_config(env_key, default=""):
     """Get config: env var > _config > default. Never writes to os.environ."""
@@ -80,14 +78,14 @@ def _get_config(env_key, default=""):
 # ═══════════════════════════════════════════════════════════════════
 # X.509 Certificate Signing for Auto-Print
 # Background: Bambu Lab 2025 firmware requires X.509 signed commands.
-# The certificate/key are loaded from references/*.pem files.
+# The certificate/key are loaded from user-supplied PEM files (see _ensure_x509).
 # Required for authenticated MQTT commands on Bambu Lab printers with Developer Mode.
 # ═══════════════════════════════════════════════════════════════════
 
 # X.509 cert/key are NOT shipped with the skill and NOT auto-downloaded.
-# Agent provides them during setup if user enables auto-print mode.
-# Files stored locally: references/bambu_connect_cert.pem, references/bambu_connect_key.pem
-# Certificate files provided by user during setup (references/*.pem).
+# The user supplies them if they enable auto-print mode.
+# Files: ~/.bambu-studio-ai/bambu_connect_{cert,key}.pem
+# (v1.x location references/*.pem inside the skill folder is still read.)
 BAMBU_APP_CERT = None
 BAMBU_APP_PRIVATE_KEY = None
 BAMBU_APP_CERT_ID = None
@@ -95,14 +93,14 @@ BAMBU_APP_CERT_ID = None
 def _ensure_x509():
     """Load X.509 cert/key from local PEM files. No auto-download.
     
-    Agent provides cert/key during setup if user enables auto-print.
-    Files: references/bambu_connect_cert.pem, references/bambu_connect_key.pem
+    The user supplies cert/key if they enable auto-print.
+    Files: ~/.bambu-studio-ai/bambu_connect_{cert,key}.pem
     """
     global BAMBU_APP_CERT, BAMBU_APP_PRIVATE_KEY, BAMBU_APP_CERT_ID
     if BAMBU_APP_CERT is not None:
         return True
-    cert_path = os.path.join(_skill_dir, "references", "bambu_connect_cert.pem")
-    key_path = os.path.join(_skill_dir, "references", "bambu_connect_key.pem")
+    cert_path = user_file("bambu_connect_cert.pem", legacy=os.path.join("references", "bambu_connect_cert.pem"))
+    key_path = user_file("bambu_connect_key.pem", legacy=os.path.join("references", "bambu_connect_key.pem"))
     try:
         with open(cert_path) as f:
             BAMBU_APP_CERT = f.read().strip()
@@ -112,7 +110,8 @@ def _ensure_x509():
         print("❌ X.509 certificate not found. Auto-print requires:")
         print(f"   {cert_path}")
         print(f"   {key_path}")
-        print("   Run setup again or ask your agent to configure auto-print.")
+        print("   Auto-print is optional. Use manual printing from Bambu Studio instead,")
+        print("   or place your own certificate files at the paths above.")
         return False
     # Extract cert_id (CN) from certificate
     try:
@@ -141,7 +140,7 @@ def sign_message_x509(message_dict):
     if not CRYPTO_AVAILABLE:
         raise RuntimeError(
             "cryptography library required for auto-print. "
-            "Install with: pip3 install --break-system-packages cryptography"
+            "Install with: pip install -r requirements.txt"
         )
     
     from cryptography.hazmat.backends import default_backend
@@ -283,28 +282,26 @@ class CloudBackend:
             from bambulab import BambuClient, BambuAuthenticator
         except ImportError:
             print("❌ bambu-lab-cloud-api not installed.")
-            print("   Run: pip3 install --break-system-packages bambu-lab-cloud-api")
+            print("   Run: pip install -r requirements.txt  (in the skill folder)")
             sys.exit(1)
 
-        email = os.environ.get("BAMBU_EMAIL", "")
-        password = os.environ.get("BAMBU_PASSWORD", "")
+        email = _get_config("BAMBU_EMAIL")
+        password = _get_config("BAMBU_PASSWORD")
         if not email or not password:
             print("❌ Missing cloud credentials:")
-            if not email: print("   export BAMBU_EMAIL='your@email.com'")
-            if not password: print("   export BAMBU_PASSWORD='your_password'")
+            if not email: print("   python3 scripts/configure.py set email your@email.com")
+            if not password: print("   python3 scripts/configure.py secret password   (reads from stdin)")
             sys.exit(1)
 
         # Token cache: avoid re-login every run
-        _token_cache = os.path.join(_skill_dir, ".token_cache.json")
+        _token_cache = user_file(".token_cache.json")
         cached_token = None
         if os.path.exists(_token_cache):
             try:
-                import json as _tj
                 with open(_token_cache) as _tf:
-                    _tc = _tj.load(_tf)
+                    _tc = json.load(_tf)
                     cached_token = _tc.get("token")
                     cache_time = _tc.get("timestamp", 0)
-                    import time
                     # Token valid for 90 days
                     if time.time() - cache_time > TOKEN_TTL_SECONDS:
                         cached_token = None
@@ -334,7 +331,7 @@ class CloudBackend:
                     print("")
                     # Check for code via env var or file (non-blocking for autonomous agents)
                     verify_code = os.environ.get("BAMBU_VERIFY_CODE", "")
-                    verify_file = os.path.join(_skill_dir, ".verify_code")
+                    verify_file = user_file(".verify_code")
                     if not verify_code and os.path.exists(verify_file):
                         with open(verify_file) as _vf:
                             verify_code = _vf.read().strip()
@@ -342,7 +339,7 @@ class CloudBackend:
                     if not verify_code:
                         print("   To provide the code, either:")
                         print("   1. Set env: export BAMBU_VERIFY_CODE=123456")
-                        print("   2. Write to file: echo 123456 > .verify_code")
+                        print(f"   2. Write to file: echo 123456 > {verify_file}")
                         print("   3. Re-run with: BAMBU_VERIFY_CODE=123456 python3 scripts/bambu.py status")
                         print("")
                         print("   💡 TIP: Use LAN mode instead to avoid verification entirely.")
@@ -353,12 +350,12 @@ class CloudBackend:
 
             self.client = BambuClient(token=token)
 
-            # Cache the token
-            import json as _tj, time as _tt
-            with open(_token_cache, "w") as _tf:
-                _tj.dump({"token": token, "timestamp": _tt.time(), "email": email}, _tf)
-            os.chmod(_token_cache, 0o600)
-            print("✅ Logged in and token cached (valid 90 days)")
+            # Cache the token (best effort — sandboxed agents may not allow writes to the home dir)
+            try:
+                write_private_json(_token_cache, {"token": token, "timestamp": time.time(), "email": email})
+                print("✅ Logged in and token cached (valid 90 days)")
+            except OSError as e:
+                print(f"✅ Logged in (token not cached: {e})")
 
         except Exception as e:
             print(f"❌ Cloud login failed: {e}")
@@ -367,7 +364,7 @@ class CloudBackend:
             sys.exit(1)
 
         # Get printer
-        device_id = os.environ.get("BAMBU_DEVICE_ID", "")
+        device_id = _get_config("BAMBU_DEVICE_ID")
         if device_id:
             self.device_id = device_id
         else:
@@ -439,18 +436,19 @@ class LocalBackend:
             import bambulabs_api as bl
         except ImportError:
             print("❌ bambulabs-api not installed.")
-            print("   Run: pip3 install --break-system-packages bambulabs-api")
+            print("   Run: pip install -r requirements.txt  (in the skill folder)")
             sys.exit(1)
 
-        ip = os.environ.get("BAMBU_IP", "")
-        serial = os.environ.get("BAMBU_SERIAL", "")
-        access_code = os.environ.get("BAMBU_ACCESS_CODE", "")
+        ip = _get_config("BAMBU_IP")
+        serial = _get_config("BAMBU_SERIAL")
+        access_code = _get_config("BAMBU_ACCESS_CODE")
 
         if not all([ip, serial, access_code]):
-            print("❌ Missing local connection vars:")
-            if not ip: print("   export BAMBU_IP='192.168.1.xxx'")
-            if not serial: print("   export BAMBU_SERIAL='01P00Axxxxxxx'")
-            if not access_code: print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
+            print("❌ Missing LAN connection settings:")
+            if not ip: print("   python3 scripts/configure.py set printer_ip 192.168.1.xxx")
+            if not serial: print("   python3 scripts/configure.py set serial 01P00Axxxxxxx")
+            if not access_code: print("   python3 scripts/configure.py secret access_code   (reads from stdin)")
+            print("   (or export BAMBU_IP / BAMBU_SERIAL / BAMBU_ACCESS_CODE)")
             sys.exit(1)
 
         self.ip = ip
@@ -463,13 +461,31 @@ class LocalBackend:
             self.printer = bl.Printer(ip, access_code, serial)
 
         def _connect_and_wait():
-            self.printer.connect()
-            time.sleep(2)
+            # MQTT only: snapshots use RTSP via ffmpeg, and the library's port-6000
+            # camera thread can stall process exit for ~75s when the printer is unreachable.
+            if hasattr(self.printer, "mqtt_start"):
+                self.printer.mqtt_start()
+            else:
+                self.printer.connect()
+            if not hasattr(self.printer, "mqtt_client_connected"):  # older bambulabs-api
+                time.sleep(2)
+                return True
+            deadline = time.time() + 12
+            while time.time() < deadline:
+                try:
+                    if self.printer.mqtt_client_connected():
+                        time.sleep(2)  # let the first status report arrive
+                        return True
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            return False
 
-        _, timed_out = run_with_timeout(_connect_and_wait, timeout_sec=15)
-        if timed_out:
-            print(f"❌ Printer not reachable at {ip} — check IP and that the printer is on.")
-            sys.exit(1)
+        connected, timed_out = run_with_timeout(_connect_and_wait, timeout_sec=20)
+        if timed_out or not connected:
+            print(f"❌ Printer not reachable at {ip} (MQTT port 8883).")
+            print("   Check: printer is on and awake, LAN mode enabled, same network, correct IP and access code.")
+            sys.exit(1)  # MQTT loop thread is a daemon; don't join it while it's stuck connecting
 
     def get_status(self):
         p = self.printer
@@ -608,46 +624,34 @@ class LocalBackend:
 # ─── Notifications ───
 
 def notify(title, message, channel="auto", image=None):
-    """Send notification via the user's current channel.
-    
-    channel: auto (detect), discord, imessage, telegram, console
-    In agent context, the agent handles notifications via its messaging tools.
-    This is a fallback for standalone script usage.
+    """Local notification: stdout + desktop notification + JSONL log.
+
+    Chat/messaging delivery (Slack, Telegram, ...) is left to the agent's own tools;
+    this script never sends anything over the network for notifications.
     """
     print(f"🔔 {title}: {message}")
-    
-    # Try macOS notification
+    desktop_notify(title, message)
     try:
-        import subprocess, shlex
-        msg_safe = message.replace("\\", "\\\\").replace('"', '\\"')
-        title_safe = title.replace("\\", "\\\\").replace('"', '\\"')
-        subprocess.run([
-            "osascript", "-e",
-            f'display notification "{msg_safe}" with title "Bambu Studio AI" subtitle "{title_safe}"'
-        ], timeout=5, capture_output=True)
-    except Exception:
+        log_path = os.path.join(output_dir(), "notifications.jsonl")
+        entry = {"timestamp": time.time(), "title": title, "message": message,
+                 "channel": channel, "image": image}
+        with open(log_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
         pass
-    
-    # Log to file for agent pickup
-    _skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_path = os.path.join(_skill_dir, "output", "notifications.jsonl")
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    import json as _nj, time as _nt
-    entry = {"timestamp": _nt.time(), "title": title, "message": message, "channel": channel}
-    with open(log_path, "a") as f:
-        f.write(_nj.dumps(entry) + "\n")
 
 
 # ─── Unified Commands ────────────────────────────────────────────────
 
 def get_backend():
     if MODE == "cloud":
-        email = os.environ.get("BAMBU_EMAIL") or _config.get("email")
-        password = os.environ.get("BAMBU_PASSWORD") or _config.get("password")
+        email = _get_config("BAMBU_EMAIL")
+        password = _get_config("BAMBU_PASSWORD")
         if not email or not password:
-            print("❌ Cloud mode requires BAMBU_EMAIL and BAMBU_PASSWORD.")
-            print("   Set in config.json or environment variables.")
-            print("   Or switch to LAN mode: set mode=local in config.json")
+            print("❌ Cloud mode requires an email and password.")
+            print("   python3 scripts/configure.py set email your@email.com")
+            print("   python3 scripts/configure.py secret password   (reads from stdin)")
+            print("   Or switch to LAN mode: python3 scripts/configure.py set mode local")
             raise SystemExit(1)
         return CloudBackend()
     else:
@@ -885,25 +889,17 @@ def cmd_snapshot():
         print("   Switch to LAN mode for camera access.")
         return
 
-    ip = os.environ.get("BAMBU_IP", _config.get("printer_ip", ""))
-    ac = os.environ.get("BAMBU_ACCESS_CODE", _config.get("access_code", ""))
-    if not ip or not ac:
-        # Try loading from secrets
-        _sp = os.path.join(_skill_dir, ".secrets.json")
-        if os.path.exists(_sp):
-            import json as _sj
-            with open(_sp) as _sf:
-                _sd = _sj.load(_sf)
-                ac = ac or _sd.get("access_code", "")
-        if not ip:
-            print("❌ BAMBU_IP not set. Check config.json or set env var.")
-            return
-        if not ac:
-            print("❌ Access code not set. Check .secrets.json or set BAMBU_ACCESS_CODE.")
-            return
+    ip = _get_config("BAMBU_IP")
+    ac = _get_config("BAMBU_ACCESS_CODE")
+    if not ip:
+        print("❌ Printer IP not set: python3 scripts/configure.py set printer_ip <ip>")
+        sys.exit(1)
+    if not ac:
+        print("❌ Access code not set: python3 scripts/configure.py secret access_code")
+        sys.exit(1)
 
-    out = os.path.join(_skill_dir, "output", "snapshots", "snapshot.jpg")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
+    from urllib.parse import quote
+    out = os.path.join(output_dir("snapshots"), "snapshot.jpg")
 
     # Use RTSP stream (port 322) — NOT port 6000 socket
     # Port 6000 is incompatible with H2D and newer firmware (SSL handshake failure)
@@ -913,7 +909,7 @@ def cmd_snapshot():
         import subprocess
         result = subprocess.run(
             ["ffmpeg", "-y", "-update", "1", "-rtsp_transport", "tcp",
-             "-i", f"rtsps://bblp:{ac}@{ip}:322/streaming/live/1",
+             "-i", f"rtsps://bblp:{quote(ac, safe='')}@{ip}:322/streaming/live/1",
              "-frames:v", "1", out],
             capture_output=True, timeout=15
         )
@@ -930,7 +926,7 @@ def cmd_snapshot():
             elif "401" in stderr or "Unauthorized" in stderr:
                 print("   💡 Wrong access code. Check Settings → Device on printer.")
     except FileNotFoundError:
-        print("❌ ffmpeg not installed. Run: brew install ffmpeg")
+        print("❌ ffmpeg not installed (macOS: brew install ffmpeg, Linux: apt install ffmpeg, Windows: winget install ffmpeg)")
     except subprocess.TimeoutExpired:
         print("⚠️ Camera timeout. Possible causes:")
         print("   1. Camera in use by another app (phone/Bambu Studio)")
@@ -952,7 +948,7 @@ def cmd_gcode(code):
     except AttributeError:
         # Fallback: direct MQTT publish
         import json as _json
-        topic = f"device/{os.environ.get('BAMBU_SERIAL', _config.get('serial', ''))}/request"
+        topic = f"device/{_get_config('BAMBU_SERIAL')}/request"
         payload = {"print": {"command": "gcode_line", "param": code}}
         try:
             b.printer._client.publish(topic, _json.dumps(payload))
@@ -970,13 +966,13 @@ def cmd_upload(filename):
         print(f"❌ File not found: {filename}")
         sys.exit(1)
     
-    ip = os.environ.get("BAMBU_IP", _config.get("printer_ip", ""))
-    access_code = os.environ.get("BAMBU_ACCESS_CODE", _config.get("access_code", ""))
+    ip = _get_config("BAMBU_IP")
+    access_code = _get_config("BAMBU_ACCESS_CODE")
     
     if not ip or not access_code:
         print("❌ Missing printer connection info:")
-        if not ip: print("   export BAMBU_IP='192.168.1.xxx'")
-        if not access_code: print("   export BAMBU_ACCESS_CODE='xxxxxxxx'")
+        if not ip: print("   python3 scripts/configure.py set printer_ip 192.168.1.xxx")
+        if not access_code: print("   python3 scripts/configure.py secret access_code")
         sys.exit(1)
     
     remote_filename = os.path.basename(filename)
@@ -989,6 +985,14 @@ def cmd_upload(filename):
     except Exception as e:
         print(f"❌ Upload failed: {e}")
         sys.exit(1)
+
+def cmd_open(filename):
+    """Open a model in Bambu Studio (macOS / Windows / Linux)."""
+    ok, msg = open_in_bambu_studio(filename)
+    print(("✅ " if ok else "❌ ") + msg)
+    if not ok:
+        sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1006,6 +1010,7 @@ def main():
     sub.add_parser("snapshot")
     p = sub.add_parser("print"); p.add_argument("--confirmed", action="store_true", help="Confirm previewed in Bambu Studio"); p.add_argument("--ams-mapping", type=str, help="AMS slot mapping (comma-separated, e.g., 0,1,2)"); p.add_argument("filename")
     p = sub.add_parser("upload", help="Upload file to printer via FTP"); p.add_argument("filename")
+    p = sub.add_parser("open", help="Open a model in Bambu Studio (no printer needed)"); p.add_argument("filename")
     p = sub.add_parser("gcode", help="Send raw G-code (local only)"); p.add_argument("code")
     p = sub.add_parser("notify", help="Send notification"); p.add_argument("--title", default="Bambu Studio AI"); p.add_argument("--message", required=True); p.add_argument("--image")
     p = sub.add_parser("light"); p.add_argument("state", choices=["on", "off"])
@@ -1029,6 +1034,8 @@ def main():
         cmds[args.command]()
     elif args.command == "upload":
         cmd_upload(args.filename)
+    elif args.command == "open":
+        cmd_open(args.filename)
     elif args.command == "print":
         cmd_print(args.filename, confirmed=args.confirmed, ams_mapping=getattr(args, "ams_mapping", None))
     elif args.command == "gcode":
