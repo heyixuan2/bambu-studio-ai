@@ -2,6 +2,8 @@
 
 # Bambu Studio AI
 
+**also known as *Bambu Lab AI*** · [中文说明](README.zh-CN.md)
+
 ### Tell your AI agent what you need. It designs it, checks it, and gets it printed on your Bambu Lab.
 
 An open-source skill for **Claude Code, OpenAI Codex, Cursor, Gemini CLI, GitHub Copilot** and any
@@ -13,8 +15,17 @@ You stay in control the whole way.
 [![CI](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.0.0-blue)](#version-history)
+[![Featured by Bambu Lab](https://img.shields.io/badge/Featured%20by-Bambu%20Lab%20%C2%B7%20%E6%8B%93%E7%AB%B9%20Skill%20%E5%A4%A7%E8%B5%8F-00AE42)](https://xhslink.cn/o/6JZRUdwvZdC)
 
 </div>
+
+> **🏆 Featured by Bambu Lab.** Selected for the first batch of featured works in Bambu Lab's
+> official *我的拓竹 Skill 大赏* (Bambu Lab Player Skill Showcase, 2026), under the name **Bambu Lab AI**.
+> [See the post on Xiaohongshu →](https://xhslink.cn/o/6JZRUdwvZdC)
+>
+> <img src="docs/assets/bambu-skill-award-2026.jpg" alt="Bambu Lab AI · featured in 我的拓竹 Skill 大赏 (poster by Bambu Lab)" width="360">
+>
+> <sub>Poster © Bambu Lab, from the official announcement.</sub>
 
 ```text
 You    I need a wall bracket for a 32 mm pipe with two M4 screw holes.
@@ -266,5 +277,6 @@ prints from camera snapshots, and testing on Windows and Linux.
 
 MIT, see [LICENSE](LICENSE).
 
-<sub>Bambu Studio AI is an independent community project. It is not affiliated with or endorsed by
-Bambu Lab. "Bambu Lab" and "Bambu Studio" are trademarks of their respective owner.</sub>
+<sub>Bambu Studio AI (Bambu Lab AI) is an independent community project by TieGaier, featured by
+Bambu Lab but not developed or officially supported by them. "Bambu Lab" and "Bambu Studio" are
+trademarks of their respective owner.</sub>
