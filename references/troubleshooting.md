@@ -58,9 +58,9 @@ untested.
 | Feature | Status |
 |---|---|
 | Single-color pipeline | Stable |
-| Multi-color (colorize) | Writes a painted Bambu Studio project; verified by headless slicing with filament changes. Opening it in the Bambu Studio app is not yet tested on every printer |
+| Multi-color (colorize) | Writes a painted Bambu Studio project on the A1 0.4 mm profiles; pick another printer in Bambu Studio and the paint stays. Checked on Bambu Studio 02.07.01.62: it opens in the app with every filament listed and slices with colour changes (`slice.py` or the app). Colour boundaries that run up the side of a model change filament on every layer, so check the time and purge estimate |
 | Parametric modeling | Geometric and functional parts only, single-color STL |
-| CLI slicing | Bambu Studio command line with its own profiles; one filament per slice. Needs Bambu Studio installed |
-| Auto-print | Works with Developer Mode (signed MQTT + FTPS upload). Disconnects Bambu Studio cloud and Handy |
-| Cloud mode | Status and basic control only. No camera, G-code or monitoring |
+| CLI slicing | Bambu Studio's command line with its own profiles. Needs Bambu Studio installed; verified on macOS, the Windows and Linux paths are untested |
+| Printer control | Not included: status is read-only. Start prints from Bambu Studio; pause and cancel on the printer or in Bambu Handy |
+| Camera | Not included: the camera stream needs LAN-only settings this skill doesn't ask for. Use Bambu Handy |
 | Desktop notifications | macOS and Linux (`notify-send`). Windows prints to the console only |

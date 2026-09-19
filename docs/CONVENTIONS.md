@@ -40,7 +40,7 @@ example configs) lives in the repo root tree, because everything in it ships.
 
 ## 2. Python
 
-- **Version:** 3.10+ (set by `bambulabs-api`). `from __future__ import annotations` in every module.
+- **Version:** 3.10+ (`requires-python` in `pyproject.toml`; CI tests 3.10 and 3.13). `from __future__ import annotations` in every module.
 - **Formatting:** `ruff format`, line length 100. No manual alignment.
 - **Linting:** `ruff check` with the full rule set in `pyproject.toml` (`E, W, F, I, N, UP, B, S,
   C4, SIM, RUF, ANN, D`), not the four error-only rules used today. Enforced on
