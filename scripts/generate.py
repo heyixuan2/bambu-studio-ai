@@ -120,7 +120,7 @@ def build_generator(provider_name, config, *, as_json):
     options = {"rodin_tier": str(config.get("rodin_tier") or "")}
     provider = create_provider(provider_name, ProviderSettings(api_key=key, options=options))
     notify = (lambda message: print(f"⏳ {message}", file=sys.stderr))
-    generator = Generator(provider, output_dir=Path(output_dir("models")),
+    generator = Generator(provider, output_dir=Path(output_dir("models", create=False)),
                           ledger=FollowUpLedger(Path(home_dir()) / "generation-tasks.json"),
                           notify=notify)
     return generator, EXIT_OK
