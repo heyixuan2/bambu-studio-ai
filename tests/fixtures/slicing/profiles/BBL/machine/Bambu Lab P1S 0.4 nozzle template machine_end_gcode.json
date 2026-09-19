@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P1S 0.4 nozzle template machine_end_gcode",
+    "instantiation": "false",
+    "machine_end_gcode": ";===== date: 20230428 =====================\nM400 ; wait for buffer to clear\nG92 E0 ; zero the extruder\nG1 E-0.8 F1800 ; retract\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

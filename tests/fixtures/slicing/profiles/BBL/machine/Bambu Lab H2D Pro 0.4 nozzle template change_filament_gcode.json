@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab H2D Pro 0.4 nozzle template change_filament_gcode",
+    "instantiation": "false",
+    "change_filament_gcode": ";======== H2D Pro filament ========\n;===== 20251031 =====\nM993 A2 B2 C2 ; nozzle cam detection allow status save.\nM993 A0 B0 C0 ; nozzle cam detection not allowed.\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

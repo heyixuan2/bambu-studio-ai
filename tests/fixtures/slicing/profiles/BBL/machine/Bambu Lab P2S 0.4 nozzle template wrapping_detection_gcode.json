@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P2S 0.4 nozzle template wrapping_detection_gcode",
+    "instantiation": "false",
+    "wrapping_detection_gcode": ";======== P2S 20250822 clumping ========\n{if !spiral_mode}\n    M622.1 S0 ; for previous firmware, default turn off\n    M1002 set_flag g39_forced_detection_flag=1\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

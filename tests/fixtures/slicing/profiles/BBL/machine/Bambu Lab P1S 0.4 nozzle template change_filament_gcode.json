@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P1S 0.4 nozzle template change_filament_gcode",
+    "instantiation": "false",
+    "change_filament_gcode": ";=P1S 20251031=\nM620 S[next_extruder]A\nM204 S9000\nG1 Z{max_layer_z + 3.0} F1200\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

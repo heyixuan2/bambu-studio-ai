@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P2S 0.4 nozzle template layer_change_gcode",
+    "instantiation": "false",
+    "layer_change_gcode": ";======== P2S layer_change gcode ==========\n;===== 2026/05/15 ====\n\n{if (layer_num + 1 == 1)}\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab H2D Pro 0.4 nozzle template machine_start_gcode",
+    "instantiation": "false",
+    "machine_start_gcode": ";===== machine: H2D Pro start ======\n;===== date: 20251104 =====================\n\n;M1002 set_flag extrude_cali_flag=1\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

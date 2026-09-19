@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab A1 0.4 nozzle template machine_end_gcode",
+    "instantiation": "false",
+    "machine_end_gcode": ";===== date: 20260513 =====================\nG392 S0 ;turn off nozzle clog detect\n\nM400 ; wait for buffer to clear\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

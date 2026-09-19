@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab H2D 0.4 nozzle template time_lapse_gcode",
+    "instantiation": "false",
+    "time_lapse_gcode": ";======== H2D 20251104========\n; SKIPPABLE_START\n; SKIPTYPE: timelapse\nM622.1 S1 ; for prev firmware, default turned on\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

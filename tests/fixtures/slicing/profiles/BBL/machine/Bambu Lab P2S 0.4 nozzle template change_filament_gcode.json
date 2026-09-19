@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P2S 0.4 nozzle template change_filament_gcode",
+    "instantiation": "false",
+    "change_filament_gcode": ";======== P2S filament_change gcode ==========\n;===== 2026/05/15 =====\n\nM620 S[next_filament_id]A\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

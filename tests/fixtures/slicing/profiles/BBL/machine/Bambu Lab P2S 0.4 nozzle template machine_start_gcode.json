@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P2S 0.4 nozzle template machine_start_gcode",
+    "instantiation": "false",
+    "machine_start_gcode": ";M1002 set_flag extrude_cali_flag=1\n;M1002 set_flag g29_before_print_flag=1\n;M1002 set_flag auto_cali_toolhead_offset_flag=1\n;M1002 set_flag build_plate_detect_flag=1\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

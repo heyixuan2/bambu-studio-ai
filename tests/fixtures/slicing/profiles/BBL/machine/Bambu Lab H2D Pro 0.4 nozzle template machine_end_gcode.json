@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab H2D Pro 0.4 nozzle template machine_end_gcode",
+    "instantiation": "false",
+    "machine_end_gcode": ";======== H2D Pro end ========\n;===== date: 2025/11/11 =====\n\nG392 S0 ;turn off nozzle clog detect\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

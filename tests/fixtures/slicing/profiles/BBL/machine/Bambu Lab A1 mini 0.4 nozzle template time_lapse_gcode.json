@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab A1 mini 0.4 nozzle template time_lapse_gcode",
+    "instantiation": "false",
+    "time_lapse_gcode": ";===================== date: 20250206 =====================\n{if !spiral_mode && print_sequence != \"by object\"}\n; don't support timelapse gcode in spiral_mode and by object sequence for I3 structure printer\n; SKIPPABLE_START\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

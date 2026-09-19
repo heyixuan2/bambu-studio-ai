@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab H2D Pro 0.4 nozzle template wrapping_detection_gcode",
+    "instantiation": "false",
+    "wrapping_detection_gcode": ";======== H2D Pro 20250806 clumping ========\n{if !spiral_mode}\n    M622.1 S0 ; for previous firmware, default turn off\n    M1002 set_flag g39_forced_detection_flag=1\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

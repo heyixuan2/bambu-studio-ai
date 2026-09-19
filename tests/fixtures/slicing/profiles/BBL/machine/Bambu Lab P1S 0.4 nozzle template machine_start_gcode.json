@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P1S 0.4 nozzle template machine_start_gcode",
+    "instantiation": "false",
+    "machine_start_gcode": ";===== machine: P1S-0.4 ========================\n;===== date: 20251031 =====================\n;===== turn on the HB fan & MC board fan =================\nM104 S75 ;set extruder temp to turn on the HB fan and prevent filament oozing from nozzle\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

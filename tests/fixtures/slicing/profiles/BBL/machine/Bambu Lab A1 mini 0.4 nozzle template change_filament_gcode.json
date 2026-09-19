@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab A1 mini 0.4 nozzle template change_filament_gcode",
+    "instantiation": "false",
+    "change_filament_gcode": ";===== A1mini 20251031 =====\nG392 S0\nM1007 S0\nM620 S[next_extruder]A\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

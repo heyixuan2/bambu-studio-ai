@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab A1 0.4 nozzle template change_filament_gcode",
+    "instantiation": "false",
+    "change_filament_gcode": ";===== A1 20251031 =======================\nM1007 S0 ; turn off mass estimation\nG392 S0\nM620 S[next_extruder]A\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}

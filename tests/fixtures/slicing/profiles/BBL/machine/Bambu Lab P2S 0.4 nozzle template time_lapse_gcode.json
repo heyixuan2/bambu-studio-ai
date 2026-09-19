@@ -1,0 +1,5 @@
+{
+    "name": "Bambu Lab P2S 0.4 nozzle template time_lapse_gcode",
+    "instantiation": "false",
+    "time_lapse_gcode": ";======== P2S timelapes gcode ==========\n;===== 2025/06/16 ====\n; SKIPPABLE_START\n; SKIPTYPE: timelapse\n; [test fixture: rest of Bambu Studio's G-code trimmed]\n"
+}
