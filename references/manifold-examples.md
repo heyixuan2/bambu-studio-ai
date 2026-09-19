@@ -84,10 +84,10 @@ python3 scripts/parametric.py extrude --polygon "[[0,0],[20,0],[20,10],[0,10]]" 
 # (base arm along +Y, upright along +Z; --depth defaults to --height)
 python3 scripts/parametric.py bracket --width 30 --height 40 --depth 25 --thickness 3 --hole-diameter 3.2 --fillet 2 -o bracket.stl
 
-# Mounting plate with 4x M3 holes, 25mm spacing
+# Mounting plate with 4x M3 holes in a 25 mm square (1 = centre, 2 = a row, others = bolt circle)
 python3 scripts/parametric.py plate-with-holes --width 60 --depth 40 --thickness 3 --holes 4 --hole-diameter 3.2 --hole-spacing 25 -o plate.stl
 
-# Hollow enclosure with a matching flat lid (printed beside the body)
+# Hollow enclosure with a lid whose rim plugs into the opening (printed beside the body, rim up)
 python3 scripts/parametric.py enclosure --width 60 --depth 40 --height 30 --wall 2 --lid -o enclosure.stl
 ```
 

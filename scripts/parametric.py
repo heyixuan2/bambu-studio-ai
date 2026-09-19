@@ -35,21 +35,9 @@ except ImportError:
     print("ERROR: trimesh not installed. Run: pip install trimesh", file=sys.stderr)
     sys.exit(1)
 
-# ---------------------------------------------------------------------------
-# FDM Printing Tolerances (mm)
-# ---------------------------------------------------------------------------
-TOLERANCES = {
-    "slip_fit": 0.2,
-    "press_fit": 0.1,
-    "clearance": 0.3,
-    "screw_holes": {
-        "M2": 2.2, "M2.5": 2.7, "M3": 3.2, "M4": 4.2,
-        "M5": 5.2, "M6": 6.2, "M8": 8.2,
-    },
-    "heat_set_inserts": {
-        "M2": 3.2, "M3": 4.0, "M4": 5.6, "M5": 6.4,
-    },
-}
+# Gap per side for parts that slide together (lid rim into its opening). Screw-hole and
+# heat-set-insert sizes are in references/manifold-examples.md.
+SLIP_FIT_GAP_MM = 0.2
 
 
 def _manifold_to_trimesh(manifold: m3d.Manifold) -> trimesh.Trimesh:
@@ -61,7 +49,16 @@ def _manifold_to_trimesh(manifold: m3d.Manifold) -> trimesh.Trimesh:
 
 
 def _export(manifold: m3d.Manifold, output_path: str) -> str:
-    """Export a Manifold to STL (or other trimesh-supported format)."""
+    """Export a Manifold to STL (or other trimesh-supported format).
+
+    Refuses to write an empty or invalid solid: a clockwise polygon, a subtraction that removes
+    everything, or bad geometry would otherwise produce a 0-triangle file reported as watertight.
+    """
+    if manifold.status() != m3d.Error.NoError:
+        raise SystemExit(f"❌ Invalid geometry ({manifold.status()}). Nothing was written.")
+    if manifold.is_empty():
+        raise SystemExit("❌ The result is empty (no solid left). Check subtractions and polygon points. "
+                         "Nothing was written.")
     t = _manifold_to_trimesh(manifold)
     t.export(output_path)
     vol = manifold.volume()
@@ -72,7 +69,7 @@ def _export(manifold: m3d.Manifold, output_path: str) -> str:
     print(f"  Dimensions: {dims[0]:.2f} x {dims[1]:.2f} x {dims[2]:.2f} mm")
     print(f"  Volume: {vol:.2f} mm³  |  Surface area: {sa:.2f} mm²")
     print(f"  Triangles: {manifold.num_tri():,}  |  Vertices: {manifold.num_vert():,}")
-    print(f"  Watertight: YES (guaranteed by manifold3d)")
+    print("  Watertight: YES (checked: valid, non-empty manifold)")
     bodies = manifold.decompose() if hasattr(manifold, "decompose") else []
     if len(bodies) > 1:
         print(f"  ⚠️ {len(bodies)} separate bodies — they don't touch. Check translate/rotate "
@@ -126,7 +123,8 @@ def cmd_extrude(args):
             points = json.load(f)
     else:
         points = json.loads(args.polygon)
-    cs = m3d.CrossSection([points])
+    # NonZero fill: a clockwise outline is still a solid (the default Positive rule drops it).
+    cs = m3d.CrossSection([points], m3d.FillRule.NonZero)
     m = m3d.Manifold.extrude(cs, args.height)
     return _export(m, _default_output(args, "extrude.stl"))
 
@@ -169,36 +167,39 @@ def cmd_bracket(args):
     return _export(bracket, _default_output(args, "bracket.stl"))
 
 
-def cmd_plate_with_holes(args):
-    """Rectangular plate with evenly spaced mounting holes."""
-    plate = m3d.Manifold.cube([args.width, args.depth, args.thickness])
+def hole_positions(width, depth, n_holes, spacing):
+    """Hole centres for plate-with-holes, all centred on the plate.
 
-    hole_r = args.hole_diameter / 2
-    spacing = args.hole_spacing
-    n_holes = args.holes
-
+    1 hole: the centre. 2: a row along the width, `spacing` apart. 4: a square with side
+    `spacing`. Any other count: a bolt circle where neighbouring holes are `spacing` apart.
+    """
+    cx, cy = width / 2, depth / 2
+    if n_holes == 1:
+        return [(cx, cy)]
+    if n_holes == 2:
+        return [(cx - spacing / 2, cy), (cx + spacing / 2, cy)]
     if n_holes == 4:
-        cx, cy = args.width / 2, args.depth / 2
-        half_sx = spacing / 2
-        half_sy = spacing / 2
-        positions = [
-            (cx - half_sx, cy - half_sy),
-            (cx + half_sx, cy - half_sy),
-            (cx - half_sx, cy + half_sy),
-            (cx + half_sx, cy + half_sy),
-        ]
-    else:
-        cx = args.width / 2
-        cy = args.depth / 2
-        positions = []
-        for i in range(n_holes):
-            angle = 2 * math.pi * i / n_holes
-            x = cx + spacing / 2 * math.cos(angle)
-            y = cy + spacing / 2 * math.sin(angle)
-            positions.append((x, y))
+        h = spacing / 2
+        return [(cx - h, cy - h), (cx + h, cy - h), (cx - h, cy + h), (cx + h, cy + h)]
+    radius = spacing / (2 * math.sin(math.pi / n_holes))
+    return [(cx + radius * math.cos(2 * math.pi * i / n_holes),
+             cy + radius * math.sin(2 * math.pi * i / n_holes)) for i in range(n_holes)]
 
+
+def cmd_plate_with_holes(args):
+    """Rectangular plate with mounting holes (see hole_positions for the layout)."""
+    if args.holes < 1:
+        raise SystemExit("❌ --holes must be at least 1")
+    plate = m3d.Manifold.cube([args.width, args.depth, args.thickness])
+    hole_r = args.hole_diameter / 2
+    edge = hole_r + 1.0  # keep at least 1 mm of material between a hole and the plate edge
+    positions = hole_positions(args.width, args.depth, args.holes, args.hole_spacing)
     for x, y in positions:
-        hole = m3d.Manifold.cylinder(args.thickness + 1, hole_r).translate([x, y, -0.5])
+        if not (edge <= x <= args.width - edge and edge <= y <= args.depth - edge):
+            raise SystemExit(f"❌ A hole at ({x:.1f}, {y:.1f}) would cut the plate edge. "
+                             "Reduce --hole-spacing or enlarge the plate.")
+    for x, y in positions:
+        hole = m3d.Manifold.cylinder(args.thickness + 1, hole_r, hole_r, 64).translate([x, y, -0.5])
         plate = plate - hole
 
     return _export(plate, _default_output(args, "plate.stl"))
@@ -216,24 +217,20 @@ def cmd_enclosure(args):
     out_path = _default_output(args, "enclosure.stl")
 
     if args.lid:
-        lip = 1.0
-        lid_outer = m3d.Manifold.cube([w, d, wall + lip])
-        lid_inner = m3d.Manifold.cube([
-            w - 2 * wall + TOLERANCES["clearance"],
-            d - 2 * wall + TOLERANCES["clearance"],
-            lip,
-        ])
-        lid_inner = lid_inner.translate([
-            wall - TOLERANCES["clearance"] / 2,
-            wall - TOLERANCES["clearance"] / 2,
-            0,
-        ])
-        lid = lid_outer - lid_inner
+        # Lid printed flat side down, with a rim on top that plugs into the opening when the lid
+        # is flipped over: the rim's outside is the opening minus a slip-fit gap on each side.
+        gap = SLIP_FIT_GAP_MM
+        rim_h = min(3.0, h - wall - 1.0)
+        rim_w, rim_d = w - 2 * wall - 2 * gap, d - 2 * wall - 2 * gap
+        if rim_h <= 0 or rim_w <= 2 * wall or rim_d <= 2 * wall:
+            raise SystemExit("❌ The enclosure is too small for a plug-in lid; drop --lid or make it larger")
+        plate = m3d.Manifold.cube([w, d, wall])
+        rim = (m3d.Manifold.cube([rim_w, rim_d, rim_h])
+               - m3d.Manifold.cube([rim_w - 2 * wall, rim_d - 2 * wall, rim_h]).translate([wall, wall, 0]))
+        lid = plate + rim.translate([wall + gap, wall + gap, wall])
         # Beside the body on the build plate (not above it, where it would print in mid-air)
         lid = lid.translate([w + 5, 0, 0])
-
-        combined = m3d.Manifold.compose([body, lid])
-        return _export(combined, out_path)
+        return _export(body + lid, out_path)
 
     return _export(body, out_path)
 
@@ -256,10 +253,10 @@ def _build_primitive(op: dict) -> m3d.Manifold:
     elif t == "sphere":
         m = m3d.Manifold.sphere(op["radius"], segments)
     elif t == "extrude":
-        cs = m3d.CrossSection([op["polygon"]])
+        cs = m3d.CrossSection([op["polygon"]], m3d.FillRule.NonZero)
         m = m3d.Manifold.extrude(cs, op["height"])
     elif t == "revolve":
-        cs = m3d.CrossSection([op["polygon"]])
+        cs = m3d.CrossSection([op["polygon"]], m3d.FillRule.NonZero)
         m = m3d.Manifold.revolve(cs, op.get("segments", 0))
     else:
         raise ValueError(f"Unknown primitive type: {t}")
@@ -395,9 +392,11 @@ def build_parser():
     p.add_argument("--width", type=float, required=True, help="Plate width X (mm)")
     p.add_argument("--depth", type=float, required=True, help="Plate depth Y (mm)")
     p.add_argument("--thickness", type=float, default=3.0, help="Plate thickness Z (mm)")
-    p.add_argument("--holes", type=int, default=4, help="Number of holes")
+    p.add_argument("--holes", type=int, default=4,
+                   help="Number of holes: 1 centre, 2 in a row, 4 in a square, others on a bolt circle")
     p.add_argument("--hole-diameter", type=float, default=3.2, help="Hole diameter (mm, default: M3 clearance)")
-    p.add_argument("--hole-spacing", type=float, required=True, help="Hole center-to-center spacing (mm)")
+    p.add_argument("--hole-spacing", type=float, required=True,
+                   help="Centre-to-centre distance between neighbouring holes (mm)")
     p.add_argument("-o", "--output", default="", help="Output file")
 
     # --- enclosure ---

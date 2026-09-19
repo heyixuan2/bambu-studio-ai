@@ -12,7 +12,7 @@ LEGACY_LIMITS = {
     "scripts/analyze.py": 866,
     "scripts/slice.py": 584,
     "scripts/preview.py": 457,
-    "scripts/parametric.py": 454,
+    "scripts/parametric.py": 453,
 }
 
 
