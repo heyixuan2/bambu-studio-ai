@@ -10,7 +10,7 @@
 <br><br>
 
 [![拓竹官方精选](https://img.shields.io/badge/%E6%8B%93%E7%AB%B9%E5%AE%98%E6%96%B9%E7%B2%BE%E9%80%89-Skill_%E5%A4%A7%E8%B5%8F_2026-00AE42?style=for-the-badge&labelColor=060E1B)](https://xhslink.cn/o/6JZRUdwvZdC)
-[![Agent Skills](https://img.shields.io/badge/Agent_Skills-SKILL.md-060E1B?style=for-the-badge&logo=markdown&logoColor=white)](https://agentskills.io)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-SKILL.md-00AE42?style=for-the-badge&logo=markdown&logoColor=white&labelColor=060E1B)](https://agentskills.io)
 [![Release](https://img.shields.io/github/v/release/heyixuan2/bambu-studio-ai?style=for-the-badge&label=release&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/heyixuan2/bambu-studio-ai/ci.yml?style=for-the-badge&label=CI&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml)
 [![Stars](https://img.shields.io/github/stars/heyixuan2/bambu-studio-ai?style=for-the-badge&logo=github&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/stargazers)
