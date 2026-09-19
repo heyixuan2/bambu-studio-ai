@@ -144,6 +144,11 @@ def test_printables_answer_to_a_query_it_ignored_is_no_match(sites):
     assert len(kept) == 5  # one title mentions the query, so the answer is trusted
 
 
+@pytest.mark.parametrize("query", ["phone-stand", "Phone stand!", "a phone stand (v2)", "x"])
+def test_printables_matches_are_kept_whatever_the_punctuation(sites, query):
+    assert len(printables.search_printables(query, limit=5, sort="downloads", timeout=10)) == 5
+
+
 def test_printables_licence_falls_back_to_its_full_name():
     document = printables_fixture()
     item = document["data"]["searchPrints2"]["items"][0]

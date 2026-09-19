@@ -6,6 +6,7 @@ below asks only for fields verified against the live API on 2026-09-19.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from urllib.parse import quote
 
@@ -25,6 +26,7 @@ from bambu_studio_ai.search.transport import SiteError
 ENDPOINT = "https://api.printables.com/graphql/"  # the trailing slash is required
 MODEL_PAGE = "https://www.printables.com/model/"
 MEDIA = "https://media.printables.com/"
+_WORD = re.compile(r"\w+")
 
 #: ``SearchChoicesEnum`` values. There is no download or like ordering, so both ask for
 #: "popular" and the merged list is then sorted by the actual numbers.
@@ -72,8 +74,14 @@ def search_printables(
 
 
 def mentions_query(query: str, results: list[ModelResult]) -> bool:
-    """Whether any result's title or page URL contains a word of ``query``."""
-    words = query.casefold().split()
+    """Whether any result's title or page URL contains a word of ``query``.
+
+    Words of one character can't tell a match from noise, so they are ignored; a
+    query made only of those is taken on trust.
+    """
+    words = [word for word in _WORD.findall(query.casefold()) if len(word) > 1]
+    if not words:
+        return True
     pages = [f"{result.title} {result.url}".casefold() for result in results]
     return any(word in page for word in words for page in pages)
 
