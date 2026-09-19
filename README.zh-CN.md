@@ -157,7 +157,7 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 | 能力 | 工具 | 说明 |
 |---|---|---|
 | 模型搜索 | `search.py` | MakerWorld 与 Printables 并行搜索，带下载量、点赞数和许可协议 |
-| AI 生成 | `generate.py` | Meshy、Tripo、Hyper3D Rodin；输出带贴图的 GLB（Bambu Studio 2.7+ 可直接导入），按目标高度精确缩放，任务可断点续取 |
+| AI 生成 | `generate.py` | Meshy、Tripo、Hyper3D Rodin 等，按目标高度缩放 |
 | 参数化 CAD | `parametric.py` | 支架、带孔底板、外壳、任意 CSG 组合；保证水密，精度 0.01 mm |
 | 可打印性 | `analyze.py` | 11 项检查、分级自动修复、自动摆放、单位识别 |
 | 多色 | `colorize` | 贴图 → 最多 8 色 AMS，按 CIELAB ΔE 匹配拓竹耗材 |
@@ -170,17 +170,17 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 
 ## 支持的机型与环境
 
-**Bambu Studio 自带配置中的全部 13 款机型：** A1 Mini · A1 · A2L · P1P · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D · H2D Pro。
+**支持机型：** A1 Mini · A1 · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D。
 成型体积、温度上限、材料兼容性都内置了（[参数表](references/model-specs.md)）。
 
 **运行环境：** macOS、Linux、Windows，Python 3.10+。以下都是可选的，装了就多一项能力：
 
 | 工具 | 解锁 | 安装 |
 |---|---|---|
-| [Bambu Studio](https://bambulab.com/zh/download/studio) | 检查、切片、打印；预估打印时间和耗材 | 官网安装包 |
-| [Blender 4+](https://www.blender.org/download/) | 更精美的渲染预览和 360° 转台动图 | 官网安装包 / `brew install --cask blender` |
+| [Bambu Studio](https://bambulab.com/zh/download/studio) | 检查、切片、打印 | 官网安装包 |
+| [Blender 4+](https://www.blender.org/download/) | 渲染预览、360° 转台动图、多色处理 | 官网安装包 / `brew install --cask blender` |
 | AI 服务商密钥 | 文生 3D、图生 3D | Meshy、Tripo 或 Rodin（[设置说明](references/setup.md#3-ai-generation-optional)） |
-| `rembg`、`pymeshlab` | 照片去背景、深度修复 | 见 `doctor.py` 输出 |
+| OrcaSlicer、`rembg`、`pymeshlab` | 命令行切片、照片去背景、深度修复 | 见 `doctor.py` 输出 |
 
 ---
 

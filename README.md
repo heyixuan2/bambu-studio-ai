@@ -104,7 +104,7 @@ Agent  Print detected. I'll report progress every
 <td width="50%" valign="top">
 
 ### The Right Method for Each Object
-Everyday objects: **search** MakerWorld, Printables, Thingiverse and Thangs first, because tested designs beat generated ones. Functional parts: **parametric CAD** with real millimetres and real screw clearances. Figurines, characters and photos: **AI text-to-3D and image-to-3D** across five providers.
+Everyday objects: **search** MakerWorld and Printables first (in about a second, with download counts), because tested designs beat generated ones. Functional parts: **parametric CAD** with real millimetres and real screw clearances. Figurines, characters and photos: **AI text-to-3D and image-to-3D** with Meshy, Tripo or Rodin.
 
 </td>
 <td width="50%" valign="top">
@@ -118,13 +118,13 @@ Every model, downloaded or generated, passes an **11-point check** before you se
 <td width="50%" valign="top">
 
 ### You're Always in the Loop
-You see a **render first**, then review and slice in **Bambu Studio**. The agent **never starts a print without an explicit yes**, and it asks before enabling auto-pause.
+You see a **render first**, then review, slice and press **Print** yourself in **Bambu Studio**. The agent can watch a print and tell you how it's going, but it **can't start, pause or change one**.
 
 </td>
 <td width="50%" valign="top">
 
 ### Your Agent, Your Printer, Your Keys
-Works with the agent you already use and talks to your printer over **your own network**. API keys live in a **local file only you can read**. No accounts, no relay servers, no telemetry.
+Works with the agent you already use and reads your printer's status over **your own network**, with the printer in its **normal mode**: Bambu Handy and cloud printing keep working. API keys live in a **local file only you can read**. No accounts, no relay servers, no telemetry.
 
 </td>
 </tr>
@@ -151,7 +151,7 @@ python3 scripts/doctor.py
 ```
 
 **3 · Ask for Something.** Search, generation, CAD and analysis work right away. For printer
-control, say *"set up my Bambu printer"* and the agent walks you through it in about two minutes.
+status, say *"set up my Bambu printer"* and the agent walks you through it in about two minutes.
 
 <br>
 
@@ -161,8 +161,8 @@ control, say *"set up my Bambu printer"* and the agent walks you through it in a
 |---|---|---|
 | *"Print me a cute cat figurine, about 6 cm tall"* | *"Why won't this STL slice properly?"* | *"What filament is loaded in my AMS?"* |
 | *"Design a 60×40×30 mm electronics box with a lid"* | *"Scale this to 12 cm and check it fits my A1 Mini"* | *"Is my print done?"* |
-| *"Turn this photo into a 3D print, in full color"* | *"Make this model 4 colors for my AMS Lite"* | *"Watch this print and pause it if it goes wrong"* |
-| *"Find me a good cable organizer on MakerWorld"* | *"Is this OK to print in ABS on a P1S?"* | *"Pause it. What's the nozzle temperature?"* |
+| *"Turn this photo into a 3D print, in full color"* | *"Make this model 4 colors for my AMS Lite"* | *"Watch this print and tell me if anything goes wrong"* |
+| *"Find me a good cable organizer on MakerWorld"* | *"Is this OK to print in ABS on a P1S?"* | *"How long is left? What's the nozzle temperature?"* |
 
 <br>
 
@@ -177,14 +177,14 @@ them.
 
 | Capability | Tool | Details |
 |---|---|---|
-| Model search | `search.py` | MakerWorld, Printables, Thingiverse, Thangs, deduplicated |
-| AI generation | `generate.py` | Meshy, Tripo3D, Printpal, 3D AI Studio, Hyper3D Rodin. Print-aware prompts, scaling to exact height, retries |
+| Model search | `search.py` | MakerWorld and Printables in parallel, with downloads, likes and licence |
+| AI generation | `generate.py` | Meshy, Tripo, Hyper3D Rodin and more, scaled to the height you ask for |
 | Parametric CAD | `parametric.py` | Brackets, plates with holes, enclosures, arbitrary CSG from JSON. Always watertight, exact to 0.01 mm |
 | Printability | `analyze.py` | 11-point check, tiered repair, auto-orientation, unit detection |
 | Multi-color | `colorize` | Texture → up to 8 AMS colors, nearest Bambu filament by CIELAB ΔE |
 | Preview | `preview.py` | Blender renders and 360° turntable GIFs, size verification |
-| Printer | `bambu.py` | Status, AMS, open in Bambu Studio, and more |
-| Monitoring | `monitor.py` | Waits for the print to start, progress reports, stall/temperature alerts |
+| Printer | `bambu.py` | Status, progress and AMS filaments (read-only), open in Bambu Studio |
+| Monitoring | `monitor.py` | Waits for the print to start, progress reports, pause / error / HMS / stall alerts |
 | Setup | `configure.py`, `doctor.py` | Settings and secrets without editing JSON, dependency diagnostics |
 
 <br>
@@ -206,27 +206,25 @@ them.
 
 </div>
 
-All current Bambu Lab printers, with build volumes, temperature limits and material compatibility
-built in ([specs](references/model-specs.md)). **Runs on** macOS, Linux and Windows with Python 3.10+.
+Bambu Lab printers from the A1 Mini to the H2D, with build volumes, temperature limits and material compatibility built in ([specs](references/model-specs.md)). **Runs on** macOS, Linux and Windows with Python 3.10+.
 Optional tools unlock more:
 
 | Tool | Unlocks | Install |
 |---|---|---|
-| [Bambu Studio](https://bambulab.com/en/download/studio) | Opening models for review and slicing | macOS `brew install --cask bambu-studio` · Windows/Linux installer, AppImage or Flatpak |
-| [Blender 4+](https://www.blender.org/download/) | Preview renders, multi-color | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
-| ffmpeg | Camera snapshots | `brew install ffmpeg` · `apt install ffmpeg` · `winget install ffmpeg` |
-| An AI provider key | Text-to-3D and image-to-3D | Meshy, Tripo3D, Printpal, 3D AI Studio or Rodin ([setup](references/setup.md#ai-generation)) |
+| [Bambu Studio](https://bambulab.com/en/download/studio) | Reviewing, slicing and printing | macOS `brew install --cask bambu-studio` · Windows/Linux installer, AppImage or Flatpak |
+| [Blender 4+](https://www.blender.org/download/) | Preview renders, turntable GIFs, multi-color | macOS `brew install --cask blender` · Linux `snap install blender --classic` · Windows installer |
+| An AI provider key | Text-to-3D and image-to-3D | Meshy, Tripo or Rodin ([setup](references/setup.md#3-ai-generation-optional)) |
 | OrcaSlicer, `rembg`, `pymeshlab` | CLI slicing, photo background removal, heavy mesh repair | See `doctor.py` |
 
 <br>
 
 ## Privacy and Safety
 
-- **Local first.** Printer communication runs over your own network. Nothing goes through a relay.
+- **Local first.** Printer status is read over your own network. Nothing goes through a relay.
 - **Your secrets stay put.** Access codes and API keys are stored in `~/.bambu-studio-ai/.secrets.json`
   (chmod 600) and are sent only to the service they belong to.
-- **Nothing prints by surprise.** `bambu.py print` refuses to run without `--confirmed`, and the
-  playbook tells agents to pass it only after your explicit go-ahead.
+- **Nothing prints by surprise.** The skill has no code that can start, pause or change a print. You
+  press Print in Bambu Studio; the printer stays in its normal mode, so Bambu Handy keeps working.
 - Every network endpoint is listed in [references/security.md](references/security.md).
 
 <br>
@@ -267,7 +265,7 @@ or `git pull`. Your settings live outside the skill folder, so updates never tou
 <br>
 
 Zip the folder and upload it under Settings → Capabilities → Skills. Search, generation, CAD and
-analysis work there. Printer control needs a machine on the same network as the printer, so use a
+analysis work there. Printer status needs a machine on the same network as the printer, so use a
 local agent (Claude Code, Codex, …) for that.
 
 </details>
@@ -278,8 +276,8 @@ local agent (Claude Code, Codex, …) for that.
 
 | What | Where | Override |
 |---|---|---|
-| Settings, secrets, cloud token, certificates | `~/.bambu-studio-ai/` | `BAMBU_STUDIO_AI_HOME` |
-| Generated models, previews, snapshots, logs | `./bambu-output/` in your working directory | `BAMBU_OUTPUT_DIR` |
+| Settings, secrets, monitor state | `~/.bambu-studio-ai/` | `BAMBU_STUDIO_AI_HOME` |
+| Generated models, previews, monitor logs | `./bambu-output/` in your working directory | `BAMBU_OUTPUT_DIR` |
 
 </details>
 
