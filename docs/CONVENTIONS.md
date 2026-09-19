@@ -87,7 +87,7 @@ example configs) lives in the repo root tree, because everything in it ships.
 - Exit codes: `0` success · `1` operation failed · `2` bad arguments / missing configuration ·
   `3` optional dependency missing. Never `sys.exit()` inside library code.
 - Output files: written next to the input unless `-o` is given; suffixes are a fixed vocabulary
-  (`_scaled`, `_oriented`, `_repaired`, `_multicolor`, `_preview`) and every command that writes
+  (`_scaled`, `_oriented`, `_repaired`, `_multicolor`, `_preview`, `_sliced`) and every command that writes
   files ends with a machine-readable `output_file` (in `--json`) and a `➡️ Use this file:` line
   (human mode). Downloads, snapshots and logs go to the output dir (`BAMBU_OUTPUT_DIR`, default
   `./bambu-output/`).

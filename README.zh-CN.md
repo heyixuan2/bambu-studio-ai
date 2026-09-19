@@ -84,7 +84,7 @@ AI     检测到打印开始。每 30 分钟给你一次进度，卡住或温度
 
 <img src="docs/assets/demo-pipe-clamp-turntable.gif" alt="preview.py 生成的管卡 360° 转盘渲染" width="100%">
 
-<sub>这段对话的真实产物：<code>parametric.py</code> 建模，<code>preview.py --views turntable</code> 渲染，未经修饰。</sub>
+<sub>这段对话的真实产物：<code>parametric.py</code> 建模，<code>preview.py --views turntable</code> 渲染，仅把默认的蓝色换成了 Bambu 绿。</sub>
 
 </td>
 </tr>
@@ -275,7 +275,8 @@ python3 scripts/monitor.py --wait-start 30 --interval 300
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。
+MIT，见 [LICENSE](LICENSE)。从 Bambu Studio 复制的配置与设置文件沿用其 AGPL-3.0 许可证，见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 <sub>Bambu Lab AI / Bambu Studio AI 是 TieGaier 的独立社区项目，获拓竹官方精选推荐，但并非拓竹科技
 开发或官方支持的产品。"Bambu Lab" 与 "Bambu Studio" 为其所有者的商标。</sub>
