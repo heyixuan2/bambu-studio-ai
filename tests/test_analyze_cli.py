@@ -181,9 +181,9 @@ class TestArguments:
         assert "Known:" in document["error"]["message"]
 
     def test_unknown_material_says_what_was_used(self, capsys, tmp_path):
-        code, document, _ = run_json(capsys, save(box(10, 10, 10), tmp_path / "p.stl"), "--material", "PLA-CF")
+        code, document, _ = run_json(capsys, save(box(10, 10, 10), tmp_path / "p.stl"), "--material", "UNOBTAINIUM")
         assert document["material"] == "PLA"
-        assert any("Unknown material 'PLA-CF'" in note for note in document["notes"])
+        assert any("Unknown material 'UNOBTAINIUM'" in note for note in document["notes"])
 
     def test_unreadable_file_exits_1(self, capsys, tmp_path):
         bad = tmp_path / "bad.stl"
