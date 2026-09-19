@@ -3,7 +3,7 @@ trimesh>=4.10,<5.0
 networkx>=3.2  # trimesh needs it to read/write 3MF and to repair meshes
 requests>=2.31,<3.0
 numpy>=1.24
-Pillow>=9.0
+Pillow>=9.1  # Image.Resampling, Quantize and Dither enums (preview renderer)
 pygltflib
 scipy>=1.10
 manifold3d>=3.0
