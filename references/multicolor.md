@@ -108,7 +108,9 @@ Z-up millimetres and centred on the plate.
 3. Map the filaments to AMS slots: set each filament's type and colour to what is loaded, or map
    them in the send dialog when printing. The paint follows the filament number, so filament 1
    stays filament 1 whatever spool it maps to.
-4. Slice and check the preview: every colour should appear, with a prime tower.
+4. Slice and check the preview: every colour should appear, with a prime tower. The tower sits
+   at the back left and the model at the centre, so a model over about 140 mm across can overlap
+   it ("G-code conflicts" / "path conflicts with WipeTower"): press Arrange (A) or drag the tower.
 
 A `--format obj` file goes through Bambu Studio's colour-mapping dialog on import instead: choose a
 filament for each colour there.
