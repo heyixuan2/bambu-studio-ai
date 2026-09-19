@@ -27,6 +27,7 @@ REQUIRED = {
     "scipy": {"min": "1.10", "import": "scipy"},
     "pygltflib": {"min": "0", "import": "pygltflib"},
     "networkx": {"min": "3.2", "import": "networkx"},
+    "lxml": {"min": "4.9", "import": "lxml"},
 }
 
 OPTIONAL = {

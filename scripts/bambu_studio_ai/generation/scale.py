@@ -105,10 +105,8 @@ def _trimesh():  # noqa: ANN202  (returns the optional trimesh module)
 def _load_mesh(path: Path) -> trimesh.Trimesh:
     try:
         loaded = _trimesh().load(str(path), force="mesh")  # pyright: ignore[reportUnknownMemberType]
-    except ImportError as exc:  # trimesh's 3MF reader needs networkx
-        raise DependencyError(
-            f"reading {path.suffix} needs {exc.name}: pip install {exc.name}"
-        ) from exc
+    except ImportError as exc:  # trimesh's 3MF reader needs networkx and lxml
+        raise DependencyError(f"reading {path.suffix} needs {_missing(exc)}") from exc
     return cast("trimesh.Trimesh", loaded)
 
 
@@ -116,10 +114,15 @@ def _export(mesh: trimesh.Trimesh, path: Path, output_format: OutputFormat) -> N
     options = {"include_texture": False} if output_format == "obj" else {}
     try:
         mesh.export(str(path), file_type=output_format, **options)  # pyright: ignore[reportUnknownMemberType]
-    except ImportError as exc:  # trimesh's 3MF writer needs networkx
-        raise DependencyError(
-            f"writing {output_format.upper()} needs {exc.name}: pip install {exc.name}"
-        ) from exc
+    except ImportError as exc:  # trimesh's 3MF writer needs networkx and lxml
+        raise DependencyError(f"writing {output_format.upper()} needs {_missing(exc)}") from exc
+
+
+def _missing(exc: ImportError) -> str:
+    """Name the missing package; trimesh re-raises some import errors without a name."""
+    return f"{exc.name}: pip install {exc.name}" if exc.name else (
+        f"a package that is not installed ({exc}): pip install -r requirements.txt"
+    )
 
 
 def _extents(mesh: trimesh.Trimesh) -> Extents:
