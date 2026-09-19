@@ -17,18 +17,22 @@ You stay in control the whole way.
 </div>
 
 ```text
-You    I need a wall bracket for a 32 mm pipe with two M4 screw holes. PETG, on my A1.
+You    I need a wall bracket for a 32 mm pipe with two M4 screw holes.
+       PETG, on my A1.
 
-Agent  That's a precision part, so I'll model it to exact dimensions rather than use AI.
-       → 32.3 mm clamp bore (0.3 mm clearance) · 4 mm walls · two 4.2 mm M4 clearance holes
-       → printability 9/10 · fits the A1 plate · recommended: 0.2 mm layers, 40% infill, 240 °C
+Agent  That's a precision part, so I'll model it to exact dimensions
+       instead of using AI.
+       → 32.3 mm clamp bore (0.3 mm clearance) · 4 mm walls
+       → two 4.2 mm M4 clearance holes
+       → printability 9/10 · fits the A1 plate
+       → suggested: 0.2 mm layers · 40% infill · 240 °C
        [preview.png]
        It's open in Bambu Studio. Slice it and tell me if it looks right.
 
 You    Looks good. Starting the print now.
 
-Agent  Print detected. I'll send progress with a camera snapshot every 30 minutes, and warn
-       you right away if it stalls or a temperature goes out of range.
+Agent  Print detected. I'll send progress with a camera snapshot every
+       30 minutes, and warn you right away if it stalls or overheats.
 ```
 
 ---
@@ -93,7 +97,7 @@ takes about two minutes.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
     R([Your request]) --> S{What is it?}
     S -->|everyday object| A[Search model sites]
     S -->|exact part| B[Parametric CAD]
