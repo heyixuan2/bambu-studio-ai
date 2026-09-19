@@ -197,16 +197,19 @@ them.
 ![A1](https://img.shields.io/badge/A1-00AE42?style=flat-square&labelColor=060E1B)
 ![P1S](https://img.shields.io/badge/P1S-00AE42?style=flat-square&labelColor=060E1B)
 ![P2S](https://img.shields.io/badge/P2S-00AE42?style=flat-square&labelColor=060E1B)
+![A2L](https://img.shields.io/badge/A2L-00AE42?style=flat-square&labelColor=060E1B)
+![P1P](https://img.shields.io/badge/P1P-00AE42?style=flat-square&labelColor=060E1B)
 ![X1C](https://img.shields.io/badge/X1C-00AE42?style=flat-square&labelColor=060E1B)
 ![X1E](https://img.shields.io/badge/X1E-00AE42?style=flat-square&labelColor=060E1B)
 ![X2D](https://img.shields.io/badge/X2D-00AE42?style=flat-square&labelColor=060E1B)
 ![H2C](https://img.shields.io/badge/H2C-00AE42?style=flat-square&labelColor=060E1B)
 ![H2S](https://img.shields.io/badge/H2S-00AE42?style=flat-square&labelColor=060E1B)
 ![H2D](https://img.shields.io/badge/H2D-00AE42?style=flat-square&labelColor=060E1B)
+![H2D Pro](https://img.shields.io/badge/H2D_Pro-00AE42?style=flat-square&labelColor=060E1B)
 
 </div>
 
-Bambu Lab printers from the A1 Mini to the H2D, with build volumes, temperature limits and material compatibility built in ([specs](references/model-specs.md)). **Runs on** macOS, Linux and Windows with Python 3.10+.
+All 13 Bambu Lab models in Bambu Studio's own printer profiles, from the A1 Mini to the H2D Pro, with build volumes, temperature limits and material compatibility built in ([specs](references/model-specs.md)). **Runs on** macOS, Linux and Windows with Python 3.10+.
 Optional tools unlock more:
 
 | Tool | Unlocks | Install |

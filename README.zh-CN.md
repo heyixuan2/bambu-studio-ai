@@ -170,7 +170,7 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 
 ## 支持的机型与环境
 
-**支持机型：** A1 Mini · A1 · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D。
+**Bambu Studio 自带配置中的全部 13 款机型：** A1 Mini · A1 · A2L · P1P · P1S · P2S · X1C · X1E · X2D · H2C · H2S · H2D · H2D Pro。
 成型体积、温度上限、材料兼容性都内置了（[参数表](references/model-specs.md)）。
 
 **运行环境：** macOS、Linux、Windows，Python 3.10+。以下都是可选的，装了就多一项能力：

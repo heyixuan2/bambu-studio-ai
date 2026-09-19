@@ -169,7 +169,7 @@ python3 scripts/analyze.py model.3mf --orient --repair --height 60 --material PL
 ```
 
 The build-volume and material checks use the configured printer, falling back to A1. When no
-printer is configured but the user named one, pass `--printer "A1 Mini"` (any of the 10 models).
+printer is configured but the user named one, pass `--printer "A1 Mini"` (any of the 13 models, e.g. `A2L`, `H2D Pro`).
 
 This runs an 11-point check (walls, overhangs, floating parts, orientation, build volume,
 material and printer compatibility, …), repairs and orients the mesh, and detects the units. It
@@ -301,7 +301,7 @@ Read these when the task calls for them:
 | [references/multicolor.md](references/multicolor.md) | Multi-color / AMS: colorize, color report template, tuning, importing into Bambu Studio |
 | [references/monitoring.md](references/monitoring.md) | Watching a print: strategies, events, error codes, status message format |
 | [references/troubleshooting.md](references/troubleshooting.md) | Connection, camera, generation, mesh and import problems; known limitations |
-| [references/model-specs.md](references/model-specs.md) | Build volumes, temperature limits and materials for all 10 printers |
+| [references/model-specs.md](references/model-specs.md) | Build volumes, temperature limits and materials for all 13 printers (3 discontinued) |
 | [references/3d-prompt-guide.md](references/3d-prompt-guide.md) | Writing prompts for AI generation |
 | [references/manifold-examples.md](references/manifold-examples.md) | Parametric parts: tolerances, CSG JSON, design rules |
 | [references/security.md](references/security.md) | What the skill stores, which network endpoints it calls, and why |
