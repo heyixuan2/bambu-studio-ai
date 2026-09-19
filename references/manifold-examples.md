@@ -113,12 +113,37 @@ Spec format:
 }
 ```
 
-Available op types:
-- **Primitives**: `cube`, `cylinder`, `sphere`, `extrude`, `revolve`
-- **Boolean**: `add`/`union`, `subtract`/`difference`, `intersect`/`intersection`
-- **Combine**: `hull`, `compose`
+Rules:
 
-Each primitive supports optional `translate`, `rotate`, `scale` fields.
+- The **last op is the output**. Give ops an `id` to refer to them later.
+- **Primitives**: `cube {size:[x,y,z]}` (corner at origin), `cylinder {height, radius, radius_top?}`
+  (along +Z from z=0), `sphere {radius}` (centred), `extrude {polygon:[[x,y],…], height}`,
+  `revolve {polygon, segments?}` (around the Y axis).
+- Every primitive accepts optional `scale`, `rotate` (degrees, `[x,y,z]`) and `translate`.
+  They're applied **in that order, about the primitive's own origin**, so rotate a cylinder
+  first, then move it into place. `"rotate": [0, 90, 0]` turns a +Z cylinder into a +X one;
+  `[90, 0, 0]` turns it into a −Y one; `[-90, 0, 0]` into +Y.
+- Round primitives accept `segments`. The default is coarse (a 4.2 mm hole gets 16 sides and
+  prints ~0.1 mm undersize), so use **`"segments": 32`+ for screw holes and 48–96 for bores**.
+- `extrude` polygons must be simple and wound **counter-clockwise**.
+- **Boolean**: `add`/`union`, `subtract`/`difference`, `intersect`/`intersection` with `a`, `b`.
+- **Combine**: `hull {parts:[…]}`, `compose {parts:[…]}` (keeps parts separate, e.g. body + lid).
+- To cut a hole cleanly through a face, make the cutter longer than the wall and start it
+  outside (e.g. height `t + 2`, translated `-1`).
+
+The script warns when the result is more than one body: that usually means a transform put a
+part in the wrong place.
+
+**Print orientation belongs in the spec.** Design the part the way it will sit on the plate
+(largest flat face at z = 0), and don't pass `--orient` to `analyze.py` afterwards. Auto-orient
+only looks at stability and can flip a part whose features have a required direction, such as
+teardrop-shaped side holes.
+
+**Beyond the built-in helpers.** `bracket`, `plate-with-holes` and `enclosure` cover the common
+cases. Anything else (pipe clamps, hooks, clips, standoffs) is an `extrude` of a 2D outline plus
+holes. Generate the outline points with a few lines of Python if it has arcs: for a saddle clamp,
+sample the inner and outer arcs at 5° steps, close the polygon through the two ears, extrude to
+the strap width, then subtract the screw holes (use teardrops if they run sideways).
 
 ---
 
@@ -203,7 +228,7 @@ Each primitive supports optional `translate`, `rotate`, `scale` fields.
     {"type": "subtract", "a": "plate_h1", "b": "hole2", "id": "plate_done"},
     {"type": "cube", "size": [30, 4, 25], "translate": [0, 26, 4], "id": "arm"},
     {"type": "add", "a": "plate_done", "b": "arm", "id": "body"},
-    {"type": "cylinder", "height": 30, "radius": 6, "translate": [15, 35, 29], "rotate": [90, 0, 0], "id": "hook_curve"},
+    {"type": "cylinder", "height": 30, "radius": 6, "segments": 48, "rotate": [0, 90, 0], "translate": [0, 32, 29], "id": "hook_curve"},
     {"type": "add", "a": "body", "b": "hook_curve"}
   ]
 }

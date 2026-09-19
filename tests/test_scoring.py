@@ -70,3 +70,30 @@ class TestAnalyzeScoring:
         report = analyze_mesh(mesh, "A1", "ABS")
         assert any("enclosed" in iss.lower() for iss in report["issues"]), (
             "ABS on A1 should flag enclosed printer issue")
+
+
+class TestOverhangCheck:
+    @staticmethod
+    def _overhang(report):
+        return next(c for c in report["checks"] if "verhang" in c["name"])
+
+    def test_flat_plate_on_bed_has_no_overhang(self):
+        """Regression: the face resting on the bed was counted as a 100%-downward overhang,
+        so every flat part reported 'Supports: needed'."""
+        import trimesh
+        from analyze import analyze_mesh
+        plate = trimesh.creation.box(extents=[40, 30, 5])
+        plate.apply_translation([0, 0, 2.5])  # sit on z=0 like a print
+        report = analyze_mesh(plate, "A1", "PETG", "functional")
+        assert self._overhang(report)["overhang_area_pct"] == 0.0
+        assert report["print_settings"]["supports"] != "needed"
+
+    def test_real_overhang_is_still_detected(self):
+        """A T shape: the underside of the top bar is a genuine 90° overhang."""
+        import trimesh
+        from analyze import analyze_mesh
+        stem = trimesh.creation.box(extents=[10, 10, 30]); stem.apply_translation([0, 0, 15])
+        bar = trimesh.creation.box(extents=[60, 10, 5]); bar.apply_translation([0, 0, 32.5])
+        t_shape = trimesh.util.concatenate([stem, bar])
+        report = analyze_mesh(t_shape, "A1", "PLA")
+        assert self._overhang(report)["overhang_area_pct"] > 5

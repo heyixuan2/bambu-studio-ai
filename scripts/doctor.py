@@ -106,6 +106,9 @@ def check_search_backend():
             return False, None
 
 def main():
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        print(__doc__.strip())
+        return 0
     print(f"🩺 Bambu Studio AI — Dependency Doctor (v{__version__})\n")
     print(f"Python: {sys.executable} ({sys.version.split()[0]})\n")
     all_ok = True

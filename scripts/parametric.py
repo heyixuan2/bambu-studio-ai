@@ -72,6 +72,10 @@ def _export(manifold: m3d.Manifold, output_path: str) -> str:
     print(f"  Volume: {vol:.2f} mm³  |  Surface area: {sa:.2f} mm²")
     print(f"  Triangles: {manifold.num_tri():,}  |  Vertices: {manifold.num_vert():,}")
     print(f"  Watertight: YES (guaranteed by manifold3d)")
+    bodies = manifold.decompose() if hasattr(manifold, "decompose") else []
+    if len(bodies) > 1:
+        print(f"  ⚠️ {len(bodies)} separate bodies — they don't touch. Check translate/rotate "
+              f"values unless this is intentional (e.g. enclosure + lid).")
     return output_path
 
 
@@ -240,13 +244,16 @@ def cmd_enclosure(args):
 def _build_primitive(op: dict) -> m3d.Manifold:
     """Build a single primitive from a JSON op dict."""
     t = op["type"]
+    # Round primitives: "segments" sets the polygon count (default 0 = manifold3d's
+    # auto, which is coarse: a 4.2 mm hole gets 16 sides and prints ~0.1 mm undersize).
+    segments = int(op.get("segments", 0))
     if t == "cube":
         m = m3d.Manifold.cube(op["size"])
     elif t == "cylinder":
         r_top = op.get("radius_top", op.get("radius", 1))
-        m = m3d.Manifold.cylinder(op["height"], op["radius"], r_top)
+        m = m3d.Manifold.cylinder(op["height"], op["radius"], r_top, segments)
     elif t == "sphere":
-        m = m3d.Manifold.sphere(op["radius"])
+        m = m3d.Manifold.sphere(op["radius"], segments)
     elif t == "extrude":
         cs = m3d.CrossSection([op["polygon"]])
         m = m3d.Manifold.extrude(cs, op["height"])
@@ -256,16 +263,17 @@ def _build_primitive(op: dict) -> m3d.Manifold:
     else:
         raise ValueError(f"Unknown primitive type: {t}")
 
-    if "translate" in op:
-        m = m.translate(op["translate"])
-    if "rotate" in op:
-        r = op["rotate"]
-        m = m.rotate(r)
+    # Order: scale → rotate → translate, all about the primitive's own origin.
+    # (Rotating after translating would swing the shape around the world origin.)
     if "scale" in op:
         s = op["scale"]
         if isinstance(s, (int, float)):
             s = [s, s, s]
         m = m.scale(s)
+    if "rotate" in op:
+        m = m.rotate(op["rotate"])
+    if "translate" in op:
+        m = m.translate(op["translate"])
     return m
 
 

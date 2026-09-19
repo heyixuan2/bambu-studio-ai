@@ -36,8 +36,10 @@ to run at each step and where the user needs to be in the loop.
 ## Running the scripts
 
 - `scripts/…` paths below are relative to the folder that contains this SKILL.md. Call them by
-  full path **from the user's working directory**. Generated files go to `./bambu-output/` in the
-  current directory (override with `BAMBU_OUTPUT_DIR`), so don't `cd` into the skill folder first.
+  full path **from the user's working directory**, and don't `cd` into the skill folder. Downloads,
+  snapshots and logs go to `./bambu-output/` in the current directory (override with
+  `BAMBU_OUTPUT_DIR`). `parametric.py` and `analyze.py`/`preview.py` write next to the file you
+  name (`-o` or the input), so pass a path inside `bambu-output/` if you want everything together.
 - Use a Python interpreter that has `requirements.txt` installed. On first use run
   `scripts/doctor.py`. If packages are missing, ask the user before installing them
   (`python3 -m pip install -r <skill-folder>/requirements.txt`, or into a venv / with `uv pip`).
@@ -58,8 +60,9 @@ waste filament and time, and occasionally damage hardware. These rules keep the 
    seen the model and explicitly said to print it. `--confirmed` is your statement that this
    happened. AI-generated meshes often have defects that analysis can't catch.
 2. **Analyze every model**, whether downloaded, generated or supplied by the user.
-   `analyze.py --orient --repair` catches wrong units, floating parts, thin walls and parts that
-   don't fit the build plate.
+   `analyze.py --repair` catches wrong units, floating parts, thin walls and parts that don't
+   fit the build plate. Add `--orient` for downloaded and AI models, which arrive in arbitrary
+   orientations, but not for parametric parts (see step 3).
 3. **Show the preview before opening Bambu Studio.** The user should see the model before they
    spend time slicing it.
 4. **Know the size before AI generation.** Generation costs API credits and minutes, and scale
@@ -163,14 +166,23 @@ detected from the texture.
 python3 scripts/analyze.py model.3mf --orient --repair --height 60 --material PLA --purpose decorative
 ```
 
+The build-volume and material checks use the configured printer, falling back to A1. When no
+printer is configured but the user named one, pass `--printer "A1 Mini"` (any of the 10 models).
+
 This runs an 11-point check (walls, overhangs, floating parts, orientation, build volume,
 material and printer compatibility, …), repairs and orients the mesh, and detects the units. It
 may write several files (`_oriented`, `_scaled`, `_repaired`, …). Its last line,
 `➡️ Use this file for the next steps: …`, names the one to continue with.
 
-Pass `--height` for AI-generated and downloaded models to set their final size. Leave it off
-for parametric parts: their dimensions are already exact, and auto-orient may lay them on a
-different side for printing.
+Pass `--height` and `--orient` for AI-generated and downloaded models: they arrive at random
+sizes and orientations. Leave both off for parametric parts. Their dimensions are already
+exact, and they were designed with the print orientation built in (largest flat face down,
+teardrop side holes pointing up). Auto-orient only optimises for stability and can flip such a
+part upside down while keeping the same footprint, so the mistake is easy to miss.
+
+The overhang figure is area-weighted and material-aware, and "Supports: needed" is a hint,
+not a verdict. For parts you designed flat on the plate, tell the user supports are not
+needed.
 
 Report the score, the repairs, any warnings and recommended settings, for example:
 "Score 8/10 · repaired 58K non-manifold edges · walls 1.5 mm ✅ · overhangs 3% ✅ · suggest 0.20 mm
@@ -234,7 +246,7 @@ Monitoring and snapshots need LAN mode.
 ```
 [ ] Size, colors and material known
 [ ] Model obtained (search / generate / parametric / user file)
-[ ] analyze.py --orient --repair run and results reported
+[ ] analyze.py --repair run (plus --orient/--height for downloaded and AI models) and results reported
 [ ] Preview shown to the user
 [ ] Opened in Bambu Studio; user reviewed and sliced it
 [ ] Print started only after the user explicitly approved it

@@ -272,8 +272,23 @@ if VIEWS == "all":
         grid = np.concatenate([top_row, bot_row], axis=0)
         Image.fromarray(grid).save(OUTPUT_PATH)
     except ImportError:
-        import shutil
-        shutil.copy(view_imgs[0], OUTPUT_PATH)
+        # Blender's bundled Python usually has no PIL: stitch with bpy's own image API.
+        try:
+            tiles = [bpy.data.images.load(p) for p in view_imgs]
+            w, h = tiles[0].size
+            px = [np.array(t.pixels[:]).reshape(h, w, 4) for t in tiles]
+            top_row = np.concatenate([px[2], px[3]], axis=1)   # image rows are bottom-up
+            bot_row = np.concatenate([px[0], px[1]], axis=1)
+            grid = np.concatenate([bot_row, top_row], axis=0)
+            out = bpy.data.images.new("grid", width=2 * w, height=2 * h, alpha=True)
+            out.pixels = grid.ravel().tolist()
+            out.filepath_raw = OUTPUT_PATH
+            out.file_format = "PNG"
+            out.save()
+        except Exception as e:
+            import shutil
+            print(f"WARNING: could not assemble 2x2 grid ({{e}}); writing the perspective view only")
+            shutil.copy(view_imgs[0], OUTPUT_PATH)
     for p in view_imgs:
         try:
             os.unlink(p)

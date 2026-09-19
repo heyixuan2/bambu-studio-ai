@@ -209,11 +209,14 @@ def analyze_mesh(mesh, printer_model, material, purpose="general"):
     threshold_deg = overhang_thresholds.get(material, 45)
     threshold_cos = -math.cos(math.radians(threshold_deg))
     
-    # Area-weighted overhang calculation (excludes near-horizontal bridging faces)
+    # Area-weighted overhang calculation.
     overhang_mask = face_normals[:, 2] < threshold_cos
-    # Exclude likely bridges: near-horizontal faces (|normal.z| < 0.1)
-    bridge_mask = abs(face_normals[:, 2]) < 0.1
-    overhang_mask = overhang_mask & ~bridge_mask
+    # Faces lying on the build plate (bottom of the bounding box) are supported by the
+    # bed, not overhangs — otherwise every flat-bottomed part reports "supports needed".
+    z_min = mesh.bounds[0][2]
+    face_z = mesh.triangles[:, :, 2]
+    on_bed = (face_z.max(axis=1) - z_min) < 0.05
+    overhang_mask = overhang_mask & ~on_bed
     
     overhang_area = face_areas[overhang_mask].sum()
     overhang_pct = round(overhang_area / total_area * 100, 1)
