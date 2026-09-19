@@ -1,0 +1,366 @@
+{
+  "schema": 1,
+  "about": "Bambu Lab printers the skill knows. Volumes and temperature limits come from Bambu Studio's own files (machine profiles for printable area/height, Resources/printers/*.json for rated nozzle, bed and chamber temperatures); AMS limits from Bambu's multi-AMS connection guide; status from Bambu's end-of-life announcements. Volumes are what the slicer accepts, with no safety margin: use hardware.usable_volume() to subtract one. `max_slots` counts AMS slots only; the external spool holder adds one more feed (one per nozzle on two-nozzle printers).",
+  "bambu_studio": {
+    "app_version": "02.07.01.62",
+    "profiles_version": "02.07.00.08",
+    "files": [
+      "Resources/profiles/BBL/machine/<machine> 0.4 nozzle.json",
+      "Resources/printers/<model_id>.json"
+    ]
+  },
+  "ams_guide": [
+    "https://wiki.bambulab.com/en/ams/manual/multi-model-ams-compatibility-guide",
+    "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+  ],
+  "printers": {
+    "A1 Mini": {
+      "name": "A1 mini",
+      "machine": "Bambu Lab A1 mini",
+      "model_ids": ["N1"],
+      "aliases": ["A1M"],
+      "build_volume_mm": [180, 180, 180],
+      "max_nozzle_c": 300,
+      "max_bed_c": 80,
+      "chamber": "none",
+      "enclosed": false,
+      "nozzle": "stainless_steel",
+      "ams": {
+        "types": ["AMS lite", "AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 16,
+        "notes": "One AMS lite (4 slots), or up to 4 AMS / AMS 2 Pro / AMS HT units through the A-series AMS hub; the two can't be combined."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en-us/compare",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": ""
+    },
+    "A1": {
+      "name": "A1",
+      "machine": "Bambu Lab A1",
+      "model_ids": ["N2S"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 256],
+      "max_nozzle_c": 300,
+      "max_bed_c": 100,
+      "chamber": "none",
+      "enclosed": false,
+      "nozzle": "stainless_steel",
+      "ams": {
+        "types": ["AMS lite", "AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 16,
+        "notes": "One AMS lite (4 slots), or up to 4 AMS / AMS 2 Pro / AMS HT units through the A-series AMS hub; the two can't be combined."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en-us/compare",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": ""
+    },
+    "A2L": {
+      "name": "A2L",
+      "machine": "Bambu Lab A2L",
+      "model_ids": ["N9"],
+      "aliases": [],
+      "build_volume_mm": [330, 320, 325],
+      "max_nozzle_c": 300,
+      "max_bed_c": 80,
+      "chamber": "none",
+      "enclosed": false,
+      "nozzle": "stainless_steel",
+      "ams": {
+        "types": ["AMS lite", "AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 19,
+        "notes": "Up to 4 AMS / AMS 2 Pro / AMS HT units (16 slots) plus one AMS lite, which gives 3 more feeds when chained."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en/a2l/specs",
+        "https://blog.bambulab.com/bambu-lab-a2l-creative-playground-extra-large/",
+        "https://3dprintingindustry.com/news/new-bambu-lab-a2l-3d-printer-technical-specifications-and-pricing-252057/",
+        "https://wiki.bambulab.com/en/a2l/manual/a2l-ams-connection-guide"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2026-06-01."
+    },
+    "P1P": {
+      "name": "P1P",
+      "machine": "Bambu Lab P1P",
+      "model_ids": ["C11"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 250],
+      "spec_volume_mm": [256, 256, 256],
+      "max_nozzle_c": 300,
+      "max_bed_c": 100,
+      "chamber": "none",
+      "enclosed": false,
+      "nozzle": "stainless_steel",
+      "ams": {
+        "types": ["AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 16,
+        "notes": "Up to 4 AMS / AMS 2 Pro / AMS HT units."
+      },
+      "status": "discontinued 2026-02-10",
+      "sources": [
+        "https://blog.bambulab.com/a-farewell-to-p1p",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Bambu Lab lists 256 × 256 × 256 mm; Bambu Studio caps the height at 250 mm, and that is the limit a print has to fit, so 250 is used. Spare parts and support until February 2031."
+    },
+    "P1S": {
+      "name": "P1S",
+      "machine": "Bambu Lab P1S",
+      "model_ids": ["C12"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 250],
+      "spec_volume_mm": [256, 256, 256],
+      "max_nozzle_c": 300,
+      "max_bed_c": 100,
+      "chamber": "passive",
+      "enclosed": true,
+      "nozzle": "stainless_steel",
+      "ams": {
+        "types": ["AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 16,
+        "notes": "Up to 4 AMS / AMS 2 Pro / AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en-us/compare",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Bambu Lab lists 256 × 256 × 256 mm; Bambu Studio caps the height at 250 mm, and that is the limit a print has to fit, so 250 is used."
+    },
+    "P2S": {
+      "name": "P2S",
+      "machine": "Bambu Lab P2S",
+      "model_ids": ["N7"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 256],
+      "max_nozzle_c": 300,
+      "max_bed_c": 110,
+      "chamber": "passive",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS 2 Pro", "AMS HT"],
+        "max_slots": 20,
+        "notes": "Up to 4 AMS 2 Pro and 4 AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://store.bblcdn.com/s7/default/2d1a01cd2dca425eb071ccc28c26c9fa/spec.pdf",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2025-10-09. Enclosed, but the chamber is not actively heated."
+    },
+    "X1C": {
+      "name": "X1 Carbon",
+      "machine": "Bambu Lab X1 Carbon",
+      "model_ids": ["BL-P001"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 250],
+      "spec_volume_mm": [256, 256, 256],
+      "max_nozzle_c": 300,
+      "max_bed_c": 110,
+      "chamber": "passive",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 16,
+        "notes": "Up to 4 AMS / AMS 2 Pro / AMS HT units."
+      },
+      "status": "discontinued 2026-03-31",
+      "sources": [
+        "https://public-cdn.bambulab.com/store/bambulab-X1-carbon-tech-specs.pdf",
+        "https://blog.bambulab.com/the-x1-series-is-eol-the-standard-it-set-will-remain-forever",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Bambu Lab lists 256 × 256 × 256 mm; Bambu Studio caps the height at 250 mm, so 250 is used. Bambu Studio has no bed limit for the X1 Carbon: 110 °C is the tech-spec figure for 220 V mains (120 °C on 110 V). X1 series production ended 2026-03-31; firmware updates until 2027-05-31, spare parts until 2031-03-31."
+    },
+    "X1E": {
+      "name": "X1E",
+      "machine": "Bambu Lab X1E",
+      "model_ids": ["C13"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 250],
+      "spec_volume_mm": [256, 256, 256],
+      "max_nozzle_c": 320,
+      "max_bed_c": 110,
+      "chamber": "heated 60 °C",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS", "AMS 2 Pro", "AMS HT"],
+        "max_slots": 16,
+        "notes": "Up to 4 AMS / AMS 2 Pro / AMS HT units."
+      },
+      "status": "discontinued 2026-03-31",
+      "sources": [
+        "https://www.matterhackers.com/store/l/bambu-lab-x1e-3d-printer/sk/MEQ5KJ70",
+        "https://blog.bambulab.com/the-x1-series-is-eol-the-standard-it-set-will-remain-forever",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Bambu Lab lists 256 × 256 × 256 mm; Bambu Studio caps the height at 250 mm, so 250 is used. Bed: Bambu Studio says 110 °C; the spec sheet says 120 °C on 110 V mains. X1 series production ended 2026-03-31; spare parts until 2031-03-31."
+    },
+    "X2D": {
+      "name": "X2D",
+      "machine": "Bambu Lab X2D",
+      "model_ids": ["N6"],
+      "aliases": [],
+      "build_volume_mm": [256, 256, 261],
+      "spec_volume_mm": [256, 256, 260],
+      "dual_nozzle_volume_mm": [235.5, 256, 256],
+      "extruders": [
+        {"name": "main", "drive": "direct drive", "max_hotends": 1, "volume_mm": [256, 256, 261]},
+        {"name": "auxiliary", "drive": "bowden", "max_hotends": 1, "volume_mm": [235.5, 256, 256]}
+      ],
+      "max_nozzle_c": 300,
+      "max_bed_c": 120,
+      "chamber": "heated 65 °C",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS 2 Pro", "AMS HT"],
+        "max_slots": 24,
+        "notes": "Up to 4 AMS 2 Pro and 8 AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://store.bblcdn.com/s7/default/9e5a2e55561347cba2838a0c98c15ace/X2D_spec.pdf",
+        "https://bambulab.com/en/x2d/specs",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2026-04-14. The spec sheet lists the main nozzle at 256 × 256 × 260 mm; Bambu Studio allows 261 mm, which is used. Extruder names follow Bambu Studio's extruder types (direct-drive main, Bowden auxiliary)."
+    },
+    "H2C": {
+      "name": "H2C",
+      "machine": "Bambu Lab H2C",
+      "model_ids": ["O1C", "O1C2"],
+      "aliases": [],
+      "build_volume_mm": [330, 320, 325],
+      "dual_nozzle_volume_mm": [300, 320, 320],
+      "extruders": [
+        {"name": "left", "drive": "direct drive", "max_hotends": 1, "volume_mm": [325, 320, 320]},
+        {"name": "right", "drive": "direct drive", "max_hotends": 6, "volume_mm": [305, 320, 325]}
+      ],
+      "max_nozzle_c": 350,
+      "max_bed_c": 120,
+      "chamber": "heated 65 °C",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS 2 Pro", "AMS HT"],
+        "max_slots": 24,
+        "notes": "Up to 4 AMS 2 Pro and 8 AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://store.bblcdn.com/s7/default/d741f5a073c94245885065ff89a0b2da/H2C_Spec.pdf",
+        "https://bambulab.com/en/h2c/specs",
+        "https://bambulab.com/en-us/compare",
+        "https://forum.bambulab.com/t/bambu-h2c-the-full-reveal-is-here/209312",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2025-11. Two nozzles; the right one takes hotends from a Vortek changer that holds up to 6 (Bambu Studio: extruder_max_nozzle_count 1, 6). Volumes are Bambu Studio's and match the compare page (left 325 × 320 × 320, right 305 × 320 × 325, both 300 × 320 × 320); the H2C spec PDF gives 325 mm for the dual-nozzle height. Bambu Studio will not print TPU with the left nozzle or PPA-CF/PPS-CF with the right one."
+    },
+    "H2S": {
+      "name": "H2S",
+      "machine": "Bambu Lab H2S",
+      "model_ids": ["O1S"],
+      "aliases": [],
+      "build_volume_mm": [340, 320, 340],
+      "max_nozzle_c": 350,
+      "max_bed_c": 120,
+      "chamber": "heated 65 °C",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS 2 Pro", "AMS HT"],
+        "max_slots": 24,
+        "notes": "Up to 4 AMS 2 Pro and 8 AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en/h2s/tech-specs",
+        "https://3dprintingindustry.com/news/bambu-lab-launches-the-new-h2s-technical-specifications-and-pricing-243603/",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2025-08-26. Single nozzle."
+    },
+    "H2D": {
+      "name": "H2D",
+      "machine": "Bambu Lab H2D",
+      "model_ids": ["O1D"],
+      "aliases": [],
+      "build_volume_mm": [350, 320, 325],
+      "dual_nozzle_volume_mm": [300, 320, 320],
+      "extruders": [
+        {"name": "left", "drive": "direct drive", "max_hotends": 1, "volume_mm": [325, 320, 320]},
+        {"name": "right", "drive": "direct drive", "max_hotends": 1, "volume_mm": [325, 320, 325]}
+      ],
+      "max_nozzle_c": 350,
+      "max_bed_c": 120,
+      "chamber": "heated 65 °C",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS 2 Pro", "AMS HT"],
+        "max_slots": 24,
+        "notes": "Up to 4 AMS 2 Pro and 8 AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en-us/compare",
+        "https://www.dynamism.com/3d-printers/desktop-3d-printers/bambu-lab-h2d.html",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2025-03-25. 350 × 320 × 325 mm is the whole plate, reachable only by using both nozzles on different objects; one nozzle reaches 325 mm in X, and an object printed with both nozzles must fit 300 × 320 × 320 mm. Volumes are Bambu Studio's and match the compare page; some spec sheets give 325 mm for the dual-nozzle height."
+    },
+    "H2D Pro": {
+      "name": "H2D Pro",
+      "machine": "Bambu Lab H2D Pro",
+      "model_ids": ["O1E"],
+      "aliases": ["H2DP"],
+      "build_volume_mm": [350, 320, 325],
+      "dual_nozzle_volume_mm": [300, 320, 320],
+      "extruders": [
+        {"name": "left", "drive": "direct drive", "max_hotends": 1, "volume_mm": [325, 320, 320]},
+        {"name": "right", "drive": "direct drive", "max_hotends": 1, "volume_mm": [325, 320, 325]}
+      ],
+      "max_nozzle_c": 350,
+      "max_bed_c": 120,
+      "chamber": "heated 65 °C",
+      "enclosed": true,
+      "nozzle": "hardened_steel",
+      "ams": {
+        "types": ["AMS 2 Pro", "AMS HT"],
+        "max_slots": 24,
+        "notes": "Up to 4 AMS 2 Pro and 8 AMS HT units."
+      },
+      "status": "current",
+      "sources": [
+        "https://bambulab.com/en/h2d-pro/tech-specs",
+        "https://blog.bambulab.com/bambu-lab-launches-h2d-pro-for-enterprise-manufacturing/",
+        "https://www.smith3d.com/bambu-ams-compatibility-guide/"
+      ],
+      "retrieved": "2026-09-19",
+      "notes": "Released 2025-08-11. Same motion system and volumes as the H2D, with enterprise network features."
+    }
+  }
+}

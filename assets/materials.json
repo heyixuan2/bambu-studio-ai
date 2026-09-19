@@ -1,0 +1,769 @@
+{
+  "schema": 1,
+  "about": "Filament materials the skill knows, derived from Bambu Studio's system filament profiles by tests/datagen/import_bambu_studio.py. nozzle_c is the profile's allowed range; bed_c its Textured PEI plate temperature; chamber_c the highest chamber temperature any of its profiles sets. needs_enclosure: Bambu Studio heats the chamber for it where the printer can (warping risk on open printers; Bambu Studio still ships some open-printer profiles). needs_heated_chamber: every profile heats the chamber. abrasive: the profile requires a hardened nozzle (HRC 40). ams_compatible: not prohibited in the AMS by Resources/printers/filaments_blacklist.json. printers: printers with a Bambu Studio profile for it. min_wall_mm: two perimeters with a 0.4 mm nozzle at Bambu Studio's default line widths.",
+  "bambu_studio": {
+    "app_version": "02.07.01.62",
+    "profiles_version": "02.07.00.08"
+  },
+  "retrieved": "2026-09-19",
+  "materials": {
+    "PLA": {
+      "studio_profiles": [
+        "Bambu PLA Basic"
+      ],
+      "aliases": [
+        "PLA Basic",
+        "PLA Matte",
+        "PLA+"
+      ],
+      "filament_type": "PLA",
+      "nozzle_c": [
+        190,
+        240
+      ],
+      "bed_c": 55,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "PLA-CF": {
+      "studio_profiles": [
+        "Bambu PLA-CF"
+      ],
+      "aliases": [],
+      "filament_type": "PLA-CF",
+      "nozzle_c": [
+        210,
+        250
+      ],
+      "bed_c": 55,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": true,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "PETG": {
+      "studio_profiles": [
+        "Bambu PETG Basic",
+        "Bambu PETG HF"
+      ],
+      "aliases": [
+        "PETG Basic",
+        "PETG HF"
+      ],
+      "filament_type": "PETG",
+      "nozzle_c": [
+        230,
+        270
+      ],
+      "bed_c": 70,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "PETG-CF": {
+      "studio_profiles": [
+        "Bambu PETG-CF"
+      ],
+      "aliases": [],
+      "filament_type": "PETG-CF",
+      "nozzle_c": [
+        240,
+        270
+      ],
+      "bed_c": 70,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": true,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "TPU 95A": {
+      "studio_profiles": [
+        "Bambu TPU 95A HF",
+        "Bambu TPU 95A"
+      ],
+      "aliases": [
+        "TPU",
+        "TPU 95A HF"
+      ],
+      "filament_type": "TPU",
+      "nozzle_c": [
+        200,
+        250
+      ],
+      "bed_c": 35,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": false,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Feed from the external spool: Bambu Studio blocks every filament of type TPU in the AMS (only 'TPU for AMS' is allowed)."
+    },
+    "TPU 90A": {
+      "studio_profiles": [
+        "Bambu TPU 90A"
+      ],
+      "aliases": [],
+      "filament_type": "TPU",
+      "nozzle_c": [
+        200,
+        240
+      ],
+      "bed_c": 35,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": false,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "External spool only (not AMS)."
+    },
+    "TPU 85A": {
+      "studio_profiles": [
+        "Bambu TPU 85A"
+      ],
+      "aliases": [],
+      "filament_type": "TPU",
+      "nozzle_c": [
+        200,
+        240
+      ],
+      "bed_c": 35,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": false,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "External spool only (not AMS). Bambu Studio refuses it with a 0.4 mm nozzle on the H2D and H2D Pro; use 0.6 mm or larger."
+    },
+    "TPU for AMS": {
+      "studio_profiles": [
+        "Bambu TPU for AMS"
+      ],
+      "aliases": [
+        "TPU-AMS"
+      ],
+      "filament_type": "TPU-AMS",
+      "nozzle_c": [
+        220,
+        240
+      ],
+      "bed_c": 35,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "The one TPU that Bambu Studio allows in the AMS."
+    },
+    "ABS": {
+      "studio_profiles": [
+        "Bambu ABS"
+      ],
+      "aliases": [],
+      "filament_type": "ABS",
+      "nozzle_c": [
+        240,
+        280
+      ],
+      "bed_c": 90,
+      "chamber_c": 65,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "ASA": {
+      "studio_profiles": [
+        "Bambu ASA"
+      ],
+      "aliases": [],
+      "filament_type": "ASA",
+      "nozzle_c": [
+        240,
+        280
+      ],
+      "bed_c": 100,
+      "chamber_c": 65,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "PA": {
+      "studio_profiles": [
+        "Generic PA"
+      ],
+      "aliases": [
+        "Nylon"
+      ],
+      "filament_type": "PA",
+      "nozzle_c": [
+        240,
+        280
+      ],
+      "bed_c": 100,
+      "chamber_c": 60,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P2S",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Bambu Lab sells no unfilled PA; values are Bambu Studio's Generic PA."
+    },
+    "PA-CF": {
+      "studio_profiles": [
+        "Bambu PAHT-CF",
+        "Bambu PA6-CF",
+        "Bambu PA-CF"
+      ],
+      "aliases": [
+        "PAHT-CF",
+        "PA6-CF"
+      ],
+      "filament_type": "PA-CF",
+      "nozzle_c": [
+        260,
+        300
+      ],
+      "bed_c": 100,
+      "chamber_c": 60,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": true,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Dry before use."
+    },
+    "PC": {
+      "studio_profiles": [
+        "Bambu PC"
+      ],
+      "aliases": [],
+      "filament_type": "PC",
+      "nozzle_c": [
+        260,
+        290
+      ],
+      "bed_c": 110,
+      "chamber_c": 60,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": ""
+    },
+    "PVA": {
+      "studio_profiles": [
+        "Bambu PVA"
+      ],
+      "aliases": [],
+      "filament_type": "PVA",
+      "nozzle_c": [
+        210,
+        250
+      ],
+      "bed_c": 55,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": true,
+      "support": true,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Water-soluble support. Dry before use; damp PVA jams the AMS."
+    },
+    "BVOH": {
+      "studio_profiles": [
+        "Generic BVOH"
+      ],
+      "aliases": [],
+      "filament_type": "BVOH",
+      "nozzle_c": [
+        190,
+        240
+      ],
+      "bed_c": 55,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": true,
+      "support": true,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Water-soluble support (Bambu Studio's Generic BVOH profile marks it not soluble; it is)."
+    },
+    "Support for PLA": {
+      "studio_profiles": [
+        "Bambu Support For PLA",
+        "Bambu Support W"
+      ],
+      "aliases": [
+        "Support W"
+      ],
+      "filament_type": "PLA",
+      "nozzle_c": [
+        190,
+        240
+      ],
+      "bed_c": 55,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": true,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Breakaway support interface for PLA."
+    },
+    "Support for PLA/PETG": {
+      "studio_profiles": [
+        "Bambu Support For PLA/PETG"
+      ],
+      "aliases": [],
+      "filament_type": "PLA",
+      "nozzle_c": [
+        190,
+        240
+      ],
+      "bed_c": 60,
+      "chamber_c": null,
+      "needs_enclosure": false,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": true,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1 Mini",
+        "A1",
+        "A2L",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Breakaway support interface for PLA and PETG."
+    },
+    "Support for ABS": {
+      "studio_profiles": [
+        "Bambu Support for ABS"
+      ],
+      "aliases": [],
+      "filament_type": "ABS",
+      "nozzle_c": [
+        240,
+        270
+      ],
+      "bed_c": 90,
+      "chamber_c": 60,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": true,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Breakaway support interface for ABS."
+    },
+    "Support for PA/PET": {
+      "studio_profiles": [
+        "Bambu Support For PA/PET",
+        "Bambu Support G"
+      ],
+      "aliases": [
+        "Support G"
+      ],
+      "filament_type": "PA",
+      "nozzle_c": [
+        260,
+        300
+      ],
+      "bed_c": 100,
+      "chamber_c": 60,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": false,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": true,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "A1",
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Breakaway support interface for PA and PET."
+    },
+    "PPA-CF": {
+      "studio_profiles": [
+        "Bambu PPA-CF"
+      ],
+      "aliases": [],
+      "filament_type": "PPA-CF",
+      "nozzle_c": [
+        280,
+        320
+      ],
+      "bed_c": 100,
+      "chamber_c": 60,
+      "needs_enclosure": true,
+      "needs_heated_chamber": false,
+      "abrasive": true,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "P1P",
+        "P1S",
+        "P2S",
+        "X1C",
+        "X1E",
+        "X2D",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Bambu recommends a 0.6 mm hardened nozzle and a heated chamber; Bambu Studio also ships profiles for X1/P1 printers without chamber heating."
+    },
+    "PPS-CF": {
+      "studio_profiles": [
+        "Bambu PPS-CF"
+      ],
+      "aliases": [],
+      "filament_type": "PPS-CF",
+      "nozzle_c": [
+        310,
+        340
+      ],
+      "bed_c": 110,
+      "chamber_c": 65,
+      "needs_enclosure": true,
+      "needs_heated_chamber": true,
+      "abrasive": true,
+      "ams_compatible": true,
+      "soluble": false,
+      "support": false,
+      "min_wall_mm": 0.9,
+      "printers": [
+        "X1E",
+        "H2C",
+        "H2S",
+        "H2D",
+        "H2D Pro"
+      ],
+      "notes": "Brittle: can snap in the bent PTFE tube above the H2S toolhead."
+    }
+  },
+  "unsupported": {
+    "PEEK": "PEEK needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either and Bambu Studio has no profile for it.",
+    "PEI": "PEI needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either and Bambu Studio has no profile for it.",
+    "PPSU": "PPSU needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either and Bambu Studio has no profile for it."
+  }
+}
