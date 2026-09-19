@@ -19,7 +19,7 @@ from common import (
 )
 
 REQUIRED = {
-    "requests": {"min": "2.31", "import": "requests"},
+    "requests": {"min": "2.31", "import": "requests"},  # also model search (MakerWorld + Printables APIs)
     "trimesh": {"min": "4.10", "import": "trimesh"},
     "numpy": {"min": "1.24", "import": "numpy"},
     "Pillow": {"min": "9.0", "import": "PIL"},
@@ -70,18 +70,6 @@ def check_blender():
         except Exception:
             pass
     return False, None, None
-
-def check_search_backend():
-    """Check search dependencies."""
-    try:
-        from ddgs import DDGS
-        return True, "ddgs"
-    except ImportError:
-        try:
-            from duckduckgo_search import DDGS
-            return True, "duckduckgo_search"
-        except ImportError:
-            return False, None
 
 def main():
     if any(a in ("-h", "--help") for a in sys.argv[1:]):
@@ -134,13 +122,6 @@ def main():
         print("  ⚠️ OrcaSlicer not installed (needed for slice.py)")
         print("     Install from: https://github.com/SoftFever/OrcaSlicer")
 
-    print("\nSearch backend:")
-    search_ok, search_pkg = check_search_backend()
-    if search_ok:
-        print(f"  ✅ {search_pkg}")
-    else:
-        print("  ⚠️ Not found — install: pip install ddgs")
-    
     print(f"\nConfig ({home_dir()}):")
     legacy_in_use = False
     for fname in ["config.json", ".secrets.json"]:

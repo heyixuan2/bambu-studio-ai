@@ -4,7 +4,6 @@ networkx>=3.2  # trimesh needs it to read/write 3MF and to repair meshes
 requests>=2.31,<3.0
 numpy>=1.24
 Pillow>=9.0
-ddgs>=7.0
 pygltflib
 scipy>=1.10
 manifold3d>=3.0
