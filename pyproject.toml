@@ -26,11 +26,13 @@ known-first-party = ["colorize", "common"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
-# Opt-in: `pytest -m network` (live services), `pytest -m slicer` (installed Bambu Studio).
-addopts = "-m 'not network and not slicer'"
+# Opt-in suites: `pytest -m network` (live services), `pytest -m slicer` (installed Bambu
+# Studio), `pytest -m blender` (real Blender renders).
+addopts = "-m 'not network and not slicer and not blender'"
 markers = [
     "network: talks to real third-party services (opt-in)",
     "slicer: runs the installed Bambu Studio command line (opt-in)",
+    "blender: renders with a locally installed Blender (opt-in)",
 ]
 
 [tool.pyright]
