@@ -26,3 +26,8 @@ known-first-party = ["colorize", "common"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
+# Live-network tests are opt-in: `pytest -m network`.
+addopts = "-m 'not network'"
+markers = [
+    "network: talks to real third-party services (opt-in)",
+]

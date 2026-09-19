@@ -56,6 +56,7 @@ needs_ddgs = pytest.mark.skipif(not _has_ddgs, reason="ddgs/duckduckgo_search no
 
 
 @needs_ddgs
+@pytest.mark.network
 class TestJSONEmpty:
     def test_json_empty_returns_zero(self):
         """JSON mode should exit 0 even with no results (for scripting)."""
