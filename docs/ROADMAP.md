@@ -180,7 +180,7 @@ interface so non-Bambu printers can follow; Thingiverse and MyMiniFactory search
 
 | Risk | Mitigation / decision needed |
 |---|---|
-| Per-triangle paint 3MF: Bambu Studio's CLI accepts the attribute, but "opens with N filaments in the GUI" is unverified | One manual import test before Phase 2 commits to it. Until then the GLB hand-off is the documented path |
+| Per-triangle paint 3MF | Import verified 2026-09-19 on Bambu Studio 2.7.1: a Bambu *project* 3MF (paint codes + `filament_colour` for N filaments) renders each face in its filament's colour; a plain 3MF falls back to one filament. Still to verify: a headless slice that actually changes filament (the audit's CLI slice stayed on filament 1). Until then the GLB hand-off is the documented path |
 | MakerWorld search uses an undocumented endpoint; its terms forbid automated access | Decided: on by default, read-only, one request per user query, never downloads, disclosed in `references/security.md`; Printables runs alongside so search survives if the endpoint moves |
 | Provider behaviour can't be verified without keys | Tripo and Meshy keys available for live tests; fal.ai covered by recorded responses until a key is available |
 | build123d/OCP wheel is ~65 MB | Optional extra; manifold3d baseline always works |
