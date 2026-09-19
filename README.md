@@ -134,44 +134,24 @@ Works with the agent you already use and talks to your printer over **your own n
 
 ## Get started
 
-<table>
-<tr>
-<td width="33%" valign="top">
-
-**1 · Add the skill**
+**1 · Add the skill.** It detects the agents you have installed and puts the skill where each one
+looks. Add `-g` for all projects, or see the [manual install](#install-details).
 
 ```bash
 npx skills add heyixuan2/bambu-studio-ai
 ```
 
-Detects the agents you have installed. Add `-g` for all projects.
-[Manual install ↓](#install-details)
-
-</td>
-<td width="33%" valign="top">
-
-**2 · Install Python deps**
+**2 · Install the Python dependencies.** Skill installers copy files but don't install packages.
+`doctor.py` then shows what's installed and what's optional.
 
 ```bash
-cd <skill folder>
-pip install -r requirements.txt
+cd <skill folder>                       # e.g. ~/.claude/skills/bambu-studio-ai
+python3 -m pip install -r requirements.txt
 python3 scripts/doctor.py
 ```
 
-Skill installers copy files but don't install packages. `doctor.py` shows what's optional.
-
-</td>
-<td width="33%" valign="top">
-
-**3 · Ask for something**
-
-Search, generation, CAD and analysis work right away.
-
-For printer control, say *"set up my Bambu printer"* and the agent walks you through it in about two minutes.
-
-</td>
-</tr>
-</table>
+**3 · Ask for something.** Search, generation, CAD and analysis work right away. For printer
+control, say *"set up my Bambu printer"* and the agent walks you through it in about two minutes.
 
 <br>
 
