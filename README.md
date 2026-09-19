@@ -1,5 +1,5 @@
 <a id="top"></a>
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00AE42,55:0B5B33,100:060E1B&height=230&section=header&text=Bambu%20Lab%20AI&fontSize=68&fontColor=F2FC75&fontAlignY=36&animation=fadeIn&desc=Tell%20your%20AI%20agent%20what%20you%20need.%20It%20designs%20it%2C%20checks%20it%2C%20and%20prints%20it%20on%20your%20Bambu%20Lab.&descSize=17&descAlignY=58" width="100%" alt="Bambu Lab AI">
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00AE42,55:0B5B33,100:060E1B&height=230&section=header&text=Bambu%20Lab%20AI&fontSize=68&fontColor=FFFFFF&fontAlignY=36&animation=fadeIn&desc=Tell%20your%20AI%20agent%20what%20you%20need.%20It%20designs%20it%2C%20checks%20it%2C%20and%20prints%20it%20on%20your%20Bambu%20Lab.&descSize=17&descAlignY=58" width="100%" alt="Bambu Lab AI">
 
 <div align="center">
 
@@ -9,24 +9,24 @@
 
 <br><br>
 
-[![Featured by Bambu Lab](https://img.shields.io/badge/%F0%9F%8F%86_Featured_by_Bambu_Lab-Skill_Showcase_2026-00AE42?style=for-the-badge&labelColor=060E1B)](https://xhslink.cn/o/6JZRUdwvZdC)
-[![Agent Skills](https://img.shields.io/badge/Agent_Skills-SKILL.md-060E1B?style=for-the-badge&logo=markdown&logoColor=F2FC75)](https://agentskills.io)
+[![Featured by Bambu Lab](https://img.shields.io/badge/Featured_by_Bambu_Lab-Skill_Showcase_2026-00AE42?style=for-the-badge&labelColor=060E1B)](https://xhslink.cn/o/6JZRUdwvZdC)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-SKILL.md-060E1B?style=for-the-badge&logo=markdown&logoColor=white)](https://agentskills.io)
 [![Release](https://img.shields.io/github/v/release/heyixuan2/bambu-studio-ai?style=for-the-badge&label=release&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/heyixuan2/bambu-studio-ai/ci.yml?style=for-the-badge&label=CI&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/actions/workflows/ci.yml)
-[![Stars](https://img.shields.io/github/stars/heyixuan2/bambu-studio-ai?style=for-the-badge&logo=github&labelColor=060E1B&color=F2FC75)](https://github.com/heyixuan2/bambu-studio-ai/stargazers)
+[![Stars](https://img.shields.io/github/stars/heyixuan2/bambu-studio-ai?style=for-the-badge&logo=github&labelColor=060E1B&color=00AE42)](https://github.com/heyixuan2/bambu-studio-ai/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00AE42?style=for-the-badge&labelColor=060E1B)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-00AE42?style=for-the-badge&logo=python&logoColor=white&labelColor=060E1B)](#%EF%B8%8F-printers-and-requirements)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-00AE42?style=for-the-badge&logo=python&logoColor=white&labelColor=060E1B)](#printers-and-requirements)
 
 <br>
 
 **Works with the agent you already use**
 
-[![Claude Code](https://img.shields.io/badge/Claude_Code-060E1B?style=for-the-badge&logo=claude&logoColor=D97757)](#-get-started)
-[![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-060E1B?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjIuMjgyIDkuODIxYTUuOTg1IDUuOTg1IDAgMCAwLS41MTYtNC45MSA2LjA0NiA2LjA0NiAwIDAgMC02LjUxLTIuOUE2LjA2NSA2LjA2NSAwIDAgMCAxMS43MDggMGE2LjA2IDYuMDYgMCAwIDAtNS43OSA0LjIgNS45ODggNS45ODggMCAwIDAtNC4wMDUgMi45MDIgNi4wNTMgNi4wNTMgMCAwIDAgLjc0OCA3LjA5NyA1Ljk4IDUuOTggMCAwIDAgLjUxIDQuOTExIDYuMDUxIDYuMDUxIDAgMCAwIDYuNTE1IDIuOUE1Ljk4NSA1Ljk4NSAwIDAgMCAxMy4yNiAyNGE2LjA1NiA2LjA1NiAwIDAgMCA1Ljc3Mi00LjIwNiA1Ljk5IDUuOTkgMCAwIDAgMy45OTctMi45IDYuMDU2IDYuMDU2IDAgMCAwLS43NDctNy4wNzN6TTEzLjI2IDIyLjQzYTQuNDc2IDQuNDc2IDAgMCAxLTIuODc2LTEuMDRsLjE0MS0uMDgxIDQuNzc5LTIuNzU4YS43OTUuNzk1IDAgMCAwIC4zOTItLjY4MXYtNi43MzdsMi4wMiAxLjE2OGEuMDcxLjA3MSAwIDAgMSAuMDM4LjA1MnY1LjU4M2E0LjUwNCA0LjUwNCAwIDAgMS00LjQ5NCA0LjQ5NHpNMy42IDE4LjMwNGE0LjQ3IDQuNDcgMCAwIDEtLjUzNS0zLjAxNGwuMTQyLjA4NSA0Ljc4MyAyLjc1OWEuNzcxLjc3MSAwIDAgMCAuNzggMGw1Ljg0My0zLjM2OXYyLjMzMmEuMDguMDggMCAwIDEtLjAzMy4wNjJMOS43NCAxOS45NWE0LjUgNC41IDAgMCAxLTYuMTQtMS42NDZ6TTIuMzQgNy44OTZhNC40ODUgNC40ODUgMCAwIDEgMi4zNjYtMS45NzNWMTEuNmEuNzY2Ljc2NiAwIDAgMCAuMzg4LjY3Nmw1LjgxNSAzLjM1NS0yLjAyIDEuMTY4YS4wNzYuMDc2IDAgMCAxLS4wNzEgMGwtNC44My0yLjc4NkE0LjUwNCA0LjUwNCAwIDAgMSAyLjM0IDcuODcyem0xNi41OTcgMy44NTVsLTUuODMzLTMuMzg3TDE1LjExOSA3LjJhLjA3Ni4wNzYgMCAwIDEgLjA3MSAwbDQuODMgMi43OTFhNC40OTQgNC40OTQgMCAwIDEtLjY3NiA4LjEwNXYtNS42NzhhLjc5Ljc5IDAgMCAwLS40MDctLjY2N3ptMi4wMS0zLjAyM2wtLjE0MS0uMDg1LTQuNzc0LTIuNzgyYS43NzYuNzc2IDAgMCAwLS43NzYgMEw5LjQwOSA5LjIzVjYuODk3YS4wNjYuMDY2IDAgMCAxIC4wMjgtLjA2MWw0LjgzLTIuNzg3YTQuNSA0LjUgMCAwIDEgNi42OCA0LjY2em0tMTIuNjQgNC4xMzVsLTIuMDItMS4xNjRhLjA4LjA4IDAgMCAxLS4wMzgtLjA1N1Y2LjA3NWE0LjUgNC41IDAgMCAxIDcuMzc1LTMuNDUzbC0uMTQyLjA4TDguNzA0IDUuNDZhLjc5NS43OTUgMCAwIDAtLjM5My42ODF6bTEuMDk3LTIuMzY1bDIuNjAyLTEuNSAyLjYwNyAxLjV2Mi45OTlsLTIuNTk3IDEuNS0yLjYwNy0xLjV6Ii8+PC9zdmc+)](#-get-started)
-[![Cursor](https://img.shields.io/badge/Cursor-060E1B?style=for-the-badge&logo=cursor&logoColor=white)](#-get-started)
-[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-060E1B?style=for-the-badge&logo=googlegemini&logoColor=8E75B2)](#-get-started)
-[![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-060E1B?style=for-the-badge&logo=githubcopilot&logoColor=white)](#-get-started)
-[![+ 60 more](https://img.shields.io/badge/%2B_60_more-00AE42?style=for-the-badge&labelColor=060E1B)](#-install-details)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-060E1B?style=for-the-badge&logo=claude&logoColor=white)](#get-started)
+[![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-060E1B?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjIuMjgyIDkuODIxYTUuOTg1IDUuOTg1IDAgMCAwLS41MTYtNC45MSA2LjA0NiA2LjA0NiAwIDAgMC02LjUxLTIuOUE2LjA2NSA2LjA2NSAwIDAgMCAxMS43MDggMGE2LjA2IDYuMDYgMCAwIDAtNS43OSA0LjIgNS45ODggNS45ODggMCAwIDAtNC4wMDUgMi45MDIgNi4wNTMgNi4wNTMgMCAwIDAgLjc0OCA3LjA5NyA1Ljk4IDUuOTggMCAwIDAgLjUxIDQuOTExIDYuMDUxIDYuMDUxIDAgMCAwIDYuNTE1IDIuOUE1Ljk4NSA1Ljk4NSAwIDAgMCAxMy4yNiAyNGE2LjA1NiA2LjA1NiAwIDAgMCA1Ljc3Mi00LjIwNiA1Ljk5IDUuOTkgMCAwIDAgMy45OTctMi45IDYuMDU2IDYuMDU2IDAgMCAwLS43NDctNy4wNzN6TTEzLjI2IDIyLjQzYTQuNDc2IDQuNDc2IDAgMCAxLTIuODc2LTEuMDRsLjE0MS0uMDgxIDQuNzc5LTIuNzU4YS43OTUuNzk1IDAgMCAwIC4zOTItLjY4MXYtNi43MzdsMi4wMiAxLjE2OGEuMDcxLjA3MSAwIDAgMSAuMDM4LjA1MnY1LjU4M2E0LjUwNCA0LjUwNCAwIDAgMS00LjQ5NCA0LjQ5NHpNMy42IDE4LjMwNGE0LjQ3IDQuNDcgMCAwIDEtLjUzNS0zLjAxNGwuMTQyLjA4NSA0Ljc4MyAyLjc1OWEuNzcxLjc3MSAwIDAgMCAuNzggMGw1Ljg0My0zLjM2OXYyLjMzMmEuMDguMDggMCAwIDEtLjAzMy4wNjJMOS43NCAxOS45NWE0LjUgNC41IDAgMCAxLTYuMTQtMS42NDZ6TTIuMzQgNy44OTZhNC40ODUgNC40ODUgMCAwIDEgMi4zNjYtMS45NzNWMTEuNmEuNzY2Ljc2NiAwIDAgMCAuMzg4LjY3Nmw1LjgxNSAzLjM1NS0yLjAyIDEuMTY4YS4wNzYuMDc2IDAgMCAxLS4wNzEgMGwtNC44My0yLjc4NkE0LjUwNCA0LjUwNCAwIDAgMSAyLjM0IDcuODcyem0xNi41OTcgMy44NTVsLTUuODMzLTMuMzg3TDE1LjExOSA3LjJhLjA3Ni4wNzYgMCAwIDEgLjA3MSAwbDQuODMgMi43OTFhNC40OTQgNC40OTQgMCAwIDEtLjY3NiA4LjEwNXYtNS42NzhhLjc5Ljc5IDAgMCAwLS40MDctLjY2N3ptMi4wMS0zLjAyM2wtLjE0MS0uMDg1LTQuNzc0LTIuNzgyYS43NzYuNzc2IDAgMCAwLS43NzYgMEw5LjQwOSA5LjIzVjYuODk3YS4wNjYuMDY2IDAgMCAxIC4wMjgtLjA2MWw0LjgzLTIuNzg3YTQuNSA0LjUgMCAwIDEgNi42OCA0LjY2em0tMTIuNjQgNC4xMzVsLTIuMDItMS4xNjRhLjA4LjA4IDAgMCAxLS4wMzgtLjA1N1Y2LjA3NWE0LjUgNC41IDAgMCAxIDcuMzc1LTMuNDUzbC0uMTQyLjA4TDguNzA0IDUuNDZhLjc5NS43OTUgMCAwIDAtLjM5My42ODF6bTEuMDk3LTIuMzY1bDIuNjAyLTEuNSAyLjYwNyAxLjV2Mi45OTlsLTIuNTk3IDEuNS0yLjYwNy0xLjV6Ii8+PC9zdmc+)](#get-started)
+[![Cursor](https://img.shields.io/badge/Cursor-060E1B?style=for-the-badge&logo=cursor&logoColor=white)](#get-started)
+[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-060E1B?style=for-the-badge&logo=googlegemini&logoColor=white)](#get-started)
+[![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-060E1B?style=for-the-badge&logo=githubcopilot&logoColor=white)](#get-started)
+[![+ 60 more](https://img.shields.io/badge/%2B_60_more-00AE42?style=for-the-badge&labelColor=060E1B)](#install-details)
 
 </div>
 
@@ -39,7 +39,7 @@
 </td>
 <td width="62%" valign="middle">
 
-### 🏆 Featured by Bambu Lab
+### Featured by Bambu Lab
 
 Selected for the **first batch of featured works** in Bambu Lab's official
 ***我的拓竹 Skill 大赏*** (Bambu Lab Player Skill Showcase, 2026), under the name **Bambu Lab AI**.
@@ -59,7 +59,7 @@ The yellow figure on the poster is a real print, produced end-to-end by this ski
 
 <br>
 
-## 💬 What a session looks like
+## What a session looks like
 
 <table>
 <tr>
@@ -97,19 +97,19 @@ Agent  Print detected. I'll report progress every
 
 <br>
 
-## ✨ Why it's different
+## Why it's different
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### 🧭 The right method for each object
+### The right method for each object
 Everyday objects: **search** MakerWorld, Printables, Thingiverse and Thangs first, because tested designs beat generated ones. Functional parts: **parametric CAD** with real millimetres and real screw clearances. Figurines, characters and photos: **AI text-to-3D and image-to-3D** across five providers.
 
 </td>
 <td width="50%" valign="top">
 
-### 🔍 Checked before it's printed
+### Checked before it's printed
 Every model, downloaded or generated, passes an **11-point check** before you see it: scale, wall thickness, overhangs, floating fragments, orientation, build volume, and whether the material suits your printer. Then it's **repaired automatically**. Textured models become **AMS-ready multi-color** files with matched Bambu filaments.
 
 </td>
@@ -117,13 +117,13 @@ Every model, downloaded or generated, passes an **11-point check** before you se
 <tr>
 <td width="50%" valign="top">
 
-### 🙋 You're always in the loop
+### You're always in the loop
 You see a **render first**, then review and slice in **Bambu Studio**. The agent **never starts a print without an explicit yes**, and it asks before enabling auto-pause.
 
 </td>
 <td width="50%" valign="top">
 
-### 🔌 Your agent, your printer, your keys
+### Your agent, your printer, your keys
 Works with the agent you already use and talks to your printer over **your own network**. API keys live in a **local file only you can read**. No accounts, no relay servers, no telemetry.
 
 </td>
@@ -132,7 +132,7 @@ Works with the agent you already use and talks to your printer over **your own n
 
 <br>
 
-## 🚀 Get started
+## Get started
 
 <table>
 <tr>
@@ -145,7 +145,7 @@ npx skills add heyixuan2/bambu-studio-ai
 ```
 
 Detects the agents you have installed. Add `-g` for all projects.
-[Manual install ↓](#-install-details)
+[Manual install ↓](#install-details)
 
 </td>
 <td width="33%" valign="top">
@@ -175,9 +175,9 @@ For printer control, say *"set up my Bambu printer"* and the agent walks you thr
 
 <br>
 
-## 🗣️ Things you can ask
+## Things you can ask
 
-| 🎨 Make something | 🔧 Check or fix a model | 🖨️ Print and watch |
+| Make something | Check or fix a model | Print and watch |
 |---|---|---|
 | *"Print me a cute cat figurine, about 6 cm tall"* | *"Why won't this STL slice properly?"* | *"What filament is loaded in my AMS?"* |
 | *"Design a 60×40×30 mm electronics box with a lid"* | *"Scale this to 12 cm and check it fits my A1 Mini"* | *"Is my print done?"* |
@@ -186,10 +186,10 @@ For printer control, say *"set up my Bambu printer"* and the agent walks you thr
 
 <br>
 
-## ⚙️ How it works
+## How it works
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#0B2A1E','primaryTextColor':'#F2FC75','primaryBorderColor':'#00AE42','lineColor':'#00AE42','secondaryColor':'#060E1B','tertiaryColor':'#0B2A1E','tertiaryTextColor':'#FFFFFF','edgeLabelBackground':'#060E1B','fontSize':'14px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#0B2A1E','primaryTextColor':'#FFFFFF','primaryBorderColor':'#00AE42','lineColor':'#00AE42','secondaryColor':'#060E1B','tertiaryColor':'#0B2A1E','tertiaryTextColor':'#FFFFFF','edgeLabelBackground':'#060E1B','fontSize':'14px'}}}%%
 flowchart TD
     R([Your request]) --> S{What is it?}
     S -->|everyday object| A[Search model sites]
@@ -213,19 +213,19 @@ them.
 
 | Capability | Tool | Details |
 |---|---|---|
-| 🔎 Model search | `search.py` | MakerWorld, Printables, Thingiverse, Thangs, deduplicated |
-| 🤖 AI generation | `generate.py` | Meshy, Tripo3D, Printpal, 3D AI Studio, Hyper3D Rodin. Print-aware prompts, scaling to exact height, retries |
-| 📐 Parametric CAD | `parametric.py` | Brackets, plates with holes, enclosures, arbitrary CSG from JSON. Always watertight, exact to 0.01 mm |
-| 🩺 Printability | `analyze.py` | 11-point check, tiered repair, auto-orientation, unit detection |
-| 🎨 Multi-color | `colorize` | Texture → up to 8 AMS colors, nearest Bambu filament by CIELAB ΔE |
-| 🖼️ Preview | `preview.py` | Blender renders and 360° turntable GIFs, size verification |
-| 🖨️ Printer | `bambu.py` | Status, AMS, open in Bambu Studio, and more |
-| 👀 Monitoring | `monitor.py` | Waits for the print to start, progress reports, stall/temperature alerts |
-| 🛠️ Setup | `configure.py`, `doctor.py` | Settings and secrets without editing JSON, dependency diagnostics |
+| Model search | `search.py` | MakerWorld, Printables, Thingiverse, Thangs, deduplicated |
+| AI generation | `generate.py` | Meshy, Tripo3D, Printpal, 3D AI Studio, Hyper3D Rodin. Print-aware prompts, scaling to exact height, retries |
+| Parametric CAD | `parametric.py` | Brackets, plates with holes, enclosures, arbitrary CSG from JSON. Always watertight, exact to 0.01 mm |
+| Printability | `analyze.py` | 11-point check, tiered repair, auto-orientation, unit detection |
+| Multi-color | `colorize` | Texture → up to 8 AMS colors, nearest Bambu filament by CIELAB ΔE |
+| Preview | `preview.py` | Blender renders and 360° turntable GIFs, size verification |
+| Printer | `bambu.py` | Status, AMS, open in Bambu Studio, and more |
+| Monitoring | `monitor.py` | Waits for the print to start, progress reports, stall/temperature alerts |
+| Setup | `configure.py`, `doctor.py` | Settings and secrets without editing JSON, dependency diagnostics |
 
 <br>
 
-## 🖨️ Printers and requirements
+## Printers and requirements
 
 <div align="center">
 
@@ -256,7 +256,7 @@ Optional tools unlock more:
 
 <br>
 
-## 🔒 Privacy and safety
+## Privacy and safety
 
 - **Local first.** Printer communication runs over your own network. Nothing goes through a relay.
 - **Your secrets stay put.** Access codes and API keys are stored in `~/.bambu-studio-ai/.secrets.json`
@@ -267,7 +267,7 @@ Optional tools unlock more:
 
 <br>
 
-## 📦 Install details
+## Install details
 
 <details>
 <summary><b>Manual install (git clone) and per-agent paths</b></summary>
@@ -351,7 +351,7 @@ python3 scripts/monitor.py --wait-start 30 --interval 300
 
 <br>
 
-## 🤝 Contributing
+## Contributing
 
 ```bash
 pip install -r requirements-dev.txt
@@ -369,15 +369,7 @@ prints from camera snapshots, and testing on Windows and Linux. Conventions are 
 
 <br>
 
-## ⭐ Star history
-
-<a href="https://star-history.com/#heyixuan2/bambu-studio-ai&Date">
-  <img src="https://api.star-history.com/svg?repos=heyixuan2/bambu-studio-ai&type=Date" alt="Star History Chart" width="640">
-</a>
-
-<br>
-
-## 🗂️ Version history
+## Version history
 
 | Version | Highlights |
 |---|---|
@@ -388,7 +380,7 @@ prints from camera snapshots, and testing on Windows and Linux. Conventions are 
 | **0.22.0** | Colorize v4 (HSV + CIELAB + vertex-color OBJ), Blender previews |
 | **0.20.0** | CLI slicing, auto-orient, Rodin provider, signed MQTT |
 
-## 📄 License
+## License
 
 MIT, see [LICENSE](LICENSE).
 
