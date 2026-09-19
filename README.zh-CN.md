@@ -273,17 +273,6 @@ python3 scripts/monitor.py --wait-start 30 --interval 300
 
 ---
 
-## 版本历史
-
-| 版本 | 要点 |
-|---|---|
-| **2.0.0** | 通用 Agent Skill：符合规范的 `SKILL.md`，设置移至 `~/.bambu-studio-ai/`，`configure.py`，跨平台打开 Bambu Studio，`monitor.py --wait-start`，修复配置读取与云登录 bug，修正 L 型支架与外壳盖几何，Python 3.10+ |
-| **1.0.2** | 支持 X2D，CI |
-| **1.0.0** | 全流程 `--height`，参数化建模，测试套件 |
-| **0.23.0** | 多色模块化，公共 `common.py` |
-| **0.22.0** | 多色 v4（HSV + CIELAB + 顶点色 OBJ），Blender 预览 |
-| **0.20.0** | 命令行切片、自动摆放、Rodin 服务商、签名 MQTT |
-
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。

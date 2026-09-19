@@ -316,17 +316,6 @@ python3 scripts/monitor.py --wait-start 30 --interval 300
 
 <br>
 
-## Version History
-
-| Version | Highlights |
-|---|---|
-| **2.0.0** | Works with any agent: spec-compliant `SKILL.md`, settings in `~/.bambu-studio-ai/`, `configure.py`, cross-platform Bambu Studio handoff, `monitor.py --wait-start`, config and cloud-login fixes, real L-bracket and enclosure-lid geometry, Python 3.10+ |
-| **1.0.2** | X2D support, CI |
-| **1.0.0** | `--height` across the pipeline, parametric modeling, test suite |
-| **0.23.0** | Multi-color as a package, shared `common.py` |
-| **0.22.0** | Colorize v4 (HSV + CIELAB + vertex-color OBJ), Blender previews |
-| **0.20.0** | CLI slicing, auto-orient, Rodin provider, signed MQTT |
-
 ## License
 
 MIT, see [LICENSE](LICENSE).
