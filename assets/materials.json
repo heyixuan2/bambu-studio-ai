@@ -762,8 +762,8 @@
     }
   },
   "unsupported": {
-    "PEEK": "PEEK needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either and Bambu Studio has no profile for it.",
-    "PEI": "PEI needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either and Bambu Studio has no profile for it.",
-    "PPSU": "PPSU needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either and Bambu Studio has no profile for it."
+    "PEEK": "Needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either, and Bambu Studio has no profile for it.",
+    "PEI": "Needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either, and Bambu Studio has no profile for it.",
+    "PPSU": "Needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches either, and Bambu Studio has no profile for it."
   }
 }

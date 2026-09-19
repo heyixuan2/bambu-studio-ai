@@ -194,7 +194,9 @@ def material(name: str) -> Material:
         return table[key]
     for bad, reason in unsupported.items():
         if normalize_name(bad) == normalize_name(name):
-            raise UnsupportedMaterialError(reason)
+            raise UnsupportedMaterialError(
+                f"{bad} can't be printed on a Bambu Lab printer: {reason}"
+            )
     raise UnknownHardwareError(f"Unknown material {name!r}. Known materials: {', '.join(table)}")
 
 

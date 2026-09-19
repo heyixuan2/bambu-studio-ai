@@ -63,11 +63,11 @@ MATERIALS = {
     "PPS-CF": (["Bambu PPS-CF"], [], "Brittle: can snap in the bent PTFE tube above the H2S toolhead."),
 }
 SOLUBLE_OVERRIDES = {"BVOH": True}
-UNSUPPORTED = {
-    name: f"{name} needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer "
-          "reaches either and Bambu Studio has no profile for it."
-    for name in ("PEEK", "PEI", "PPSU")
-}
+UNSUPPORTED = dict.fromkeys(
+    ("PEEK", "PEI", "PPSU"),
+    "Needs a nozzle hotter than 350 °C and a chamber far above 65 °C; no Bambu Lab printer reaches "
+    "either, and Bambu Studio has no profile for it.",
+)
 
 # Colour-table product line -> surface finish. A new line in Bambu Studio fails loudly
 # here so someone decides whether it may stand in for a plain opaque colour.
