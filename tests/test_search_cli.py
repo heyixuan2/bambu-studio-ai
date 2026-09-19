@@ -62,3 +62,28 @@ class TestJSONEmpty:
         r = _run(["xyznonexistent_query_42", "--json", "--limit", "1"])
         data = json.loads(r.stdout)
         assert isinstance(data, list)
+
+
+class TestWarningsStayOffStdout:
+    def test_backend_warnings_go_to_stderr(self, monkeypatch, capsys):
+        """--json output must stay parseable when a site query fails (network flake)."""
+        import search
+
+        class Boom:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def text(self, *a, **k):
+                raise RuntimeError("No results found.")
+
+        import types
+        fake = types.ModuleType("ddgs")
+        fake.DDGS = Boom
+        monkeypatch.setitem(sys.modules, "ddgs", fake)
+        search._web_search("anything", site="makerworld.com", limit=1)
+        out = capsys.readouterr()
+        assert out.out == ""
+        assert "Search failed" in out.err

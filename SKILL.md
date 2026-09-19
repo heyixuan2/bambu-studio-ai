@@ -11,7 +11,7 @@ description: >-
   or print progress, even if they don't say "Bambu".
 license: MIT
 compatibility: >-
-  Python 3.9+ with requirements.txt installed. Optional: Blender 4+ (previews, multi-color),
+  Python 3.10+ with requirements.txt installed. Optional: Blender 4+ (previews, multi-color),
   Bambu Studio, ffmpeg (camera), OrcaSlicer (CLI slicing). Printer control needs LAN or Bambu cloud
   access; AI generation needs a provider API key. macOS, Linux, Windows.
 metadata:
