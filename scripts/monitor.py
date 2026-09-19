@@ -14,24 +14,29 @@ Usage:
   python3 scripts/monitor.py --status            # Show log (offline, no printer needed)
   python3 scripts/monitor.py --interval 60       # Custom interval
   python3 scripts/monitor.py --auto-pause        # Auto-pause on anomaly
+  python3 scripts/monitor.py --wait-start 30     # Wait up to 30 min for the user to start a print
+
+Output is one line per event (📢 NOTIFY: ...), line-buffered, so an agent can run this
+in the background and relay events. Snapshots/logs go to <output dir>/snapshots/.
 """
 
 import os, sys, time, argparse, subprocess, json
 from datetime import datetime, timedelta
 
 # ─── Config ───
-from common import SKILL_DIR as _skill_dir, load_config
+from common import load_config, get_config, output_dir, desktop_notify, HIGH_TEMP_PRINTERS
 _cfg = load_config(include_secrets=True)
 
-BAMBU_IP = os.environ.get("BAMBU_IP", _cfg.get("printer_ip", ""))
-BAMBU_ACCESS_CODE = os.environ.get("BAMBU_ACCESS_CODE", _cfg.get("access_code", ""))
-SNAPSHOT_DIR = os.path.join(_skill_dir, "output", "snapshots")
+BAMBU_IP = get_config("BAMBU_IP", _cfg, "printer_ip")
+BAMBU_ACCESS_CODE = get_config("BAMBU_ACCESS_CODE", _cfg, "access_code")
+SNAPSHOT_DIR = output_dir("snapshots", create=False)
 LOG_FILE = os.path.join(SNAPSHOT_DIR, "monitor-log.json")
 STATE_FILE = os.path.join(SNAPSHOT_DIR, "monitor-state.json")
 
 # Thresholds
 STALL_MINUTES = 10       # Alert if progress unchanged for this long
-TEMP_MAX_NOZZLE = 280    # °C — above this is dangerous
+# °C — above the printer's rated maximum (300 °C, or 350 °C on H2C/H2D) is an anomaly
+TEMP_MAX_NOZZLE = 355 if get_config("BAMBU_MODEL", _cfg, "model") in HIGH_TEMP_PRINTERS else 305
 TEMP_MAX_BED = 120       # °C
 PROGRESS_REPORT_MIN = 30 # Minutes between progress reports
 
@@ -80,9 +85,9 @@ def get_status_dict():
     script = os.path.join(os.path.dirname(__file__), "bambu.py")
     try:
         r = subprocess.run(
-            ["python3", script, "status", "--json"],
+            [sys.executable, script, "status", "--json"],
             capture_output=True, text=True, timeout=30,
-            env={**os.environ, "BAMBU_MODE": os.environ.get("BAMBU_MODE", "local")})
+            env={**os.environ, "BAMBU_MODE": get_config("BAMBU_MODE", _cfg, "mode", "local")})
         if r.returncode == 0:
             return json.loads(r.stdout)
     except Exception:
@@ -90,33 +95,20 @@ def get_status_dict():
     # Fallback: parse text output
     try:
         r = subprocess.run(
-            ["python3", script, "status"],
+            [sys.executable, script, "status"],
             capture_output=True, text=True, timeout=30,
-            env={**os.environ, "BAMBU_MODE": os.environ.get("BAMBU_MODE", "local")})
+            env={**os.environ, "BAMBU_MODE": get_config("BAMBU_MODE", _cfg, "mode", "local")})
+        if r.returncode != 0:
+            return {"error": (r.stdout + r.stderr).strip()[-300:] or f"bambu.py exited {r.returncode}"}
         return {"raw": r.stdout.strip()}
     except Exception as e:
         return {"error": str(e)}
 
 def notify(title, message, snapshot=None):
-    """Send notification via bambu.py notify()."""
-    script = os.path.join(os.path.dirname(__file__), "bambu.py")
-    try:
-        cmd = ["python3", script, "notify", "--title", title, "--message", message]
-        if snapshot:
-            cmd.extend(["--image", snapshot])
-        subprocess.run(cmd, capture_output=True, timeout=15)
-    except Exception:
-        pass
-    # Also try macOS notification as fallback
-    try:
-        msg_safe = message.replace("\\", "\\\\").replace('"', '\\"')
-        title_safe = title.replace("\\", "\\\\").replace('"', '\\"')
-        subprocess.run(["osascript", "-e",
-            f'display notification "{msg_safe}" with title "🖨️ {title_safe}"'],
-            capture_output=True, timeout=5)
-    except Exception:
-        pass
-    print(f"📢 NOTIFY: {title} — {message}")
+    """Print an event line (for the agent reading stdout) and show a desktop notification."""
+    one_line = " | ".join(part.strip() for part in message.splitlines() if part.strip())
+    print(f"📢 NOTIFY: {title} — {one_line}" + (f" [snapshot: {snapshot}]" if snapshot else ""), flush=True)
+    desktop_notify(title, one_line)
 
 def log_event(event_type, details, snapshot=None):
     """Append to monitor log (keep last 200)."""
@@ -144,7 +136,7 @@ def pause_print():
     """Send pause command."""
     script = os.path.join(os.path.dirname(__file__), "bambu.py")
     try:
-        r = subprocess.run(["python3", script, "pause"],
+        r = subprocess.run([sys.executable, script, "pause"],
                           capture_output=True, text=True, timeout=30)
         return r.returncode == 0
     except Exception:
@@ -220,7 +212,7 @@ def monitor_once(auto_pause=False):
     # Handle raw/error responses
     if "error" in status:
         print(f"❌ Status error: {status['error']}")
-        return {"printing": False, "status": status}
+        return {"printing": False, "error": True, "status": status}
     
     if "raw" in status:
         raw = status["raw"]
@@ -325,24 +317,35 @@ def monitor_once(auto_pause=False):
     
     return {"printing": True, "status": status, "alerts": alerts, "snapshot": snapshot}
 
-def monitor_loop(interval=120, auto_pause=False):
-    """Continuous monitoring loop."""
+def monitor_loop(interval=120, auto_pause=False, wait_start_min=0):
+    """Continuous monitoring loop.
+
+    wait_start_min > 0: if nothing is printing yet, keep polling (every <=30s) for up to
+    that many minutes for a print to start — e.g. right after handing a model to
+    Bambu Studio — instead of exiting immediately.
+    """
     print(f"🔍 Print monitor started")
     print(f"   Check interval: {interval}s")
     print(f"   Auto-pause: {'Yes' if auto_pause else 'No'}")
     print(f"   Progress report: Every {PROGRESS_REPORT_MIN} min")
     print(f"   Anomaly alert: Realtime")
     print(f"   Snapshot dir: {SNAPSHOT_DIR}")
+    if wait_start_min:
+        print(f"   Waiting up to {wait_start_min} min for a print to start")
     print()
     
     # Reset state for new session
     state = _load_state()
     state["last_report_time"] = None  # Force first report
+    if wait_start_min:
+        state["print_started"] = None  # Stale state from an old run would fake a "complete" event
     _save_state(state)
     
     cycle = 0
     consecutive_failures = 0
     max_failures = 5
+    seen_printing = False
+    wait_deadline = time.time() + wait_start_min * 60 if wait_start_min else 0
     
     while True:
         cycle += 1
@@ -350,9 +353,22 @@ def monitor_loop(interval=120, auto_pause=False):
         
         try:
             result = monitor_once(auto_pause)
+            if result.get("error"):
+                raise RuntimeError("printer status unavailable")
             consecutive_failures = 0
             
-            if not result.get("printing"):
+            if result.get("printing"):
+                if not seen_printing and wait_start_min:
+                    notify("Print Started 🖨️", "Print detected — monitoring started")
+                seen_printing = True
+            elif not seen_printing and time.time() < wait_deadline:
+                print("⏳ No print running yet — waiting for it to start...")
+                time.sleep(min(interval, 30))
+                continue
+            elif not seen_printing and wait_start_min:
+                print(f"⌛ No print started within {wait_start_min} min, monitor stopped.")
+                break
+            else:
                 print("🏁 Print complete or idle, monitor stopped.")
                 break
         except Exception as e:
@@ -367,16 +383,24 @@ def monitor_loop(interval=120, auto_pause=False):
 def main():
     parser = argparse.ArgumentParser(
         description="Bambu Lab Print Monitor — smart anomaly detection",
-        epilog="Agent should ASK user before starting monitor.")
+        epilog="Ask the user before starting the monitor or enabling --auto-pause.")
     parser.add_argument("--interval", type=int, default=120,
                        help="Check interval in seconds (default: 120)")
     parser.add_argument("--auto-pause", action="store_true",
                        help="Auto-pause on critical anomaly")
     parser.add_argument("--once", action="store_true",
                        help="Single check then exit")
+    parser.add_argument("--wait-start", type=int, default=0, metavar="MIN",
+                       help="If idle, wait up to MIN minutes for a print to start, then monitor it")
     parser.add_argument("--status", action="store_true",
                        help="Show log summary (offline, no printer needed)")
     args = parser.parse_args()
+
+    # Line-buffer stdout so agents tailing a background run see each event immediately.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     
     if args.status:
         if os.path.exists(LOG_FILE):
@@ -398,15 +422,16 @@ def main():
         return
     
     if not BAMBU_IP or not BAMBU_ACCESS_CODE:
-        print("❌ Monitor requires local mode:")
-        print("   Set printer_ip and access_code in config.json")
+        print("❌ Monitor requires LAN mode settings:")
+        print("   python3 scripts/configure.py set printer_ip <ip>")
+        print("   python3 scripts/configure.py secret access_code")
         print("   Or: export BAMBU_IP='x.x.x.x' BAMBU_ACCESS_CODE='xxxxxxxx'")
         sys.exit(1)
     
     if args.once:
         monitor_once(args.auto_pause)
     else:
-        monitor_loop(args.interval, args.auto_pause)
+        monitor_loop(args.interval, args.auto_pause, wait_start_min=args.wait_start)
 
 if __name__ == "__main__":
     try:

@@ -78,6 +78,34 @@ class TestBracket:
         assert os.path.exists(out)
         assert "Watertight: YES" in r.stdout
 
+    # Geometry checks: v1.0 produced a flat plate (base arm hidden inside the upright)
+    # with the holes placed outside the part — existence/watertight checks didn't notice.
+    @staticmethod
+    def _mesh(tmp_path, *extra):
+        import trimesh
+        out = str(tmp_path / "b.stl")
+        _run(["bracket", "--width", "30", "--height", "40", "--thickness", "3", *extra, "-o", out])
+        return trimesh.load(out)
+
+    def test_is_an_l_shape(self, tmp_path):
+        m = self._mesh(tmp_path)
+        assert m.extents == pytest.approx([30, 40, 40], abs=0.01)   # depth defaults to height
+        assert m.volume == pytest.approx(30 * 40 * 3 + 30 * 3 * 37, rel=1e-3)
+
+    def test_depth_option(self, tmp_path):
+        m = self._mesh(tmp_path, "--depth", "25")
+        assert m.extents == pytest.approx([30, 25, 40], abs=0.01)
+
+    def test_holes_go_through_both_arms(self, tmp_path):
+        import math
+        solid = self._mesh(tmp_path).volume
+        holed = self._mesh(tmp_path, "--hole-diameter", "3.2").volume
+        two_holes = 2 * math.pi * 1.6 ** 2 * 3
+        assert solid - holed == pytest.approx(two_holes, rel=0.05)
+
+    def test_fillet_adds_material(self, tmp_path):
+        assert self._mesh(tmp_path, "--fillet", "3").volume > self._mesh(tmp_path).volume
+
 
 class TestPlateWithHoles:
     def test_four_holes(self, tmp_path):
@@ -99,6 +127,17 @@ class TestEnclosure:
         ])
         assert os.path.exists(out)
         assert "Watertight: YES" in r.stdout
+
+    def test_lid_sits_on_the_build_plate(self, tmp_path):
+        """v1.0 placed the lid 2 mm above the body, so it would print in mid-air."""
+        import trimesh
+        out = str(tmp_path / "enc.stl")
+        _run(["enclosure", "--width", "60", "--depth", "40", "--height", "30",
+              "--wall", "2", "--lid", "-o", out])
+        parts = trimesh.load(out).split(only_watertight=False)
+        assert len(parts) == 2
+        assert all(p.bounds[0][2] == pytest.approx(0, abs=1e-6) for p in parts)
+        assert max(p.extents[2] for p in parts) == pytest.approx(30, abs=0.01)
 
 
 class TestCSG:

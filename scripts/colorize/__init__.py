@@ -49,7 +49,7 @@ def colorize(input_path, output_path, max_colors=8, height=0, subdivide=1,
     """
     blender = find_blender()
     if not blender:
-        print("❌ Blender not found. Install: brew install --cask blender")
+        print("❌ Blender not found. Install Blender 4.0+ from https://www.blender.org/download/ (macOS: brew install --cask blender)")
         return None
 
     if not os.path.exists(input_path):

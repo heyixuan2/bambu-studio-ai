@@ -30,13 +30,13 @@ htmlcov/
 
 # Project outputs
 output/
+bambu-output/
 *.log
 
 # Agent / skill infrastructure
 .agents/
 skills-lock.json
 
-# Certificates
-references/bambu_connect_cert.pem
-references/bambu_connect_key.pem
+# Certificates (v1.x location; v2 keeps them in ~/.bambu-studio-ai/)
+*.pem
 .cursor/

@@ -9,7 +9,10 @@ Usage: python3 scripts/doctor.py
 import sys, os, importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import find_blender, find_orcaslicer, BLENDER_PATHS, ORCASLICER_PATHS
+from common import (
+    find_blender, find_orcaslicer, find_bambu_studio, BLENDER_PATHS, ORCASLICER_PATHS,
+    SKILL_DIR, home_dir, user_file, output_dir, __version__,
+)
 
 REQUIRED = {
     "requests": {"min": "2.31", "import": "requests"},
@@ -23,7 +26,7 @@ REQUIRED = {
 
 OPTIONAL = {
     "bambulabs-api": {"import": "bambulabs_api", "purpose": "LAN printer control"},
-    "bambu-lab-cloud-api": {"import": "bambu_lab_cloud_api", "purpose": "Cloud printer control"},
+    "bambu-lab-cloud-api": {"import": "bambulab", "purpose": "Cloud printer control"},
     "scikit-learn": {"import": "sklearn", "purpose": "Better colorize k-means clustering"},
     "paho-mqtt": {"import": "paho.mqtt", "purpose": "LAN MQTT printer control"},
     "manifold3d": {"import": "manifold3d", "purpose": "Parametric modeling (functional parts)"},
@@ -75,8 +78,8 @@ def check_cloud_api_symbols():
     """Check bambu-lab-cloud-api has required classes."""
     issues = []
     try:
-        from bambu_lab_cloud_api import BambuClient
-        from bambu_lab_cloud_api import BambuAuthenticator
+        from bambulab import BambuClient
+        from bambulab import BambuAuthenticator
         c_methods = dir(BambuClient)
         for method in ["get_devices"]:
             if method not in c_methods:
@@ -103,7 +106,8 @@ def check_search_backend():
             return False, None
 
 def main():
-    print("🩺 Bambu Studio AI — Dependency Doctor\n")
+    print(f"🩺 Bambu Studio AI — Dependency Doctor (v{__version__})\n")
+    print(f"Python: {sys.executable} ({sys.version.split()[0]})\n")
     all_ok = True
     
     print("Required packages:")
@@ -120,19 +124,20 @@ def main():
         print(f"  {name:20s} {status}")
     
 
-    # Check pygltflib (fast texture extraction)
-    try:
-        import pygltflib
-        print("  pygltflib: ✅")
-    except ImportError:
-        print("  pygltflib: ❌ (pip3 install pygltflib — fast texture extraction)")
+    print("\nBambu Studio (model review + slicing):")
+    bs_cmd = find_bambu_studio()
+    if bs_cmd:
+        print(f"  ✅ {' '.join(bs_cmd)}")
+    else:
+        print("  ⚠️ Not found — install from https://bambulab.com/en/download/studio")
+
     print("\nBlender:")
     ok, ver, path = check_blender()
     if ok:
         print(f"  ✅ {ver}")
         print(f"     Path: {path}")
     else:
-        print("  ⚠️ Not found (needed for multi-color)")
+        print("  ⚠️ Not found (needed for preview.py and colorize) — https://www.blender.org/download/")
 
     print("\nOrcaSlicer (for slicing):")
     orca_path = find_orcaslicer()
@@ -150,7 +155,7 @@ def main():
         print(f"  ✅ ffmpeg found: {ffmpeg_path}")
     else:
         print("  ⚠️ ffmpeg not found (needed for camera snapshots in LAN mode)")
-        print("     Install: brew install ffmpeg (macOS) / apt install ffmpeg (Linux)")
+        print("     Install: brew install ffmpeg (macOS) / apt install ffmpeg (Linux) / winget install ffmpeg (Windows)")
 
     print("\nAPI compatibility (LAN):")
     issues = check_api_symbols()
@@ -168,13 +173,6 @@ def main():
     else:
         print("  ✅ bambu-lab-cloud-api symbols verified")
 
-    print("\nPreview rendering:")
-    blender_ok2, blender_ver2, _ = check_blender()
-    if blender_ok2:
-        print(f"  ✅ Blender (required for preview + colorize)")
-    else:
-        print("  ❌ Blender not found (brew install --cask blender) — needed for preview + colorize")
-
 
     print("\nSearch backend:")
     search_ok, search_pkg = check_search_backend()
@@ -183,21 +181,27 @@ def main():
     else:
         print("  ⚠️ Not found — install: pip install ddgs")
     
-    print("\nConfig files:")
-    skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print(f"\nConfig ({home_dir()}):")
+    legacy_in_use = False
     for fname in ["config.json", ".secrets.json"]:
-        path = os.path.join(skill_dir, fname)
-        if os.path.exists(path):
-            print(f"  ✅ {fname}")
+        path = user_file(fname)
+        if not os.path.exists(path):
+            print(f"  ℹ️ {fname} — not created yet (run: python3 scripts/configure.py show)")
+        elif path.startswith(SKILL_DIR + os.sep):
+            legacy_in_use = True
+            print(f"  ⚠️ {fname} — found in the skill folder (v1.x location): {path}")
         else:
-            print(f"  ℹ️ {fname} — not yet created (will be set up during first use)")
+            print(f"  ✅ {fname}")
+    if legacy_in_use:
+        print("     Skill updates may overwrite it. Move it: python3 scripts/configure.py migrate")
+    print(f"\nOutput dir: {output_dir(create=False)}")
     
     print()
     if all_ok:
         print("✅ All checks passed — ready to use!")
     else:
         print("❌ Some required dependencies missing. Run:")
-        print("   pip install -r requirements.txt")
+        print(f"   {sys.executable} -m pip install -r {os.path.join(SKILL_DIR, 'requirements.txt')}")
     
     return 0 if all_ok else 1
 

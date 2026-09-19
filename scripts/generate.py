@@ -64,15 +64,14 @@ def _convert_model(input_path, target_format):
 
 # ─── Config ──────────────────────────────────────────────────────────
 
-from common import SKILL_DIR as _skill_dir, BUILD_VOLUMES, load_config, MAX_POLL_ITERATIONS
+from common import BUILD_VOLUMES, load_config, output_dir, MAX_POLL_ITERATIONS
 
 _cfg = load_config(include_secrets=True)
 
 PROVIDER = os.environ.get("BAMBU_3D_PROVIDER", _cfg.get("3d_provider", "meshy")).lower()
 API_KEY = os.environ.get("BAMBU_3D_API_KEY", 
     _cfg.get(f"{PROVIDER}_api_key", _cfg.get("3d_api_key", "")))
-OUTPUT_DIR = os.path.join(_skill_dir, "output", "models")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_DIR = output_dir("models", create=False)  # created on first write
 PRINTER_MODEL = os.environ.get("BAMBU_MODEL", _cfg.get("model", ""))
 
 def get_max_size():
@@ -237,6 +236,7 @@ def _download_url_image(url):
             suffix = ".png"
         elif "webp" in content_type:
             suffix = ".webp"
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir=OUTPUT_DIR)
         tmp.write(r.content)
         tmp.close()
