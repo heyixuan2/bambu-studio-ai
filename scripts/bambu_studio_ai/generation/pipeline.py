@@ -30,13 +30,6 @@ if TYPE_CHECKING:
         TaskStatus,
     )
 
-GLB_AXIS_NOTE = (
-    "Bambu Studio 2.7 reads GLB coordinates as-is with Z up and does not convert glTF's "
-    "Y-up axis, so the model may import lying on its back; the Z extent above is its "
-    "height as imported."
-)
-
-
 def _ignore(_message: str) -> None:
     """Default ``notify``: drop progress messages."""
 
@@ -180,6 +173,9 @@ class Generator:
         fetched = self.provider.fetch(ref, output_format, self.output_dir)
         path, got = fetched.path, fetched.output_format
         result = GenerationResult(ref.token, ref.provider, TaskState.SUCCEEDED.value)
+        if got == "glb":
+            # Providers write glTF's Y-up; Bambu Studio reads Z as up and would lay it down.
+            scale.stand_glb_upright(path)
         if got != output_format and got == "glb":
             converted = path.with_suffix(f".{output_format}")
             scale.convert_glb_locally(path, converted, output_format)
@@ -206,8 +202,6 @@ class Generator:
                 f"the model is only {max(extents):.2f} mm across (AI providers use arbitrary "
                 "units); rerun download with --height MM to size it"
             )
-        if got == "glb":
-            result.warnings.append(GLB_AXIS_NOTE)
         result.output_file = str(path)
         result.output_format = got
         result.extents_mm = extents

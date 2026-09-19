@@ -48,6 +48,13 @@ def measure(path: Path, output_format: OutputFormat) -> Extents:
     return _extents(_load_mesh(path))
 
 
+def stand_glb_upright(path: Path) -> None:
+    """Rewrite a provider GLB so it stands upright in Bambu Studio (see ``glb.stand_upright``)."""
+    model = glb.read_glb(path)
+    if glb.stand_upright(model):
+        glb.write_glb(path, model)
+
+
 def scale_to_height(path: Path, output_format: OutputFormat, height_mm: float) -> Extents:
     """Rescale the file in place so its Z extent is ``height_mm``; return the new extents.
 

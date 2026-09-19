@@ -63,7 +63,7 @@ def test_wait_json_reports_the_file(fake, capsys):
     assert data["status"] == "succeeded"
     assert data["provider"] == "meshy"
     assert Path(data["output_file"]).is_file()
-    assert data["extents_mm"] == [40.0, 20.0, 60.0]
+    assert data["extents_mm"] == [120.0, 180.0, 60.0]  # raw 2×1×3 stood up to 2×3×1, then Z → 60
     assert data["has_texture"] is True
     assert data["format"] == "glb"
     assert f"➡️ Use this file: {data['output_file']}" in captured.err

@@ -11,7 +11,7 @@ from bambu_studio_ai.generation.ledger import FollowUpLedger
 from bambu_studio_ai.generation.pipeline import Generator
 from bambu_studio_ai.generation.providers.base import GenerationRequest, TaskRef, TaskState
 from bambu_studio_ai.generation.providers.tripo import TripoProvider, parse_task
-from generation_fakes import FakeClock, FakeSession, client, fixture, image_bytes, make_glb
+from generation_fakes import assert_same_model_stood_up, FakeClock, FakeSession, client, fixture, image_bytes, make_glb
 
 V3 = "https://openapi.tripo3d.ai/v3"
 TASK = fixture("tripo/create_task")[1]["data"]["task_id"]
@@ -43,7 +43,7 @@ def test_text_to_model_uses_v3_and_the_current_model(tmp_path):
     assert session.calls[0].kwargs["headers"] == {"Authorization": "Bearer tsk_secret"}
     assert ref.token == f"tripo:task:{TASK}"
     assert result.status == "succeeded"
-    assert Path(result.output_file).read_bytes() == model
+    assert_same_model_stood_up(result.output_file, model)
     assert result.has_texture is True
 
 

@@ -13,7 +13,7 @@ from bambu_studio_ai.generation.ledger import FollowUpLedger
 from bambu_studio_ai.generation.pipeline import Generator
 from bambu_studio_ai.generation.providers.base import GenerationRequest, TaskRef, TaskState
 from bambu_studio_ai.generation.providers.meshy import MeshyProvider, parse_task
-from generation_fakes import FakeClock, FakeSession, client, fixture, image_bytes, make_glb
+from generation_fakes import assert_same_model_stood_up, FakeClock, FakeSession, client, fixture, image_bytes, make_glb
 
 T2 = "https://api.meshy.ai/openapi/v2/text-to-3d"
 I2 = "https://api.meshy.ai/openapi/v1/image-to-3d"
@@ -56,8 +56,8 @@ def test_text_runs_preview_then_refine_and_keeps_the_textured_glb(tmp_path):
     assert result.status == "succeeded"
     assert result.task_id == f"meshy:refine:{REFINE}"
     assert result.has_texture is True
-    assert result.extents_mm == pytest.approx((1.5, 1.0, 2.0))
-    assert Path(result.output_file).read_bytes() == model  # untouched without --height
+    assert result.extents_mm == pytest.approx((1.5, 2.0, 1.0))  # stood up: glTF's Y is now Z
+    assert_same_model_stood_up(result.output_file, model)
 
 
 def test_resuming_after_the_refine_started_does_not_pay_again(tmp_path):
@@ -154,7 +154,7 @@ def test_image_task_is_polled_on_its_own_route_and_downloaded(tmp_path):
     assert result.task_id == f"meshy:image:{IMAGE}"
     assert session.gets(f"/v1/image-to-3d/{IMAGE}")  # not the text-to-3d route
     assert session.gets("/v2/text-to-3d") == []
-    assert Path(result.output_file).read_bytes() == model
+    assert_same_model_stood_up(result.output_file, model)
 
 
 def test_image_url_is_passed_through(tmp_path):

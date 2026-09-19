@@ -11,7 +11,7 @@ from bambu_studio_ai.generation.pipeline import Generator
 from bambu_studio_ai.generation.providers import ProviderSettings, create_provider
 from bambu_studio_ai.generation.providers.base import GenerationRequest, TaskRef, TaskState
 from bambu_studio_ai.generation.providers.rodin import RodinProvider, parse_file_list, parse_status
-from generation_fakes import FakeClock, FakeSession, client, fixture, image_bytes, make_glb
+from generation_fakes import assert_same_model_stood_up, FakeClock, FakeSession, client, fixture, image_bytes, make_glb
 
 API = "https://api.hyper3d.com/api/v2"
 SUBMIT = fixture("rodin/submit")[1]
@@ -47,7 +47,7 @@ def test_text_submits_gen_2_5_explicitly_and_resumes_from_one_token(tmp_path):
     assert all(call.json == {"subscription_key": KEY} for call in status_calls)
     assert session.posts("/download")[0].json == {"task_uuid": UUID}
     assert result.status == "succeeded"
-    assert Path(result.output_file).read_bytes() == model
+    assert_same_model_stood_up(result.output_file, model)
 
 
 def test_configured_tier_and_stl_output(tmp_path):

@@ -34,6 +34,7 @@ re-check the linked pages before quoting them to a user.
 - **Model sizes are arbitrary.** None of the three returns millimetres by default; pass
   `--height MM`. Bambu Studio 2.7 reads GLB coordinates as millimetres with Z up and does not
   convert glTF's Y-up axis (checked in its source and with `bambu-studio --export-stl`), so a
-  generated model can import lying on its back.
+  provider's model would import lying on its back. `generate.py` therefore wraps every
+  downloaded GLB in one root node that turns it Z-up; meshes and textures are untouched.
 - **Not supported:** Printpal and 3D AI Studio (removed: the old code called routes that don't
   exist). fal.ai is planned as the next provider.

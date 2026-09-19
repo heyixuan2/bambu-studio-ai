@@ -4,8 +4,8 @@ Measurements follow what Bambu Studio 2.7 does on import (verified against its s
 ``src/libslic3r/Format/AssimpImport.cpp``, and by exporting a test GLB through
 ``bambu-studio --export-stl``): node transforms are baked into the vertices, coordinates
 are read as millimetres, and the file's Z axis is the vertical. glTF's own convention
-is Y-up, and Bambu Studio does not convert it, so a provider's model can import lying
-on its back; its Z extent is still what Bambu Studio shows as the height.
+is Y-up and Bambu Studio does not convert it, so a provider's model would import lying on
+its back: :func:`stand_upright` fixes that with one extra root node.
 
 Rescaling multiplies the vertex positions and every node translation by the same factor,
 which scales the whole scene uniformly and leaves the node hierarchy, UVs, materials and
@@ -55,12 +55,20 @@ def read_glb(path: Path) -> Glb:
     Raises:
         InputError: the file is not a version-2 GLB.
     """
-    data = path.read_bytes()
+    return read_glb_bytes(path.read_bytes(), name=path.name)
+
+
+def read_glb_bytes(data: bytes, name: str = "the model") -> Glb:
+    """Parse GLB bytes.
+
+    Raises:
+        InputError: the data is not a version-2 GLB.
+    """
     if len(data) < 20 or data[:4] != _MAGIC:  # noqa: PLR2004  (12-byte header + chunk header)
-        raise InputError(f"{path.name} is not a GLB file")
+        raise InputError(f"{name} is not a GLB file")
     (version,) = struct.unpack_from("<I", data, 4)
     if version != 2:  # noqa: PLR2004
-        raise InputError(f"{path.name} is glTF version {version}; only version 2 is supported")
+        raise InputError(f"{name} is glTF version {version}; only version 2 is supported")
     offset, document, binary = 12, None, bytearray()
     while offset + 8 <= len(data):
         length, kind = struct.unpack_from("<II", data, offset)
@@ -71,7 +79,7 @@ def read_glb(path: Path) -> Glb:
             binary = bytearray(chunk)
         offset += 8 + length
     if document is None:
-        raise InputError(f"{path.name} has no glTF JSON chunk")
+        raise InputError(f"{name} has no glTF JSON chunk")
     return Glb(document, binary)
 
 
@@ -138,6 +146,27 @@ def scale_in_place(glb: Glb, factor: float) -> None:
                 node["matrix"][i] *= factor
         if "translation" in node:
             node["translation"] = [value * factor for value in node["translation"]]
+
+
+UPRIGHT_NODE = "bambu-studio-ai: Y-up to Z-up"
+# +90° about X as a glTF quaternion (x, y, z, w): glTF's up (+Y) becomes Bambu Studio's up (+Z).
+_Y_UP_TO_Z_UP = [0.7071067811865476, 0.0, 0.0, 0.7071067811865476]
+
+
+def stand_upright(glb: Glb) -> bool:
+    """Rotate every scene from glTF's Y-up to Z-up by wrapping it in one new root node.
+
+    Meshes, materials and textures are untouched; Bambu Studio bakes node transforms into
+    the vertices on import. Returns False if the file was already turned (idempotent).
+    """
+    nodes: list[Json] = glb.document.setdefault("nodes", [])
+    if any(node.get("name") == UPRIGHT_NODE for node in nodes):
+        return False
+    for scene in glb.document.get("scenes", []):
+        roots = cast("list[int]", scene.get("nodes", []))
+        nodes.append({"name": UPRIGHT_NODE, "rotation": list(_Y_UP_TO_Z_UP), "children": roots})
+        scene["nodes"] = [len(nodes) - 1]
+    return True
 
 
 def has_texture(glb: Glb) -> bool:

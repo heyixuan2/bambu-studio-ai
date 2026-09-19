@@ -92,3 +92,18 @@ def test_non_glb_bytes_are_rejected(tmp_path):
     path.write_bytes(b"<html>not a model</html>")
     with pytest.raises(InputError, match="not a GLB"):
         scale.measure(path, "glb")
+
+
+def test_provider_glb_is_stood_up_once(tmp_path):
+    """glTF is Y-up; Bambu Studio reads Z as up, so a tall figure would import lying down."""
+    from bambu_studio_ai.generation import glb
+
+    path = tmp_path / "figure.glb"
+    make_glb(path, (10.0, 40.0, 10.0))  # tall along glTF's Y (up)
+    scale.stand_glb_upright(path)
+    assert scale.measure(path, "glb") == pytest.approx((10.0, 10.0, 40.0))  # now tall along Z
+    once = path.read_bytes()
+    scale.stand_glb_upright(path)  # idempotent: a resumed download doesn't turn it again
+    assert path.read_bytes() == once
+    assert [n.get("name") for n in glb.read_glb(path).document["nodes"]].count(glb.UPRIGHT_NODE) == 1
+    assert scale.scale_to_height(path, "glb", 80.0) == pytest.approx((20.0, 20.0, 80.0))

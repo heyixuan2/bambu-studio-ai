@@ -41,7 +41,7 @@ def test_finished_task_is_downloaded_and_measured(tmp_path):
     result = generator.complete(generator.submit(GenerationRequest(prompt="a box")),
                                 output_format="glb", texture=True, height_mm=40, timeout_s=600)
     assert result.status == "succeeded"
-    assert result.extents_mm == pytest.approx((80.0, 80.0, 40.0))
+    assert result.extents_mm == pytest.approx((40.0, 20.0, 40.0))  # raw 2×2×1 stood up (2×1×2), Z scaled to 40
     assert result.has_texture is True
     assert len(provider.submitted) == 1
 

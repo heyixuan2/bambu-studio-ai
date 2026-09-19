@@ -203,3 +203,13 @@ class FakeProvider:
         path = Path(dest_dir) / f"{ref.primary_id}.glb"
         path.write_bytes(self.model_bytes)
         return Fetched(path, "glb")
+
+
+def assert_same_model_stood_up(path, original_bytes):
+    """The downloaded GLB is the provider's model, only wrapped in the Y-up → Z-up root node."""
+    from bambu_studio_ai.generation import glb
+
+    got, before = glb.read_glb(Path(path)), glb.read_glb_bytes(original_bytes)
+    assert bytes(got.binary) == bytes(before.binary)  # meshes and textures untouched
+    names = [node.get("name") for node in got.document["nodes"]]
+    assert names.count(glb.UPRIGHT_NODE) == 1
