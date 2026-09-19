@@ -31,3 +31,11 @@ addopts = "-m 'not network'"
 markers = [
     "network: talks to real third-party services (opt-in)",
 ]
+
+[tool.pyright]
+include = ["scripts/bambu_studio_ai"]
+strict = ["scripts/bambu_studio_ai"]
+pythonVersion = "3.10"
+venvPath = "."
+venv = ".venv"
+extraPaths = ["scripts"]

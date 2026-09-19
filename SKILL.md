@@ -306,4 +306,4 @@ Read these when the task calls for them:
 | [references/3d-prompt-guide.md](references/3d-prompt-guide.md) | Writing prompts for AI generation |
 | [references/manifold-examples.md](references/manifold-examples.md) | Parametric parts: tolerances, CSG JSON, design rules |
 | [references/security.md](references/security.md) | What the skill stores, which network endpoints it calls, and why |
-| [references/bambu-mqtt-protocol.md](references/bambu-mqtt-protocol.md), [bambu-cloud-api.md](references/bambu-cloud-api.md), [3d-generation-apis.md](references/3d-generation-apis.md) | Protocol and API details for debugging |
+| [references/bambu-mqtt-protocol.md](references/bambu-mqtt-protocol.md), [3d-generation-apis.md](references/3d-generation-apis.md) | Protocol and API details for debugging |

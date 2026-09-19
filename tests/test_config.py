@@ -52,10 +52,10 @@ def test_legacy_file_used_only_when_new_missing(home, tmp_path, monkeypatch):
 
 
 def test_configure_set_and_secret(home):
-    r = _configure("set", "model", "a1 mini", "mode", "LOCAL", "printer_ip", "10.0.0.5")
+    r = _configure("set", "model", "a1 mini", "printer_ip", "10.0.0.5")
     assert r.returncode == 0, r.stdout + r.stderr
     cfg = json.loads((home / "config.json").read_text())
-    assert cfg == {"model": "A1 Mini", "mode": "local", "printer_ip": "10.0.0.5"}
+    assert cfg == {"model": "A1 Mini", "printer_ip": "10.0.0.5"}
 
     r = _configure("secret", "access_code", stdin="12345678\n")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -77,12 +77,11 @@ def test_configure_rejects_bad_values(home):
 
 def test_bambu_reads_connection_from_config(home):
     """Regression: v1.x LocalBackend ignored config.json and only read env vars."""
-    _configure("set", "mode", "local", "printer_ip", "10.0.0.5", "serial", "SERIAL1")
+    _configure("set", "printer_ip", "10.0.0.5", "serial", "SERIAL1")
     _configure("secret", "access_code", stdin="abcd")
     code = (
-        "import bambu; "
-        "print(bambu._get_config('BAMBU_IP'), bambu._get_config('BAMBU_SERIAL'), "
-        "bambu._get_config('BAMBU_ACCESS_CODE'))"
+        "import bambu, common; s = bambu.printer_settings(common.load_config(include_secrets=True)); "
+        "print(s.ip, s.serial, s.access_code)"
     )
     r = subprocess.run([sys.executable, "-c", code], cwd=SCRIPTS, capture_output=True, text=True,
                        env=os.environ.copy())
@@ -92,6 +91,7 @@ def test_bambu_reads_connection_from_config(home):
 def test_env_overrides_config(home, monkeypatch):
     _configure("set", "printer_ip", "10.0.0.5")
     monkeypatch.setenv("BAMBU_IP", "10.9.9.9")
-    r = subprocess.run([sys.executable, "-c", "import bambu; print(bambu._get_config('BAMBU_IP'))"],
+    code = "import bambu, common; print(bambu.printer_settings(common.load_config(include_secrets=True)).ip)"
+    r = subprocess.run([sys.executable, "-c", code],
                        cwd=SCRIPTS, capture_output=True, text=True, env=os.environ.copy())
     assert r.stdout.strip() == "10.9.9.9"

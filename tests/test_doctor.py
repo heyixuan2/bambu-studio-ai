@@ -36,13 +36,13 @@ class TestDoctor:
         assert "Optional packages:" in r.stdout
         assert "manifold3d" in r.stdout
 
-    def test_checks_system_tools(self):
+    def test_checks_tools_and_packages(self):
         r = subprocess.run(
             [sys.executable, SCRIPT],
             capture_output=True, text=True, timeout=30,
         )
-        assert "System tools:" in r.stdout
-        assert "ffmpeg" in r.stdout
+        assert "Bambu Studio" in r.stdout
+        assert "networkx" in r.stdout
 
     def test_main_returns_int(self):
         """Test main() directly returns 0 or 1."""

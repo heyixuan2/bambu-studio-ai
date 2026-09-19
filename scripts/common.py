@@ -20,7 +20,7 @@ import threading
 # ~/.claude/skills, ~/.codex/skills, .agents/skills, ... and `npx skills update`
 # or `git pull` replaces it. User state therefore lives elsewhere:
 #
-#   home dir   (config, secrets, token cache, certs)
+#   home dir   (config, secrets)
 #              $BAMBU_STUDIO_AI_HOME  or  ~/.bambu-studio-ai/
 #   output dir (models, previews, snapshots, logs)
 #              $BAMBU_OUTPUT_DIR  or  config "output_dir"  or  ./bambu-output/
@@ -32,7 +32,7 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def home_dir():
-    """User-level directory for config, secrets, token cache and certificates."""
+    """User-level directory for config and secrets."""
     base = os.environ.get("BAMBU_STUDIO_AI_HOME") or os.path.join("~", ".bambu-studio-ai")
     return os.path.abspath(os.path.expanduser(base))
 
@@ -91,14 +91,10 @@ def use_utf8_stdio():
 
 # Env var → config/secrets key. Env vars always win over files.
 ENV_TO_CONFIG = {
-    "BAMBU_MODE": "mode",
     "BAMBU_MODEL": "model",
     "BAMBU_IP": "printer_ip",
     "BAMBU_SERIAL": "serial",
     "BAMBU_ACCESS_CODE": "access_code",
-    "BAMBU_EMAIL": "email",
-    "BAMBU_PASSWORD": "password",
-    "BAMBU_DEVICE_ID": "device_id",
     "BAMBU_3D_PROVIDER": "3d_provider",
     "BAMBU_3D_API_KEY": "3d_api_key",
 }
@@ -166,7 +162,6 @@ HIGH_TEMP_PRINTERS = {"H2C", "H2D"}
 # ─── Named Constants ─────────────────────────────────────────────
 
 MAX_FACES_NO_SIMPLIFY = 500_000
-TOKEN_TTL_SECONDS = 7_776_000  # 90 days
 MAX_POLL_ITERATIONS = 120
 MERGE_DOUBLES_DIST = 0.0001
 ACHROMATIC_BLOCK_DIST = 1e12

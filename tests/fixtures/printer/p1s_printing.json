@@ -1,0 +1,41 @@
+{
+  "print": {
+    "command": "push_status",
+    "msg": 0,
+    "sequence_id": "2021",
+    "gcode_state": "RUNNING",
+    "mc_percent": 42,
+    "mc_remaining_time": 71,
+    "layer_num": 57,
+    "total_layer_num": 136,
+    "subtask_name": "cat_figurine",
+    "gcode_file": "/data/Metadata/plate_1.gcode",
+    "nozzle_temper": 219.8,
+    "nozzle_target_temper": 220,
+    "bed_temper": 59.9,
+    "bed_target_temper": 60,
+    "chamber_temper": 31,
+    "spd_lvl": 2,
+    "spd_mag": 100,
+    "print_error": 0,
+    "hms": [{"attr": 50331904, "code": 131079}],
+    "lights_report": [{"node": "chamber_light", "mode": "off"}],
+    "ams": {
+      "tray_now": "1",
+      "ams": [
+        {
+          "id": "0",
+          "humidity": "4",
+          "temp": "27.1",
+          "tray": [
+            {"id": "0", "tray_type": "PLA", "tray_sub_brands": "PLA Basic", "tray_color": "FFFFFFFF", "remain": 80, "tray_info_idx": "GFA00"},
+            {"id": "1", "tray_type": "PLA", "tray_sub_brands": "PLA Basic", "tray_color": "FF6A13FF", "remain": 35, "tray_info_idx": "GFA00"},
+            {"id": "2"},
+            {"id": "3", "tray_type": "PETG", "tray_sub_brands": "", "tray_color": "000000FF", "remain": -1, "tray_info_idx": "GFG99"}
+          ]
+        }
+      ]
+    },
+    "vt_tray": {"id": "254", "tray_type": "", "tray_color": "00000000"}
+  }
+}

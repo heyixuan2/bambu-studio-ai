@@ -1,0 +1,16 @@
+# Strict lint for the library (docs/CONVENTIONS.md §2). Legacy scripts in scripts/
+# still use the repo-level rules in pyproject.toml until they move in here.
+extend = "../../pyproject.toml"
+line-length = 100
+
+[lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "S", "C4", "SIM", "RUF", "ANN", "D",
+    "PL", "BLE", "RET", "PTH", "TRY", "ERA", "PERF", "FBT",
+]
+ignore = [
+    "TRY003",  # messages at the raise site are clearer than one exception class per message
+]
+
+[lint.pydocstyle]
+convention = "google"

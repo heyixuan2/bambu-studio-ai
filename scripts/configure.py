@@ -8,7 +8,7 @@ override with BAMBU_STUDIO_AI_HOME), so settings survive skill reinstalls and up
 Usage:
   python3 scripts/configure.py show                       # Current settings (secrets masked)
   python3 scripts/configure.py set model "A1 Mini"        # Non-secret setting
-  python3 scripts/configure.py set mode local printer_ip 192.168.1.50 serial 01P00A000000000
+  python3 scripts/configure.py set printer_ip 192.168.1.50 serial 01P00A000000000
   printf '%s' "$CODE" | python3 scripts/configure.py secret access_code   # Secret from stdin
   python3 scripts/configure.py secret 3d_api_key --value msy_xxx          # Secret from argument
   python3 scripts/configure.py unset output_dir
@@ -32,12 +32,8 @@ PROVIDERS = ["meshy", "tripo", "printpal", "3daistudio", "rodin"]
 # key -> validator/coercer. Unknown keys are accepted with a warning.
 CONFIG_KEYS = {
     "model": lambda v: _choice(v, PRINTER_MODELS),
-    "mode": lambda v: _choice(v.lower(), ["local", "cloud"]),
-    "print_mode": lambda v: _choice(v.lower(), ["manual", "auto"]),
     "printer_ip": str,
     "serial": str,
-    "email": str,
-    "device_id": str,
     "printer_name": str,
     "3d_provider": lambda v: _choice(v.lower(), PROVIDERS),
     "rodin_tier": str,
@@ -45,17 +41,13 @@ CONFIG_KEYS = {
     "preferred_format": lambda v: _choice(v.lower(), ["3mf", "stl", "obj"]),
     "monitor_interval": int,
     "monitor_level": str,
-    "auto_pause": lambda v: _bool(v),
     "monitor_enabled": lambda v: _bool(v),
 }
-SECRET_KEYS = ["access_code", "password", "3d_api_key"] + [f"{p}_api_key" for p in PROVIDERS]
+SECRET_KEYS = ["access_code", "3d_api_key"] + [f"{p}_api_key" for p in PROVIDERS]
 
 LEGACY_FILES = {
     "config.json": "config.json",
     ".secrets.json": ".secrets.json",
-    ".token_cache.json": ".token_cache.json",
-    "bambu_connect_cert.pem": os.path.join("references", "bambu_connect_cert.pem"),
-    "bambu_connect_key.pem": os.path.join("references", "bambu_connect_key.pem"),
 }
 
 
@@ -127,24 +119,17 @@ def cmd_show():
         print(f"\nEnvironment overrides active: {', '.join(overrides)}")
 
     missing = []
-    mode = os.environ.get("BAMBU_MODE") or cfg.get("mode", "local")
     if not (os.environ.get("BAMBU_MODEL") or cfg.get("model")):
         missing.append("model")
-    if mode == "local":
-        for k, env in (("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL")):
-            if not (os.environ.get(env) or cfg.get(k)):
-                missing.append(k)
-        if not (os.environ.get("BAMBU_ACCESS_CODE") or sec.get("access_code")):
-            missing.append("access_code (secret)")
-    else:
-        if not (os.environ.get("BAMBU_EMAIL") or cfg.get("email")):
-            missing.append("email")
-        if not (os.environ.get("BAMBU_PASSWORD") or sec.get("password")):
-            missing.append("password (secret)")
+    for k, env in (("printer_ip", "BAMBU_IP"), ("serial", "BAMBU_SERIAL")):
+        if not (os.environ.get(env) or cfg.get(k)):
+            missing.append(k)
+    if not (os.environ.get("BAMBU_ACCESS_CODE") or sec.get("access_code")):
+        missing.append("access_code (secret)")
     if missing:
-        print(f"\nPrinter connection not ready ({mode} mode) — missing: {', '.join(missing)}")
+        print(f"\nPrinter status not set up (optional) — missing: {', '.join(missing)}")
     else:
-        print(f"\nPrinter connection configured ({mode} mode).")
+        print("\nPrinter status configured (read-only, printer stays in normal cloud mode).")
     return 0
 
 

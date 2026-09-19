@@ -6,7 +6,10 @@ Run before first use to verify all dependencies and API compatibility.
 Usage: python3 scripts/doctor.py
 """
 
-import sys, os, importlib
+import importlib
+import importlib.metadata
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import use_utf8_stdio
@@ -22,26 +25,38 @@ REQUIRED = {
     "Pillow": {"min": "9.0", "import": "PIL"},
     "scipy": {"min": "1.10", "import": "scipy"},
     "pygltflib": {"min": "0", "import": "pygltflib"},
-    "cryptography": {"min": "42.0", "import": "cryptography"},
+    "networkx": {"min": "3.2", "import": "networkx"},
 }
 
 OPTIONAL = {
-    "bambulabs-api": {"import": "bambulabs_api", "purpose": "LAN printer control"},
-    "bambu-lab-cloud-api": {"import": "bambulab", "purpose": "Cloud printer control"},
     "scikit-learn": {"import": "sklearn", "purpose": "Better colorize k-means clustering"},
-    "paho-mqtt": {"import": "paho.mqtt", "purpose": "LAN MQTT printer control"},
+    "paho-mqtt": {"import": "paho.mqtt", "purpose": "Printer status (bambu.py status, monitor.py)"},
     "manifold3d": {"import": "manifold3d", "purpose": "Parametric modeling (functional parts)"},
     "rembg": {"import": "rembg", "purpose": "Image-to-3D background removal"},
     "pymeshlab": {"import": "pymeshlab", "purpose": "Advanced mesh repair"},
 }
 
+def _version_tuple(text):
+    parts = []
+    for piece in str(text).split("."):
+        digits = "".join(ch for ch in piece if ch.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts)
+
+
 def check_version(pkg_name, min_ver, import_name):
+    """Return (importable_and_new_enough, installed_version)."""
     try:
-        mod = importlib.import_module(import_name)
-        ver = getattr(mod, "__version__", getattr(mod, "VERSION", "unknown"))
-        return True, ver
+        importlib.import_module(import_name)
     except ImportError:
         return False, None
+    try:
+        ver = importlib.metadata.version(pkg_name)
+    except importlib.metadata.PackageNotFoundError:
+        return True, "unknown"
+    return _version_tuple(ver) >= _version_tuple(min_ver or "0"), ver
 
 def check_blender():
     import subprocess
@@ -55,44 +70,6 @@ def check_blender():
         except Exception:
             pass
     return False, None, None
-
-def check_api_symbols():
-    """Check bambulabs-api has required methods."""
-    issues = []
-    try:
-        from bambulabs_api import Printer
-        p_methods = dir(Printer)
-        for method in ["connect", "disconnect"]:
-            if method not in p_methods:
-                issues.append(f"Printer missing .{method}()")
-        # Check speed method (either name)
-        if "set_print_speed" not in p_methods and "set_speed_level" not in p_methods:
-            issues.append("Printer missing speed control method")
-        # Check AMS method (either name)
-        if "get_ams" not in p_methods and "ams_hub" not in p_methods:
-            issues.append("Printer missing AMS accessor")
-    except ImportError:
-        issues.append("bambulabs-api not installed (needed for LAN mode)")
-    return issues
-
-def check_cloud_api_symbols():
-    """Check bambu-lab-cloud-api has required classes."""
-    issues = []
-    try:
-        from bambulab import BambuClient
-        from bambulab import BambuAuthenticator
-        c_methods = dir(BambuClient)
-        for method in ["get_devices"]:
-            if method not in c_methods:
-                issues.append(f"BambuClient missing .{method}()")
-        a_methods = dir(BambuAuthenticator)
-        if "login" not in a_methods:
-            issues.append("BambuAuthenticator missing .login()")
-    except ImportError:
-        issues.append("bambu-lab-cloud-api not installed (needed for Cloud mode)")
-    except Exception as e:
-        issues.append(f"bambu-lab-cloud-api import error: {e}")
-    return issues
 
 def check_search_backend():
     """Check search dependencies."""
@@ -117,7 +94,12 @@ def main():
     print("Required packages:")
     for name, info in REQUIRED.items():
         ok, ver = check_version(name, info["min"], info["import"])
-        status = f"✅ {ver}" if ok else "❌ NOT FOUND"
+        if ok:
+            status = f"✅ {ver}"
+        elif ver:
+            status = f"❌ {ver} is too old (need {info['min']}+)"
+        else:
+            status = "❌ NOT FOUND"
         if not ok: all_ok = False
         print(f"  {name:20s} {status}")
     
@@ -151,32 +133,6 @@ def main():
     else:
         print("  ⚠️ OrcaSlicer not installed (needed for slice.py)")
         print("     Install from: https://github.com/SoftFever/OrcaSlicer")
-
-    print("\nSystem tools:")
-    import shutil
-    ffmpeg_path = shutil.which("ffmpeg")
-    if ffmpeg_path:
-        print(f"  ✅ ffmpeg found: {ffmpeg_path}")
-    else:
-        print("  ⚠️ ffmpeg not found (needed for camera snapshots in LAN mode)")
-        print("     Install: brew install ffmpeg (macOS) / apt install ffmpeg (Linux) / winget install ffmpeg (Windows)")
-
-    print("\nAPI compatibility (LAN):")
-    issues = check_api_symbols()
-    if issues:
-        for issue in issues:
-            print(f"  ⚠️ {issue}")
-    else:
-        print("  ✅ bambulabs-api symbols verified")
-
-    print("\nAPI compatibility (Cloud):")
-    cloud_issues = check_cloud_api_symbols()
-    if cloud_issues:
-        for issue in cloud_issues:
-            print(f"  ⚠️ {issue}")
-    else:
-        print("  ✅ bambu-lab-cloud-api symbols verified")
-
 
     print("\nSearch backend:")
     search_ok, search_pkg = check_search_backend()
