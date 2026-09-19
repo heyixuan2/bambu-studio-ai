@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 622" width="960" height="622" role="img" aria-label="How Bambu Lab AI works">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00200F"/><stop offset=".6" stop-color="#030C07"/><stop offset="1" stop-color="#000"/></linearGradient>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#00AE42" stroke-opacity=".06"/></pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#00AE42"/></marker>
+  </defs>
+  <rect width="960" height="622" rx="20" fill="url(#bg)"/>
+  <rect width="960" height="622" rx="20" fill="url(#grid)"/>
+  <rect x="467" y="36" width="180" height="42" rx="21" fill="#00AE42"/>
+  <text x="557" y="63" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="17" font-weight="700" fill="#02140A">Your request</text>
+  <path d="M557 78 C557 112 293 104 293 146" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M557 78 C557 112 293 104 293 146" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M557 78 C557 112 557 104 557 146" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M557 78 C557 112 557 104 557 146" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M557 78 C557 112 821 104 821 146" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M557 78 C557 112 821 104 821 146" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <rect x="363.0" y="100" width="124" height="22" rx="11" fill="#030C07" stroke="#1F6B3D"/>
+  <text x="425.0" y="115.5" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#B7D8C1">everyday object</text>
+  <rect x="495" y="100" width="124" height="22" rx="11" fill="#030C07" stroke="#1F6B3D"/>
+  <text x="557" y="115.5" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#B7D8C1">exact part</text>
+  <rect x="627.0" y="100" width="124" height="22" rx="11" fill="#030C07" stroke="#1F6B3D"/>
+  <text x="689.0" y="115.5" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#B7D8C1">figurine / photo</text>
+  <path d="M293 234 V264" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2"/>
+  <path d="M293 234 V264" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M557 234 V264" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2"/>
+  <path d="M557 234 V264" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M821 234 V264" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2"/>
+  <path d="M821 234 V264" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M821 264 H293 V318" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M821 264 H293 V318" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M416 364 H430" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M416 364 H430" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M680 364 H694" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M680 364 H694" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M821 406 V436 H293 V490" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M821 406 V436 H293 V490" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M416 536 H430" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M416 536 H430" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M680 536 H694" fill="none" stroke="#00AE42" stroke-opacity=".28" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M680 536 H694" fill="none" stroke="#00AE42" stroke-width="2" stroke-dasharray="6 12"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+  <path d="M58 160 V568" stroke="#00AE42" stroke-opacity=".25" stroke-width="2" stroke-dasharray="2 6"/>
+  <circle cx="58" cy="174" r="21" fill="#030C07" stroke="#00AE42" stroke-width="1.5"/>
+  <text x="58" y="181" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="19" font-weight="700" fill="#00AE42">01</text>
+  <text x="90" y="172" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="11" letter-spacing="1" fill="#8CB89A">GET A</text>
+  <text x="90" y="188" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="11" letter-spacing="1" fill="#8CB89A">MODEL</text>
+  <circle cx="58" cy="346" r="21" fill="#030C07" stroke="#00AE42" stroke-width="1.5"/>
+  <text x="58" y="353" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="19" font-weight="700" fill="#00AE42">02</text>
+  <text x="90" y="344" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="11" letter-spacing="1" fill="#8CB89A">MAKE IT</text>
+  <text x="90" y="360" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="11" letter-spacing="1" fill="#8CB89A">PRINTABLE</text>
+  <circle cx="58" cy="518" r="21" fill="#030C07" stroke="#00AE42" stroke-width="1.5"/>
+  <text x="58" y="525" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="19" font-weight="700" fill="#00AE42">03</text>
+  <text x="90" y="516" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="11" letter-spacing="1" fill="#8CB89A">PRINT</text>
+  <circle r="5" fill="#00AE42" opacity="0"><animate attributeName="opacity" values=".9" dur="7s" repeatCount="indefinite"/><animateMotion dur="7s" repeatCount="indefinite" path="M557 78 V264 H293 V364 H821 V436 H293 V536 H821"/></circle>
+  <circle r="12" fill="#00AE42" opacity="0"><animate attributeName="opacity" values=".18" dur="7s" repeatCount="indefinite"/><animateMotion dur="7s" repeatCount="indefinite" path="M557 78 V264 H293 V364 H821 V436 H293 V536 H821"/></circle>
+  <g>
+    <rect x="170" y="150" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="186" y="150" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(188 180)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></g>
+    <text x="224" y="190" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Search models</text>
+    <text x="224" y="211" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">MakerWorld &amp; Printables</text>
+    
+  </g>
+  <g>
+    <rect x="434" y="150" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="450" y="150" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(452 180)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2"/></g>
+    <text x="488" y="190" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Parametric CAD</text>
+    <text x="488" y="211" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">exact mm, real screw holes</text>
+    
+  </g>
+  <g>
+    <rect x="698" y="150" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="714" y="150" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(716 180)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></g>
+    <text x="752" y="190" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">AI text / photo → 3D</text>
+    <text x="752" y="211" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">figurines and characters</text>
+    
+  </g>
+  <g>
+    <rect x="170" y="322" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="186" y="322" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(188 352)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.6 8.2-8 9-4.4-.8-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></g>
+    <text x="224" y="362" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Check &amp; repair</text>
+    <text x="224" y="383" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">scale, overhangs, fit</text>
+    
+  </g>
+  <g>
+    <rect x="434" y="322" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D" stroke-dasharray="5 5"/>
+    <rect x="450" y="322" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(452 352)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="3.5"/><circle cx="16.5" cy="7.5" r="3.5"/><circle cx="7.5" cy="16.5" r="3.5"/><circle cx="16.5" cy="16.5" r="3.5"/></g>
+    <text x="488" y="362" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Multi-colour</text>
+    <text x="488" y="383" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">texture → AMS filaments</text>
+    <text x="666" y="344" text-anchor="end" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="11" letter-spacing="1.5" fill="#5E8C6E">OPTIONAL</text>
+  </g>
+  <g>
+    <rect x="698" y="322" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="714" y="322" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(716 352)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c3-6 17-6 20 0-3 6-17 6-20 0z"/><circle cx="12" cy="12" r="3"/></g>
+    <text x="752" y="362" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Preview render</text>
+    <text x="752" y="383" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">see it before slicing</text>
+    
+  </g>
+  <g>
+    <rect x="170" y="494" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="186" y="494" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(188 524)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5M3 16.5L12 21l9-4.5"/></g>
+    <text x="224" y="534" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Bambu Studio</text>
+    <text x="224" y="555" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">you review and slice</text>
+    
+  </g>
+  <g>
+    <rect x="434" y="494" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="450" y="494" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(452 524)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8l6 4-6 4z"/></g>
+    <text x="488" y="534" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">You press Print</text>
+    <text x="488" y="555" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">the agent can't start one</text>
+    
+  </g>
+  <g>
+    <rect x="698" y="494" width="246" height="84" rx="12" fill="#0A1A10" stroke="#1F6B3D"/>
+    <rect x="714" y="494" width="46" height="3" rx="1.5" fill="#00AE42"/>
+    <g transform="translate(716 524)" fill="none" stroke="#00AE42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h5l2.5-6 4.5 12 2.5-6H22"/></g>
+    <text x="752" y="534" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Monitor</text>
+    <text x="752" y="555" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="12.5" fill="#8CB89A">progress + alerts, read-only</text>
+    
+  </g>
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 110" width="1200" height="110" role="img" aria-label="为拓竹社区而做 · by TieGaier">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#000000"/><stop offset=".45" stop-color="#030C07"/><stop offset="1" stop-color="#00200F"/>
+    </linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#00AE42" stroke-opacity=".07"/>
+    </pattern>
+    <radialGradient id="glow" cx=".5" cy="1" r=".6">
+      <stop offset="0" stop-color="#00AE42" stop-opacity=".22"/><stop offset="1" stop-color="#00AE42" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0" x2="1">
+      <stop offset="0" stop-color="#00AE42" stop-opacity="0"/><stop offset=".5" stop-color="#00AE42"/><stop offset="1" stop-color="#00AE42" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="frame"><rect width="1200" height="110" rx="22"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+  <rect width="1200" height="110" fill="url(#bg)"/>
+  <rect width="1200" height="110" fill="url(#grid)"/>
+  <rect width="1200" height="110" fill="url(#glow)"/>
+  <rect x="0" y="0" width="1200" height="3" fill="#0B2415"/>
+  <rect x="-300" y="0" width="300" height="3" fill="url(#sweep)">
+    <animate attributeName="x" from="1200" to="-300" dur="4s" repeatCount="indefinite"/>
+  </rect>
+  <g transform="translate(600 58)" text-anchor="middle">
+    <text y="0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="26" font-weight="800" fill="#FFFFFF">Bambu Lab <tspan fill="#00AE42">AI</tspan></text>
+    <text y="28" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" letter-spacing="2" fill="#6E9C7E">为拓竹社区而做 · by TieGaier</text>
+  </g>
+  </g>
+</svg>

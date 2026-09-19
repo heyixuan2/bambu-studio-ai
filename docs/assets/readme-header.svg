@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Bambu Lab AI">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00200F"/><stop offset=".55" stop-color="#030C07"/><stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".55" r=".5">
+      <stop offset="0" stop-color="#00AE42" stop-opacity=".28"/><stop offset="1" stop-color="#00AE42" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#00AE42" stroke-opacity=".09"/>
+    </pattern>
+    <radialGradient id="fade" cx=".5" cy=".5" r=".6">
+      <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="gridmask"><rect width="1200" height="300" fill="url(#fade)"/></mask>
+    <pattern id="layerlines" width="8" height="5" patternUnits="userSpaceOnUse">
+      <rect width="8" height="1.2" fill="#000" fill-opacity=".28"/>
+    </pattern>
+    <clipPath id="printed">
+      <rect x="0" y="72" width="1200" height="108">
+        <animate attributeName="y" from="180" to="72" dur="2.6s" fill="freeze" calcMode="spline" keySplines=".3 0 .7 1"/>
+        <animate attributeName="height" from="0" to="108" dur="2.6s" fill="freeze" calcMode="spline" keySplines=".3 0 .7 1"/>
+      </rect>
+    </clipPath>
+    <linearGradient id="sweep" x1="0" x2="1">
+      <stop offset="0" stop-color="#00AE42" stop-opacity="0"/><stop offset=".5" stop-color="#00AE42"/><stop offset="1" stop-color="#00AE42" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="frame"><rect width="1200" height="300" rx="22"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="22" fill="url(#grid)" mask="url(#gridmask)"/>
+  <ellipse cx="600" cy="170" rx="520" ry="150" fill="url(#glow)"/>
+  <text x="48" y="54" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="15" letter-spacing="3" fill="#00AE42">● AGENT SKILL · BAMBU STUDIO AI</text>
+  <text x="1152" y="54" text-anchor="end" font-family="'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="15" letter-spacing="2" fill="#5E8C6E">SKILL.md</text>
+  <g clip-path="url(#printed)" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="96" font-weight="800" text-anchor="middle">
+    <text x="600" y="168" fill="#FFFFFF">Bambu Lab <tspan fill="#00AE42">AI</tspan></text>
+    <text x="600" y="168" fill="url(#layerlines)">Bambu Lab AI</text>
+  </g>
+  <!-- The nozzle is hidden unless animation runs, so a static render shows the finished title. -->
+  <g opacity="0">
+    <animateTransform attributeName="transform" type="translate" from="0 0" to="0 -108" dur="2.6s" fill="freeze" calcMode="spline" keySplines=".3 0 .7 1"/>
+    <animate attributeName="opacity" values="1;1;0" keyTimes="0;.85;1" dur="3s" fill="freeze"/>
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="300 0;900 0;300 0" dur=".42s" repeatCount="7"/>
+      <rect x="-9" y="160" width="18" height="12" rx="2" fill="#D9E8DE"/>
+      <path d="M-5 172h10l-5 7z" fill="#00AE42"/>
+      <rect x="-60" y="179" width="120" height="2" fill="url(#sweep)"/>
+    </g>
+  </g>
+  <text x="600" y="226" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif" font-size="22" fill="#B7D8C1">Tell your AI agent what you need. It designs it, checks it, and prints it on your Bambu Lab.
+    <animate attributeName="opacity" values="0;0;1" keyTimes="0;.7;1" dur="3.2s" fill="freeze"/>
+  </text>
+  <rect x="0" y="296" width="1200" height="4" fill="#0B2415"/>
+  <rect x="-300" y="296" width="300" height="4" fill="url(#sweep)">
+    <animate attributeName="x" from="-300" to="1200" dur="4s" repeatCount="indefinite"/>
+  </rect>
+  </g>
+</svg>

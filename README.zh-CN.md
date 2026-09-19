@@ -1,5 +1,5 @@
 <a id="top"></a>
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00AE42,55:0B5B33,100:060E1B&height=230&section=header&text=Bambu%20Lab%20AI&fontSize=68&fontColor=FFFFFF&fontAlignY=36&animation=fadeIn&desc=%E8%B7%9F%E4%BD%A0%E7%9A%84%20AI%20%E8%AF%B4%E4%B8%80%E5%8F%A5%E8%AF%9D%EF%BC%8C%E5%AE%83%E6%9D%A5%E5%BB%BA%E6%A8%A1%E3%80%81%E6%A3%80%E6%9F%A5%E3%80%81%E6%89%93%E5%8D%B0%E5%88%B0%E4%BD%A0%E7%9A%84%E6%8B%93%E7%AB%B9%E3%80%82&descSize=18&descAlignY=58" width="100%" alt="Bambu Lab AI">
+<img src="docs/assets/readme-header-zh.svg" width="100%" alt="Bambu Lab AI">
 
 <div align="center">
 
@@ -147,23 +147,7 @@ python3 scripts/doctor.py               # 检查装了什么、缺什么
 
 ## 它是怎么工作的
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#0B2A1E','primaryTextColor':'#FFFFFF','primaryBorderColor':'#00AE42','lineColor':'#00AE42','secondaryColor':'#060E1B','tertiaryColor':'#0B2A1E','tertiaryTextColor':'#FFFFFF','edgeLabelBackground':'#060E1B','fontSize':'14px'}}}%%
-flowchart TD
-    R([你的需求]) --> S{是什么？}
-    S -->|日常物件| A[搜索模型站]
-    S -->|精密件| B[参数化 CAD]
-    S -->|手办 / 照片| C[AI 文生或图生 3D]
-    A --> D[分析 + 修复]
-    B --> D
-    C --> D
-    D --> E[AMS 多色处理]
-    D --> F[渲染预览]
-    E --> F
-    F --> G[你在 Bambu Studio 里检查、切片]
-    G -->|你点头| H[打印]
-    H --> I[进度监控]
-```
+<p align="center"><img src="docs/assets/how-it-works-zh.svg" width="100%" alt="工作流程：获取模型（搜索、参数化 CAD 或 AI 生成）→ 变得可打印（检查修复、可选 AMS 多色、渲染预览）→ 打印（你在 Bambu Studio 里检查切片并点打印，AI 只读监控）"></p>
 
 这个 skill 是一组普通的 Python 命令行工具，加上一份 `SKILL.md` 告诉 AI 什么时候用哪个、
 哪一步必须停下来问你。AI 只在遇到 3D 打印任务时才加载它，细节文档（设置、多色、监控、
@@ -320,8 +304,8 @@ MIT，见 [LICENSE](LICENSE)。
 <div align="center">
 <br>
 
-**为拓竹社区用 💚 制作** · [回到顶部 ↑](#top)
+[回到顶部 ↑](#top)
 
 </div>
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:060E1B,45:0B5B33,100:00AE42&height=120&section=footer" width="100%" alt="">
+<img src="docs/assets/readme-footer-zh.svg" width="100%" alt="">

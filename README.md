@@ -1,5 +1,5 @@
 <a id="top"></a>
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00AE42,55:0B5B33,100:060E1B&height=230&section=header&text=Bambu%20Lab%20AI&fontSize=68&fontColor=FFFFFF&fontAlignY=36&animation=fadeIn&desc=Tell%20your%20AI%20agent%20what%20you%20need.%20It%20designs%20it%2C%20checks%20it%2C%20and%20prints%20it%20on%20your%20Bambu%20Lab.&descSize=17&descAlignY=58" width="100%" alt="Bambu Lab AI">
+<img src="docs/assets/readme-header.svg" width="100%" alt="Bambu Lab AI">
 
 <div align="center">
 
@@ -188,23 +188,7 @@ For printer control, say *"set up my Bambu printer"* and the agent walks you thr
 
 ## How it works
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#0B2A1E','primaryTextColor':'#FFFFFF','primaryBorderColor':'#00AE42','lineColor':'#00AE42','secondaryColor':'#060E1B','tertiaryColor':'#0B2A1E','tertiaryTextColor':'#FFFFFF','edgeLabelBackground':'#060E1B','fontSize':'14px'}}}%%
-flowchart TD
-    R([Your request]) --> S{What is it?}
-    S -->|everyday object| A[Search model sites]
-    S -->|exact part| B[Parametric CAD]
-    S -->|figurine / photo| C[AI text or image to 3D]
-    A --> D[Analyze + repair]
-    B --> D
-    C --> D
-    D --> E[Multi-color for AMS]
-    D --> F[Preview render]
-    E --> F
-    F --> G[You review and slice in Bambu Studio]
-    G -->|your go-ahead| H[Print]
-    H --> I[Monitor progress]
-```
+<p align="center"><img src="docs/assets/how-it-works.svg" width="100%" alt="How it works: get a model (search, parametric CAD or AI), make it printable (check and repair, optional AMS multi-colour, preview), then print (you review and slice in Bambu Studio, you press Print, the agent monitors read-only)"></p>
 
 The skill is a set of plain Python tools plus a `SKILL.md` playbook that tells the agent when to use
 each one and where to stop and ask you. Agents load it only when a 3D-printing task comes up, and
@@ -391,8 +375,8 @@ trademarks of their respective owner.</sub>
 <div align="center">
 <br>
 
-**Made with 💚 for the Bambu Lab community** · [back to top ↑](#top)
+[back to top ↑](#top)
 
 </div>
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:060E1B,45:0B5B33,100:00AE42&height=120&section=footer" width="100%" alt="">
+<img src="docs/assets/readme-footer.svg" width="100%" alt="">
