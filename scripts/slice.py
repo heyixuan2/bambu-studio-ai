@@ -71,6 +71,24 @@ REMOVED_FLAGS = {
     "--no-detect": "slice.py no longer asks the printer what it is. It uses --printer, or the "
                    "configured model (python3 scripts/configure.py set model P1S).",
 }
+REMOVED_VALUES = {
+    ("--quality", "extra"): "`--quality extra` was removed: the qualities are now the printer's "
+                            "own Draft, Standard and Fine presets. For finer layers ask for a "
+                            "height, e.g. --layer-height 0.08 (see --list-profiles).",
+}
+
+
+def removed_option(argv: list[str]) -> str | None:
+    """Return the explanation for a removed flag or flag value in argv, if any."""
+    for index, arg in enumerate(argv):
+        flag, has_value, value = arg.partition("=")
+        if flag in REMOVED_FLAGS:
+            return REMOVED_FLAGS[flag]
+        if not has_value and index + 1 < len(argv):
+            value = argv[index + 1]
+        if (flag, value.lower()) in REMOVED_VALUES:
+            return REMOVED_VALUES[flag, value.lower()]
+    return None
 
 
 def millimetres(text: str) -> float:
@@ -324,8 +342,7 @@ def cmd_list(args):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    flags = [arg.split("=", 1)[0] for arg in argv]
-    removed = next((REMOVED_FLAGS[flag] for flag in flags if flag in REMOVED_FLAGS), None)
+    removed = removed_option(argv)
     if removed:
         print(removed, file=sys.stderr)
         return EXIT_CONFIG

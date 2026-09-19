@@ -156,6 +156,8 @@ def test_output_must_be_a_new_3mf(model, capsys):
     (["--orient"], "no longer re-orients"),
     (["--arrange"], "no longer arranges"),
     (["--no-detect"], "no longer asks the printer"),
+    (["--quality", "extra"], "`--quality extra` was removed"),
+    (["--quality=Extra"], "--layer-height 0.08"),
 ])
 def test_removed_flags_explain_themselves(args, explanation, model, capsys):
     assert slice_cli.main([str(model), *args]) == slice_cli.EXIT_CONFIG
